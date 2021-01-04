@@ -1,23 +1,13 @@
-import config.py
+# import system libraries
+import subprocess, json, time, sys, os
 
-import os
-import sys
-import time
-import json
-import subprocess
-
+# import music libraries
+from mutagen.flac import FLAC, StreamInfo
+# music_tag was the only library I found that allows me to delete the YEAR tag to make sure I only have one in there
 import music_tag
 
-import mutagen
-from mutagen.flac import FLAC
-from mutagen.id3 import ID3, TIT2
-
-from tinytag import TinyTag
-
-import discogs_client
-
-import argparse
-parser = argparse.ArgumentParser(description='Process some integers.')
+# define the application you want to run to tag your files with Discogs metadata
+tagger = "/Applications/Yate.app/Contents/MacOS/Yate"
 
 def query_yes_no(question, default="yes"):
     valid = {"yes": True, "y": True, "ye": True,
@@ -43,56 +33,35 @@ def query_yes_no(question, default="yes"):
                              "(or 'y' or 'n').\n")
 
 def main():
-   if len(sys.argv) != 2:
-      print ("path to FLAC files missing")
-      exit(1)
-   else:
-      args = sys.argv[1]   
-   # initialize 
-   dclient = discogs_client.Client('xampleApplication/0.1', user_token = api_key)
-   current_album = ""
-   current_artist = ""
-   currentDirectory = os.getcwd()
-   for (subdir,dirs,files) in os.walk(args):
-      for filename in files:
-         filepath = subdir + os.sep + filename
-         if filepath.endswith(".flac"):
-            tag = TinyTag.get(filepath)
-            if (tag.albumartist != current_artist) or (tag.album != current_album):
-               current_album = tag.album
-               current_artist = tag.albumartist
-               bitrate = int(tag.samplerate / 1000)
-               audio = FLAC(filepath)
-               if ("DISCOGS_RELEASE_ID" in audio):
-                  discogs_idstring = audio["DISCOGS_RELEASE_ID"]
-                  discogs_id = (int(discogs_idstring[0]))
-                  drelease = dclient.release(discogs_id)
-                  time.sleep(1)
-                  mrelease = drelease.master
-                  album_year_release = (drelease.year)
-                  formats_json = json.dumps (drelease.formats[0])
-                  formats = json.loads (formats_json)
-                  album_media = (formats["name"])
-                  labels_json = json.dumps (drelease.labels[0].data)
-                  labels = json.loads (labels_json)
-                  album_label = (labels["name"])
-                  album_catno = (labels["catno"])
-                  album_year_master = (mrelease.main_release.year)
-                  album_name = drelease.title
-                  album_artist = current_artist
-                  album_newtitle = album_name + " (" + str(album_year_release) + " " + album_media + " " + str(bitrate) + " kHz " + album_catno + ")"
-                  for flacfile in files:
-                     if flacfile.endswith(".flac"):
-                        filename = os.path.join(currentDirectory, subdir, flacfile)
-                        tags = music_tag.load_file(filename)
-                        tags.remove_tag('year')
-                        tags['album'] = album_newtitle
-                        tags['year'] = str(album_year_master)
-                        tags.save()
-               else:
-                  if query_yes_no("No Discogs release assigned. Start Tagger?"):
-                     directory = os.path.join(currentDirectory, subdir)
-                     return_code = subprocess.call("/Applications/Yate.app/Contents/MacOS/Yate" + " \"" + directory + "\"", shell=True) 
+    mode = 0
+    if len(sys.argv) != 2:
+        print("path to FLAC files missing")
+        exit(1)
+    else:
+        flacdir = sys.argv[1]
+
+    current_album = ""
+    current_artist = ""
+
+    # walk through directory given as ARGV and all subdirs
+    currentDirectory = os.getcwd()
+    for (subdir,dirs,files) in os.walk(flacdir):
+        for filename in files:
+            filepath = subdir + os.sep + filename
+            if filepath.endswith(".flac"):
+                tag = music_tag.load_file(filepath)
+                # Do we have a new album to process?
+                if (str(tag['albumartist']) != current_artist) or (str(tag['album']) != current_album):
+                    current_album = str(tag['album'])
+                    current_artist = str(tag['albumartist'])
+                    # get FLAC metadata
+                    audio = FLAC(filepath)
+                    # does it have a Discogs release assigned we can use for tagging?
+                    if not ("DISCOGS_RELEASE_ID" in audio):
+                        # No Discogs release assigned: ask to run the tagge 
+                        if query_yes_no(current_artist + " - "+ current_album + ": No Discogs release assigned. Start Tagger?"):
+                            directory = os.path.join(currentDirectory, subdir)
+                            return_code = subprocess.call(tagger + " \"" + directory + "\"", shell=True) 
 
 
 if __name__ == "__main__":

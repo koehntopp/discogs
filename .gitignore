@@ -1,3 +1,5 @@
 flac
 .DS_Store
 config.py
+launch.json
+mymusic.txt
