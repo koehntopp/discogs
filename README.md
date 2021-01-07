@@ -5,7 +5,7 @@ Playing with the Discogs Python API
 Goal: Make sure all my files
 
 - have associated Discogs releases
-- have their album names reflect those in a consistent manner
+- allow for their album names to be generated based on those tags
 
 There are three Python scripts to get there:
 
@@ -18,5 +18,7 @@ discogs_rename.py <folder> will walk through folder hierarchy and rename files a
 In order to call the Discogs API you need to create a file called "config.py" and add a Discogs API key in there (as "api_key = xxxxx")
 
 There are a few special cases I have coded:
-- Discogs has some HDTracks.com releases only as "File", but HDTracks is mentioned in Discogs remarks. I'm pulling that from there and put it into the album title
+
 - The album title usually omits remarks about the release (like "Remastered" or "Deluxe Edition"). You can put them into the file while tagging as comments, I will pull anything between two pairs of '###' (i.e. ###Remastered###) and add that to the album title
+
+- There are albums that have no Discogs entry. You can name them manually and add a comment "##nodiscogs## in the file so that the script will leave them alone.

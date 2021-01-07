@@ -40,6 +40,7 @@ def main():
                current_album = tag_album
                current_artist = tag_artist
                special_title = ""
+               discogs_relnotes = ""
                # get FLAC metadata
                audio = FLAC(filepath)
                bitrate = int(audio.info.sample_rate / 1000)
@@ -59,34 +60,41 @@ def main():
                      discogs_comments_raw = discogs_comments_raw[3:100]
                      comment_pos = discogs_comments_raw.find('###')
                      if comment_pos:
-                        special_title = " " + discogs_comments_raw[0:comment_pos]
+                        special_title = discogs_comments_raw[0:comment_pos]
                # does it have a Discogs release assigned we can use for tagging?
                if ("DISCOGS_RELEASE_ID" in audio):
                   discogs_idstring = audio["DISCOGS_RELEASE_ID"]
                   discogs_id = (int(discogs_idstring[0]))
                   drelease = dclient.release(discogs_id)
                   # make Discogs API rate limit happy
-                  time.sleep(2)
+                  time.sleep(3)
                   # get media type and catalog number (publisher names too long)
                   formats_json = json.dumps (drelease.formats[0])
                   formats = json.loads (formats_json)
-                  album_media = (formats["name"])
+                  album_media = (formats["name"]).strip()
                   labels_json = json.dumps (drelease.labels[0].data)
                   labels = json.loads (labels_json)
                   album_label = (labels["name"])
                   album_catno = " " + (labels["catno"])
                   # Add 'MFSL' before catalog number for Mobile Fidelity Sound Labs releases
-                  if "Mobile Fidelity" in album_label:
+                  if ("Vinyl" in album_media):
+                     album_catno = " Vinyl" + album_catno
+                  if ("SACD" in album_media):
+                     album_catno = " SACD" + album_catno
+                  if ("Mobile Fidelity" in album_label) and not ("MFSL" in album_catno):
                      album_catno = " MFSL" + album_catno
                   # Digital releases have no catalog number, often 'HDTracks' is in the Discogs Release Notes
-                  if ("discogs_release_notes" in audio):
-                     discogs_relnotes = audio["discogs_release_notes"]
-                     if ('File' in album_media) and ('HDTracks' in discogs_relnotes[0]):
-                        album_catno = ""
-                        album_media = "HDtracks.com"
+                  if (('HDTracks' in special_title) or ('Tidal' in special_title) or ('Qobuz' in special_title) or ('Download' in special_title)):
+                     album_catno = ""
+                  if "none" in album_catno:
+                     album_catno = ""
                   # get the release date from the master release which will be used for all files
                   # release date goes into the album name instead
                   album_year_release = (drelease.year)
+                  if album_year_release == 0:
+                     album_year_release_str = ""
+                  else:
+                     album_year_release_str = str(album_year_release)
                   mrelease = drelease.master
                   if drelease.master:
                      album_year_master = (mrelease.main_release.year)
@@ -94,8 +102,10 @@ def main():
                      album_year_master = album_year_release
                   album_name = drelease.title.strip()
                   album_artist = current_artist.strip()
+                  if special_title and album_year_release_str:
+                     special_title = " " + special_title
                   # build the new album title from Discogs album name, release year, sample rate and catalog number
-                  album_newtitle = album_name + " (" + str(album_year_release) + special_title + " " + album_media + " " + str(bitrate) + " kHz" + album_catno + ")"
+                  album_newtitle = album_name + " ("+ album_year_release_str + special_title + " " + str(bitrate) + " kHz" + album_catno + ")"
                   if current_album != album_newtitle:
                      message = "[Tags updated for]            - "
                      for flacfile in files:
@@ -107,7 +117,7 @@ def main():
                            tags['year'] = str(album_year_master)
                            tags.save()
                   else:
-                     message = "[Tags already OK for]         - "
+                     message = "[Tags OK for        ]         - "
                else:
                   message = "[Skipped, no Discogs tags]    - "
                   album_newtitle = current_album

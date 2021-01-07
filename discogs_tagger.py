@@ -56,6 +56,19 @@ def main():
                     current_artist = str(tag['albumartist'])
                     # get FLAC metadata
                     audio = FLAC(filepath)
+                    # Look in the comments for either ##nodiscogs## (leave me alone) or ###<title>### (special title to assign)
+                    discogs_comments_raw = str(audio.vc)
+                    comment_pos = discogs_comments_raw.find('COMMENT')
+                    if comment_pos:
+                        discogs_comments_raw = discogs_comments_raw[comment_pos:10000]
+                        comment_pos = discogs_comments_raw.find('\')')
+                        discogs_comments_raw = discogs_comments_raw[11:comment_pos]
+                        # no Discogs release available? Skip album.
+                        if "##nodiscogs##" in discogs_comments_raw:
+                            message = "[Skipped, no Discogs release] - "
+                            print (message + current_artist + " - " + current_album)
+                            break
+
                     # does it have a Discogs release assigned we can use for tagging?
                     if not ("DISCOGS_RELEASE_ID" in audio):
                         # No Discogs release assigned: ask to run the tagge 
