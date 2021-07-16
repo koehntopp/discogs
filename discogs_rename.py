@@ -91,15 +91,17 @@ def main():
                   # get the release date from the master release which will be used for all files
                   # release date goes into the album name instead
                   album_year_release = (drelease.year)
-                  if album_year_release == 0:
-                     album_year_release_str = ""
-                  else:
-                     album_year_release_str = str(album_year_release)
                   mrelease = drelease.master
                   if drelease.master:
                      album_year_master = (mrelease.main_release.year)
                   else:
                      album_year_master = album_year_release
+                  if album_year_release == 0 and album_year_master != 0:
+                     album_year_release = album_year_master
+                  if album_year_release == 0:
+                     album_year_release_str = ""
+                  else:
+                     album_year_release_str = str(album_year_release)
                   album_name = drelease.title.strip()
                   album_artist = current_artist.strip()
                   if special_title and album_year_release_str:
