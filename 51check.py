@@ -1,3 +1,5 @@
+# walks along $flacroot and identifies the number of channels in album to identify 5.1 and mono versions
+
 from pathlib import Path, PurePosixPath
 import music_tag
 from mutagen import mp3
@@ -11,7 +13,6 @@ import time
 from datetime import datetime
 
 # Global variables
-#flacroot = '/Volumes/koehntopp/00NZB/Complete'
 flacroot = '/Volumes/FLAC/'
 
 def hasSubDirs(dir_name):
