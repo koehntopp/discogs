@@ -3,3 +3,9 @@ flac
 config.py
 launch.json
 mymusic.txt
+.discogs_rename.py.swp
+requirements.txt
+.discogs_rename.py.swp
+discogs.code-workspace
+*.swp
+*.pyc
