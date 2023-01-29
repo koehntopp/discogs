@@ -8,12 +8,23 @@ from rich import print as rprint
 import os
 import shutil
 import time
+import csv
 from datetime import datetime
+from shlex import quote
+import subprocess
+import glob
+import re
+from tqdm import tqdm
 
 # Global variables
-flacroot = '/Volumes/FLAC/'
-#flacroot = '/Volumes/roon/'
-mp3root = '/Volumes/MP3/'
+flacroot = '/flac/'
+#flacroot = '/Volumes/koehntopp/00NZB/complete/'
+mp3root = '/mp3/'
+
+def timelog(txt1, txt2):
+   log_msg = "[green]" + txt1 + "[/green]"
+   log_msg = log_msg + ' ' * (45 - len(log_msg))
+   rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white] " + log_msg + txt2)
 
 
 def hasSubDirs(dir_name):
@@ -30,18 +41,21 @@ def clean(dirty_text):
    clean_text = clean_text.replace('\'', '')
    clean_text = clean_text.replace('&', 'and')
    clean_text = clean_text.replace('+', 'and')
-   clean_text = clean_text.replace('\´', '')
+   clean_text = clean_text.replace('´', '')
+   clean_text = clean_text.replace('’', '')
+   clean_text = clean_text.replace('″', '')
    clean_text = clean_text.replace('\"', '')
    clean_text = clean_text.replace(',', '')
+   clean_text = clean_text.replace(';', '')
+   clean_text = clean_text.replace(':', '')
    clean_text = clean_text.replace(' ', '_')
    return clean_text
 
 
 def movefiles(flacroot):
-   log_msg = " [green]Checking FLAC folders in[/green]"
-   log_msg = log_msg + ' ' * 6
-   rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + flacroot)
+   timelog("Checking FLAC folders in", flacroot)
    currentalbum = ""
+#   t = tqdm(total=1, unit="album", disable=not show_progress)
    for p in Path(flacroot).rglob('*.flac'):
       fullfilename = str(PurePosixPath(p))
       tags = music_tag.load_file(fullfilename)
@@ -49,25 +63,80 @@ def movefiles(flacroot):
       salbumtitle = clean(str(tags['album']))
       sartist = clean(str(tags['albumartist']))
       ftags = FLAC(fullfilename)
-      tag_version = clean(ftags['VERSION'][0])
       # Check file name and path and move if wrong
       tobefilename = (str(tags['discnumber']).zfill(2) + '_' + str(tags['tracknumber']).zfill(2) + '_' + stracktitle + '.flac')
-      tobepathname = (flacroot + sartist + '/' + salbumtitle + '_[' + tag_version + ']/')
+      tobepathname = (flacroot + sartist + '/' + salbumtitle + '/')
       tobefullname = tobepathname + tobefilename
       if unicodedata.normalize('NFD', fullfilename) != unicodedata.normalize('NFD', tobefullname):
          if salbumtitle != currentalbum:
             currentalbum = salbumtitle
             a = unicodedata.normalize('NFD', fullfilename)
             b = unicodedata.normalize('NFD', tobefullname)
-            log_msg = " [red]Moving album[/red]"
-            log_msg = log_msg + ' ' * 18
-            rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + str(tags['album']))
+            timelog("Moving album", str(tags['album']))
          if not os.path.exists(tobepathname):
             os.makedirs(tobepathname)
          shutil.move(fullfilename, tobefullname)
-   log_msg = " [green]Done.[/green]"
-   log_msg = log_msg + ' ' * 8
-   rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg)
+   timelog("Done.", "")
+
+def addtocsv(flacfile):
+   ftags = FLAC(flacfile)
+   tags = music_tag.load_file(flacfile)
+   csvzeile = [str(ftags['albumartist'][0])]
+   try:
+      csvzeile += [str(ftags['albumartistsort'][0])]
+   except:
+      csvzeile += ['']
+   csvzeile += [str(ftags['album'][0])]
+   try:
+      csvzeile += [str(ftags['totaltracks'][0])]
+   except:
+      csvzeile += ["ERROR"]
+   csvzeile += [str(ftags['disctotal'][0])]
+   try:
+      csvzeile += [str(ftags['ALBUM DYNAMIC RANGE'][0])]
+   except:
+      csvzeile += ['']
+   try:
+      csvzeile += [str(ftags['ORIGINALDATE'][0])]
+   except:
+      csvzeile += ['']
+      timelog("No original release date!", flacfile)
+   try:
+      csvzeile += [str(ftags['DATE'][0])]
+   except:
+      csvzeile += ['ERROR']
+   csvzeile += [str(int(ftags.info.bits_per_sample))]
+   csvzeile += [str(int(ftags.info.sample_rate / 1000))]
+   csvzeile += [str(ftags.info.channels)]
+   try:
+      csvzeile += [str(len(ftags.pictures))]
+      csvzeile += [str(ftags.pictures[0].width)]
+      csvzeile += [str(ftags.pictures[0].height)]
+   except:
+      csvzeile += ['', '', '']
+      timelog("Picture problem", flacfile)
+   try:
+      csvzeile += [ftags["SUBTITLE"][0].strip()]
+   except:
+      csvzeile += ['']
+   try:
+      csvzeile += [ftags["DISCOGS_MASTER_ID"][0].strip()]
+   except:
+      csvzeile += ['']
+   try:
+      csvzeile += [ftags["DISCOGS_RELEASE_ID"][0].strip()]
+   except:
+      csvzeile += ['']
+   try:
+      csvzeile += [ftags["MUSICBRAINZ_RELEASE_GROUPID"][0].strip()]
+   except:
+      csvzeile += ['']
+   try:
+      csvzeile += [ftags["MUSICBRAINZ_ALBUMID"][0].strip()]
+   except:
+      csvzeile += ['']
+   #print(csvzeile)
+   return(csvzeile)
 
 
 def checktags(flacroot):
@@ -77,32 +146,40 @@ def checktags(flacroot):
    currentalbum = ""
    check = False
    albumcount = 0
+#   t = tqdm(total=1, unit="album", disable=not show_progress)
+   f = open('albums.csv', 'w')
+   csvwriter = csv.writer(f)
+   csvstring = ['Artist', 'Sort Artist', 'Album', 'Tracks', 'Discs', 'Album DR', 'Date Master', 'Date Release', 'Bit Depth', 'Sample Rate', 'Channels', '# Covers', 'Cover Width', 'Cover Height', 'Description', 'Discogs Master', 'Discogs Release', 'Musicbrainz Release Group', 'Musicbrainz Album']
+   csvwriter.writerow(csvstring)
    for p in Path(flacroot).rglob('*.flac'):
       artistdir = (PurePosixPath(p).parent).stem
       song = str(PurePosixPath(p).name)
       # get tags
       fullfilename = str(PurePosixPath(p))
       tags = music_tag.load_file(fullfilename)
+      flactags = FLAC(fullfilename)
       stracktitle = clean(str(tags['tracktitle']))
       salbumtitle = clean(str(tags['album']))
       album = str(tags['album'])
       sartist = clean(str(tags['albumartist']))
       # Check artwork
-      arterror = ""
-      artwork = tags['artwork']
+      arterror = ""      
+      artwork = flactags.pictures[0].width
       # Do we have a new album?
       if salbumtitle != currentalbum:
          currentalbum = salbumtitle
          albumcount += 1
+#         t.update()
+         csvwriter.writerow(addtocsv(fullfilename))
       # Check album art size
       try:
-         if (artwork.first.width < 500) and (arterror != salbumtitle):
+         if (artwork < 500) and (arterror != salbumtitle):
             arterror = salbumtitle
             if salbumtitle != currentalbum:
                check = True
                log_msg = " [red]Art too small[/red]"
                log_msg = log_msg + ' ' * 17
-               rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + str(artwork.first.width) + ' in ' + str(tags['albumartist']) + ' - ' + str(tags['album']))
+               rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + str(artwork) + ' in ' + str(tags['albumartist']) + ' - ' + str(tags['album']))
       except AttributeError:
          log_msg = " [red]Art error[/red]"
          log_msg = log_msg + ' ' * 17
@@ -110,15 +187,22 @@ def checktags(flacroot):
 
       # Check for lyrics
       lyrics = str(tags['lyrics'])
-#      lyricslrc = str(tags['sylt'])
+      #      lyricslrc = str(tags['sylt'])
       if lyrics == "":
          log_msg = " [red]No lyrics[/red]"
          log_msg = log_msg + ' ' * 17
-#         rprint ("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + ' in ' + str(tags['albumartist']) + ' - ' + str(tags['album']) + ' - ' + stracktitle)
+      #         rprint ("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + ' in ' + str(tags['albumartist']) + ' - ' + str(tags['album']) + ' - ' + stracktitle)
       else:
          log_msg = " [red]May have lrc[/red]"
          log_msg = log_msg + ' ' * 14
-#            rprint ("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + ' in ' + str(tags['albumartist']) + ' - ' + str(tags['album']) + ' - ' + stracktitle + ' - ' + lyrics[:20])
+         #            rprint ("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + ' in ' + str(tags['albumartist']) + ' - ' + str(tags['album']) + ' - ' + stracktitle + ' - ' + lyrics[:20])
+      try:
+         csvstring1 = str(flactags['ORIGINALDATE'][0])
+         #csvstring = sartist + ',' + salbumtitle + ',' + flactags['ORIGINALRELEASEDATE'][0] + ',' + flactags['DATE'][0] + ',' + flactags['VERSION'][0]
+      except:
+         log_msg = " [red]tag error[/red]"
+         log_msg = log_msg + ' ' * 17
+         rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + ' in ' + str(tags['albumartist']) + ' - ' + str(tags['album']))
 
       # Check for cover.jpg
       if album != album.strip():
@@ -142,6 +226,7 @@ def checktags(flacroot):
       # reset flag so errors are only reported once per album
       if check:
          check = False
+   f.close()
    log_msg = " [green]Done.[/green]"
    log_msg = log_msg + ' ' * 25
    rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + str(albumcount) + " albums scanned.")
@@ -222,6 +307,35 @@ def checkMP3():
    log_msg = log_msg + ' ' * 8
    rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg)
 
+def add_replaygain(flacroot):
+   timelog("Adding ReplayGain in", flacroot)
+   for (root, dirs, files) in os.walk(flacroot, topdown=True):
+      for dirname in dirs:
+         # are we in an album directory? Only then album level ReplayGain works correctly
+         #if not hasSubDirs(root + '/' + dirname):
+         flacdir = os.path.abspath(os.path.join(flacroot, root, dirname))
+         # check if there are FLAC files with 1 or 2 channels (ReplayGain does not work for 5.1)
+         ffiles = glob.glob(flacdir + '/*.flac')
+         if ffiles:
+            channels = FLAC(ffiles[1]).info.channels
+            try:
+               rpgain = FLAC(ffiles[1])['REPLAYGAIN_ALBUM_GAIN'][0]
+               timelog("ReplayGain exists in ", flacdir)
+            except:
+               if channels == 1 or channels == 2:
+                  timelog("Adding ReplayGain for", flacdir)
+                  escapedir = re.escape(flacdir)
+                  try:
+                     metaflac = 'metaflac --add-replay-gain \"' + escapedir + '/\"*.flac'
+                     subprocess.run(metaflac, shell=True, check=True)
+                  except OSError as err:
+                     print(err)
+               else:
+                  timelog("# of channels in FLAC files:", str(channels) + " (" + flacdir + ")")
+         else:
+            timelog("No FLAC files in", flacdir)
+   timelog("Done.","")
+
 
 def createMP3():
    global mp3root, flacroot
@@ -240,8 +354,8 @@ def createMP3():
             salbumtitle = clean(str(tags['album']))
             sartist = clean(str(tags['albumartist']))
             ftags = FLAC(flacfilename)
-            tag_version = clean(ftags['VERSION'][0])
-            tobepathname = (mp3root + sartist + '/' + salbumtitle + '_[' + tag_version + ']/')
+            #tag_version = clean(ftags['VERSION'][0])
+            tobepathname = (mp3root + sartist + '/' + salbumtitle)
             if not os.path.exists(tobepathname):
                os.makedirs(tobepathname)
             log_msg = " [red]Creating MP3 for[/red]"
@@ -249,8 +363,10 @@ def createMP3():
             rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + str(tags['album']) + ' - ' + str(tags['tracktitle']))
             flac2mp3 = "ffmpeg -i " + flacfilename + " -codec:a libmp3lame -qscale:a 2 -vsync 2 " + mp3filename + " > /dev/null 2>&1"
             os.system(flac2mp3)
-      except:
-         break
+      except Exception as e: 
+         timelog('EXCEPTION RAISED:', str(e))
+      #except:
+         #break
    log_msg = " [green]Done.[/green]"
    log_msg = log_msg + ' ' * 8
    rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg)
@@ -258,7 +374,7 @@ def createMP3():
 
 def main():
    movefiles(flacroot)
-#   checktags(flacroot)
+   checktags(flacroot)
    removedirs(flacroot)
    checkMP3()
    removedirs(mp3root)
