@@ -25,11 +25,13 @@ from config import api_key
 # calculate dynamic range
 from drmeter import calc_drscore
 
+# logging function
 def timelog(txt1, txt2):
    log_msg = "[green]" + txt1 + "[/green]"
    log_msg = log_msg + ' ' * (45 - len(log_msg))
    rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white] " + log_msg + txt2)
 
+# calculate song and album dynamic range and write tags to files
 def calculate_dr(albumpath):
    # assumption: folder only contains a single album
    idx = 0
@@ -59,6 +61,7 @@ def calculate_dr(albumpath):
       dr_album = 0
    return(dr_album)
 
+# walk flacdir searching for directories holding albums with flac files
 def walkdirs(fixdir):
    current_album = ""
    current_artist = ""

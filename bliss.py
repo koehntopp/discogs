@@ -379,6 +379,5 @@ def main():
    removedirs(mp3root)
    createMP3()
 
-
 if __name__ == "__main__":
    main()
