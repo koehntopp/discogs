@@ -18,7 +18,6 @@ from tqdm import tqdm
 
 # Global variables
 flacroot = '/flac/'
-#flacroot = '/Volumes/koehntopp/00NZB/complete/'
 mp3root = '/mp3/'
 
 def timelog(txt1, txt2):

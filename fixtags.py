@@ -141,9 +141,9 @@ def walkdirs(fixdir):
 def main():
    if len(sys.argv) != 2:
       #      print("path to FLAC files missing")
-      #      exit(1)
-      #flacdir = '/Volumes/koehntopp/00NZB/'
-      flacdir = '/koehntopp/00NZB/complete/'
+      #      exit(1)      flacdir = '/koehntopp/00NZB/complete/'
+      #flacdir = '/Volumes/k'
+      from config import flacdir
    else:
       flacdir = sys.argv[1]
 
