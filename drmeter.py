@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# https://github.com/janw/drmeter/blob/master/drmeter.py
+# Copyright (c) 2013-2018 Jan Willhaus <mail@janwillhaus.de>
+
 import sys
 import getopt
 import glob
