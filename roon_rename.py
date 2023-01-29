@@ -25,12 +25,17 @@ from config import api_key
 # import config file containing APISEEDS apiseeds_key for lyrics (String with API token from https://happi.dev/panel )
 #from config import apiseeds_key
 
+def timelog(txt1, txt2):
+   log_msg = "[green]" + txt1 + "[/green]"
+   log_msg = log_msg + ' ' * (45 - len(log_msg))
+   rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white] " + log_msg + txt2)
 
 def main():
    if len(sys.argv) != 2:
       #      print("path to FLAC files missing")
       #      exit(1)
-      flacdir = '/Volumes/roon'
+      flacdir = '/Volumes/koehntopp/00NZB/'
+      #flacdir = '/Volumes/FLAC/Asia/'
    else:
       flacdir = sys.argv[1]
 
@@ -40,8 +45,15 @@ def main():
    current_artist = ""
    current_discogs_id = 12345
 
-   log_msg = " [green]Starting analysis[/green]"
-   rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg)
+   timelog('Starting analysis', '')
+
+def mp3gen():
+    for root, dirs, files in os.walk('.'):
+        for filename in files:
+            if os.path.splitext(filename)[1] == ".mp3":
+                yield os.path.join(root, filename)
+
+
 
    # walk through directory given as ARGV and all subdirs
    currentDirectory = os.getcwd()
@@ -50,55 +62,32 @@ def main():
          filepath = subdir + os.sep + filename
          if filepath.endswith(".flac"):
             # load the tags
-            tag = music_tag.load_file(filepath)
-            tag_album = str(tag['album'])
-            tag_artist = str(tag['albumartist'])
-            # get FLAC metadata
-            audio = FLAC(filepath)
-            if ("DISCOGS_RELEASE_ID" in audio):
-               discogs_idstring = audio["DISCOGS_RELEASE_ID"]
-               discogs_id = (int(discogs_idstring[0]))
-
+            tags = music_tag.load_file(filepath)
+            tag_album = str(tags['album'])
+            tag_artist = str(tags['albumartist'])
             # Do we have a new album to process?
             if (tag_artist != current_artist) or (tag_album != current_album) or (current_discogs_id != discogs_id):
-               log_msg = " [red]Working on[/red]"
-               log_msg = log_msg + ' ' * 14 + subdir
-               rprint("[white]" + datetime.now().strftime("%H:%M:%S") +
-                      "[/white]" + log_msg)
-               current_album = tag_album
-               current_artist = tag_artist
-               current_discogs_id = discogs_id
-               special_title = ""
-               new_title = ""
-               discogs_relnotes = ""
-               album_comments = ''
-
-               bitrate = int(audio.info.sample_rate / 1000)
-
-               # does it have a Discogs release assigned we can use for tagging?
-               if ("DISCOGS_RELEASE_ID" in audio):
+               timelog('New album found in', subdir)
+               try:
+                  discogs_idstring = tags["DISCOGS_RELEASE_ID"]
+                  discogs_id = (int(discogs_idstring[0]))
+                  current_album = tag_album
+                  current_artist = tag_artist
+                  current_discogs_id = discogs_id
+                  bitrate = int(tags.info.sample_rate / 1000)
                   drelease = dclient.release(discogs_id)
                   # make Discogs API rate limit happy
                   time.sleep(3)
-                  # get media type and catalog number (publisher names too long)
-                  formats_json = json.dumps(drelease.formats[0])
-                  formats = json.loads(formats_json)
-                  album_media = (formats["name"]).strip()
+                  # get catalog number (publisher names too long)
+                  album_catno = ""
                   labels_json = json.dumps(drelease.labels[0].data)
                   labels = json.loads(labels_json)
                   album_label = (labels["name"])
                   album_catno = " " + (labels["catno"])
-                  if "none" in album_catno:
-
-
-                     album_catno = ""
+                  album_name = drelease.title.strip()
+                  album_artist = current_artist.strip()
                   # get the release date from the master release which will be used for all files
                   # release date goes into the album name instead
-                  try:
-                     if drelease.notes.strip() != '':
-                        album_comments = drelease.notes.strip()
-                  except:
-                     pass      
                   album_year_release = (drelease.year)
                   mrelease = drelease.master
                   if drelease.master:
@@ -113,58 +102,32 @@ def main():
                      album_year_release_str = str(album_year_release)
                   if album_year_release != 0 and album_year_master == 0:
                      album_year_master = album_year_release
-                  album_name = drelease.title.strip()
-                  if new_title:
-                     album_name = new_title
-                  album_artist = current_artist.strip()
                   if special_title and album_year_release_str:
                      special_title = " " + special_title
-
-                  album_newtitle = album_name
-
-                  # finish
-                  idx = 0
+                  # build the new album title
+                  try:
+                     album_description = tags["SUBTITLE"][1].strip() + ' '
+                  except:
+                     album_description = ''
+                  album_newtitle = album_name + ' (' + album_year_release_str + " " + album_description + str(bitrate) + "kHz" + ')'
+                  # write new tags to files
                   for flacfile in files:
                      if flacfile.endswith(".flac"):
-                        filename = os.path.join(
-                            currentDirectory, subdir, flacfile)
+                        filename = os.path.join(currentDirectory, subdir, flacfile)
                         tags = music_tag.load_file(filename)
-                        tags.remove_tag('year')
-                        tags['album'] = album_newtitle
-                        tags['year'] = str(album_year_release)
-                        if album_comments != '':
-                           tags['comment'] = album_comments
+                        tags.remove_tag('YEAR')
+                        tags['YEAR'] = str(album_year_release)
+                        tags['DATE'] = str(album_year_release)
+                        tags['ORIGINALDATE'] = str(album_year_master)
+                        tags['VERSION'] = special_title
+                        tags['ALBUM'] = album_newtitle
+                        tags['ORIGINAL_TITLE'] = album_name
                         tags.save()
-                        flactags = FLAC(filename)
-                        album_description = ''
-                        try:
-                           album_description = flactags["subtitle"][0].strip() + ' '
-                        except:
-                           pass
-                        special_title = album_year_release_str + " " + album_description + str(bitrate) + "kHz" + album_catno
-                        flactags['VERSION'] = special_title
-                        flactags['ORIGINALRELEASEDATE'] = str(album_year_master)
-                        flactags['DATE'] = str(album_year_release)
-                        album_subtitle =''
-                        try:
-                           album_subtitle = flactags['SET SUBTITLE']
-                        except:
-                           pass
-                        flactags['DISC SUBTITLE'] = album_subtitle
-                        flactags.save()
-
-                  log_msg = " [yellow]Tags updated[/yellow]"
-                  log_msg = log_msg + ' ' * 12
-                  rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + current_artist + " - " + album_newtitle + " [" + special_title + "]")
+                  timelog('Tags updated', current_artist + " - " + album_newtitle)
                   current_album = album_newtitle
-               else:
-                  log_msg = " [red]No Discogs tags[/red]".ljust(20)
-                  log_msg = log_msg + ' ' * 9
-                  rprint("[white]" + datetime.now().strftime("%H:%M:%S") +
-                         "[/white]" + log_msg + current_artist + " - " + current_album)
-   log_msg = " [green]Done.[/green]"
-   rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg)
-
+               except:
+                  timelog('No Discogs tags', filepath)
+   timelog('Done.', '')
 
 if __name__ == "__main__":
    main()

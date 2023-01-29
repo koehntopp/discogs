@@ -13,7 +13,8 @@ import time
 from datetime import datetime
 
 # Global variables
-flacroot = '/Volumes/FLAC/'
+#flacroot = '/Volumes/FLAC/'
+flacroot = '/Volumes/koehntopp/00NZB/'
 
 def hasSubDirs(dir_name):
    subdirs = list(os.walk(dir_name))

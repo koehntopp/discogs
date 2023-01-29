@@ -1,6 +1,6 @@
 # discogs
 
-Playing with the Discogs Python API
+A collection of python scripts 
 
 Goal: Make sure all my files
 
