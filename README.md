@@ -13,13 +13,19 @@ Goal: Make sure all my files
 - Run fixtags.py to normalize tags
 - Run bliss.py to normalize file and folder names, and create MP3 copies for mobile/car use
 
+## This looks terribly complicated, why would you do that?
+
+If you have a music collection that has, for example, different version of the same song (original, acoustic, live, remaster), the 'automated' discovery in tools like Apple Music might not share your enthusiasm and map them all to the same metadata. I have tried *multiple* automated taggers, and they have consistently messed up my music.
+
+So now, I will not allow any program to touch my tags. Assigning to a Discogs release makes sure I always know exactly which version of a song I'm listening to. The rest is really just OCD and consistency.
+
+Tagging with Discogs and MusicBrainz releases may also allow me to recover from accidential access by other tools, as log as the release tags are still there.
+
 ## Details
 
 ### Prerequisites
 
 In order to call the Discogs API you need to create a file called "config.py" and add a Discogs API key in there (as "api_key = xxxxx") - look into the sample config file for details.
-
-
 
 ### fixtags.py 
 
