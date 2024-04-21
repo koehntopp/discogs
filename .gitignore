@@ -1,5 +1,9 @@
 flac
+.venv
+.lyndisk
+*.ipynb
 .DS_Store
+pyproject.toml
 config.py
 launch.json
 mymusic.txt
@@ -22,3 +26,6 @@ test.txt
 Untitled.ipynb
 @eaDir/*
 .ipynb_checkpoints/*
+00_todo.txt
+Untitled1.ipynb
+discogs_dump.ipynb

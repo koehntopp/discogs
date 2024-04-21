@@ -212,7 +212,7 @@ def walkdirs(fixdir):
                      lyrics = tags['LYRICS'][0].strip()
                   except KeyError:
                      lyrics = ''
-                  if lyrics == '' or not re.match(r'\[\d\d\D\d\d\D\d\d\]', lyrics):
+                  if lyrics == '' or not re.match('\[\d\d\D\d\d\D\d\d\]', lyrics):
                      lrc, lrctype = get_lrclyrics(tags)
                      if lrctype == 'lrc':
                         tags['LYRICS'] = lrc
@@ -242,7 +242,7 @@ def walkdirs(fixdir):
                         else:
                            nototal += 1
                   else:
-                     if re.match(r'\[\d\d\D\d\d\D\d\d\]', lyrics):
+                     if re.match('\[\d\d\D\d\d\D\d\d\]', lyrics):
                         lrctotal += 1
                   try:
                      subtitle = tags['SET SUBTITLE'][0].strip()

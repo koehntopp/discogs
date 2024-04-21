@@ -1,7 +1,7 @@
 from pathlib import Path, PurePosixPath
 import music_tag
 from mutagen import mp3
-from mutagen.flac import FLAC, StreamInfo
+from mutagen.flac import FLAC
 from pathvalidate import sanitize_filename
 import unicodedata
 from rich import print as rprint
@@ -17,8 +17,8 @@ import re
 from tqdm import tqdm
 
 # Global variables
-flacroot = '/flac/'
-mp3root = '/mp3/'
+flacroot = '/Volumes/FLAC/'
+mp3root = '/Volumes/MP3/'
 
 def timelog(txt1, txt2):
    log_msg = "[green]" + txt1 + "[/green]"
@@ -61,16 +61,14 @@ def movefiles(flacroot):
       stracktitle = clean(str(tags['tracktitle']))
       salbumtitle = clean(str(tags['album']))
       sartist = clean(str(tags['albumartist']))
-      ftags = FLAC(fullfilename)
+#      ftags = FLAC(fullfilename)
       # Check file name and path and move if wrong
       tobefilename = (str(tags['discnumber']).zfill(2) + '_' + str(tags['tracknumber']).zfill(2) + '_' + stracktitle + '.flac')
       tobepathname = (flacroot + sartist + '/' + salbumtitle + '/')
       tobefullname = tobepathname + tobefilename
-      if unicodedata.normalize('NFD', fullfilename) != unicodedata.normalize('NFD', tobefullname):
+      if unicodedata.normalize('NFD', fullfilename.lower()) != unicodedata.normalize('NFD', tobefullname.lower()):
          if salbumtitle != currentalbum:
             currentalbum = salbumtitle
-            a = unicodedata.normalize('NFD', fullfilename)
-            b = unicodedata.normalize('NFD', tobefullname)
             timelog("Moving album", str(tags['album']))
          if not os.path.exists(tobepathname):
             os.makedirs(tobepathname)
@@ -162,8 +160,11 @@ def checktags(flacroot):
       album = str(tags['album'])
       sartist = clean(str(tags['albumartist']))
       # Check artwork
-      arterror = ""      
-      artwork = flactags.pictures[0].width
+      arterror = ""  
+      try:    
+         artwork = flactags.pictures[0].width
+      except:
+         print(album + "Art Error")
       # Do we have a new album?
       if salbumtitle != currentalbum:
          currentalbum = salbumtitle
@@ -283,7 +284,10 @@ def checkMP3():
                sartist = clean(str(tags['albumartist']))
             else:
                # if we don't we can delete the mp3
-               tags = music_tag.load_file(firstmp3)
+               try:
+                  tags = music_tag.load_file(firstmp3)
+               except:
+                  print("ERROR " + firstmp3)    
                salbumtitle = clean(str(tags['album']))
                sartist = clean(str(tags['albumartist']))
                log_msg = " [red]MP3 but no FLAC - deleting[/red]"
