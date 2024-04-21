@@ -18,15 +18,11 @@ def get_lrclyrics (flactags):
       lyricsdata = ''
    return lyricsdata
 
-
-
 def main():
    filename = "/Volumes/Frank/00NZB/complete/Billy Joel - Live at The Great American Music Hall (Live at the Great American Music Hall - 1975) (2023) [24B-44.1kHz]/14. Delta Lady (VampFragment).flac"
    tags = FLAC(filename)
    lrc = get_lrclyrics(tags)
    print(lrc)
-
-
 
 if __name__ == "__main__":
    main()
