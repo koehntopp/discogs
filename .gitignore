@@ -5,6 +5,8 @@ flac
 .DS_Store
 pyproject.toml
 config.py
+drmeter*
+lrclib.py
 launch.json
 mymusic.txt
 .discogs_rename.py.swp
