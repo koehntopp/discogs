@@ -54,14 +54,14 @@ def clean(dirty_text):
 def movefiles(flacroot):
    timelog("Checking FLAC folders in", flacroot)
    currentalbum = ""
-#   t = tqdm(total=1, unit="album", disable=not show_progress)
+   #   t = tqdm(total=1, unit="album", disable=not show_progress)
    for p in Path(flacroot).rglob('*.flac'):
       fullfilename = str(PurePosixPath(p))
       tags = music_tag.load_file(fullfilename)
       stracktitle = clean(str(tags['tracktitle']))
       salbumtitle = clean(str(tags['album']))
       sartist = clean(str(tags['albumartist']))
-#      ftags = FLAC(fullfilename)
+      #      ftags = FLAC(fullfilename)
       # Check file name and path and move if wrong
       tobefilename = (str(tags['discnumber']).zfill(2) + '_' + str(tags['tracknumber']).zfill(2) + '_' + stracktitle + '.flac')
       tobepathname = (flacroot + sartist + '/' + salbumtitle + '/')
@@ -143,7 +143,7 @@ def checktags(flacroot):
    currentalbum = ""
    check = False
    albumcount = 0
-#   t = tqdm(total=1, unit="album", disable=not show_progress)
+   #   t = tqdm(total=1, unit="album", disable=not show_progress)
    f = open('albums.csv', 'w')
    csvwriter = csv.writer(f)
    csvstring = ['Artist', 'Sort Artist', 'Album', 'Tracks', 'Discs', 'Album DR', 'Date Master', 'Date Release', 'Bit Depth', 'Sample Rate', 'Channels', '# Covers', 'Cover Width', 'Cover Height', 'Description', 'Discogs Master', 'Discogs Release', 'Musicbrainz Release Group', 'Musicbrainz Album']
@@ -169,7 +169,7 @@ def checktags(flacroot):
       if salbumtitle != currentalbum:
          currentalbum = salbumtitle
          albumcount += 1
-#         t.update()
+      #         t.update()
          csvwriter.writerow(addtocsv(fullfilename))
       # Check album art size
       try:
