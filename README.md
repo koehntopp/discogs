@@ -2,6 +2,7 @@
 
 A collection of python scripts to manage my local music files.
 
+
 Goal: Make sure all my files
 - have associated Discogs releases
 - allow for their album names to be generated based on those tags
