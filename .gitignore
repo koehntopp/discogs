@@ -1,0 +1,17 @@
+flac
+.venv
+.lyndisk
+*.ipynb
+.DS_Store
+pyproject.toml
+config.py
+requirements.txt
+discogs.code-workspace
+*.pyc
+
+51check.py
+albums.csv
+@eaDir/*
+00_todo.txt
+musicbrainz.ipynb
+musicbrainz.ipynb
