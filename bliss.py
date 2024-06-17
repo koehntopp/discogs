@@ -113,6 +113,10 @@ def addtocsv(flacfile):
       csvzeile += ['', '', '']
       timelog("Picture problem", flacfile)
    try:
+      csvzeile += [ftags["ORIGINAL FILENAME"][0].strip()]
+   except:
+      csvzeile += ['']
+   try:
       csvzeile += [ftags["SUBTITLE"][0].strip()]
    except:
       csvzeile += ['']
@@ -146,7 +150,7 @@ def checktags(flacroot):
    #   t = tqdm(total=1, unit="album", disable=not show_progress)
    f = open('albums.csv', 'w')
    csvwriter = csv.writer(f)
-   csvstring = ['Artist', 'Sort Artist', 'Album', 'Tracks', 'Discs', 'Album DR', 'Date Master', 'Date Release', 'Bit Depth', 'Sample Rate', 'Channels', '# Covers', 'Cover Width', 'Cover Height', 'Description', 'Discogs Master', 'Discogs Release', 'Musicbrainz Release Group', 'Musicbrainz Album']
+   csvstring = ['Artist', 'Sort Artist', 'Album', 'Tracks', 'Discs', 'Album DR', 'Date Master', 'Date Release', 'Bit Depth', 'Sample Rate', 'Channels', '# Covers', 'Cover Width', 'Cover Height', 'Fixed Album Name', 'Description', 'Discogs Master', 'Discogs Release', 'Musicbrainz Release Group', 'Musicbrainz Album']
    csvwriter.writerow(csvstring)
    for p in Path(flacroot).rglob('*.flac'):
       artistdir = (PurePosixPath(p).parent).stem
