@@ -14,10 +14,14 @@ from drmeter.algorithm import dynamic_range
 from drmeter.models import AudioData
 import soundfile as sf
 
+def hasSubDirs(dir_name):
+   subdirs = list(os.walk(dir_name))
+   return(len(list(os.walk(dir_name))) > 1)
+
 # logging function
 def timelog(txt1, txt2):
    log_msg = '[green]' + txt1 + '[/green]'
-   log_msg = log_msg + ' ' * (45 - len(log_msg))
+   log_msg = log_msg + ' ' * (60 - len(log_msg))
    rprint('[white]' + datetime.now().strftime('%H:%M:%S') + '[/white] ' + log_msg + txt2)
 
 # calculate song and album dynamic range and write tags to files
@@ -59,9 +63,9 @@ def calculate_dr(albumpath):
          dr_tags = taglib.File(fullfilename)
          dr_tags.tags["ALBUM DYNAMIC RANGE"] = [str(dr_album).zfill(2)]
          dr_tags.save()
-      timelog("Album DR calculated for ", albumpath + ": " + str(dr_album))
+      timelog("Album DR calculated for ", dr_tags.tags["ALBUM"][0] + ": " + str(dr_album))
    else:
-      timelog("Album DR for ", albumpath + ": " + str(dr_album))
+      timelog("Album DR for ", dr_tags.tags["ALBUM"][0] + ": " + str(dr_album))
 
 
 def main():
@@ -69,7 +73,6 @@ def main():
       from config import flacdir
    else:
       flacdir = sys.argv[1]
-   timelog('Starting analysis', flacdir)
    # find all directories containing flac files below fixdir
    flac_directories = []
    for root, dirs, files in os.walk(flacdir):
@@ -78,8 +81,10 @@ def main():
             flac_directories.append(root)
             break
    for directory in flac_directories:
-      calculate_dr(directory)
-   timelog('Finished analysis', flacdir)
+      if not hasSubDirs(directory):
+         timelog('Starting Dynamic Range calculation in ', flacdir)
+         calculate_dr(directory)
+   print("")  
 
 if __name__ == '__main__':
    main()

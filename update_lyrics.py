@@ -29,10 +29,14 @@ def flactag(song, tag):
       #timelog("Tag Error:", tag + " -- " + song.tags["ALBUMARTIST"][0] + " - " + song.tags["ALBUM"][0])
       return("")
 
+def hasSubDirs(dir_name):
+   subdirs = list(os.walk(dir_name))
+   return(len(list(os.walk(dir_name))) > 1)
+
 # logging function
 def timelog(txt1, txt2):
    log_msg = '[green]' + txt1 + '[/green]'
-   log_msg = log_msg + ' ' * (45 - len(log_msg))
+   log_msg = log_msg + ' ' * (60 - len(log_msg))
    rprint('[white]' + datetime.now().strftime('%H:%M:%S') + '[/white] ' + log_msg + txt2)
 
 def get_lrclyrics(flactags, albumtitle):
@@ -44,12 +48,7 @@ def get_lrclyrics(flactags, albumtitle):
     "Connection": "keep-alive",
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36"
    }
-   params = {
-      'artist_name': flactags.tags['ALBUMARTIST'],
-      'track_name': flactags.tags['TITLE'],
-      'album_name': albumtitle,
-      'duration': duration,
-   }
+   params = {'artist_name': flactags.tags['ARTIST'], 'track_name': flactags.tags['TITLE'], 'album_name': albumtitle, 'duration': duration}
    url = url_template.format(urlencode(params, safe='()', quote_via=quote))
    lyricsdata = ''
    lyricstype = 'none'
@@ -66,7 +65,6 @@ def get_lrclyrics(flactags, albumtitle):
       lyricsdata = ''
    return lyricsdata, lyricstype
 
-
 # walk flacdir searching for directories holding albums with flac files
 def walkdirs(fixdir):
    global lrc_total
@@ -81,108 +79,70 @@ def walkdirs(fixdir):
    dclient = discogs_client.Client('PyDiscogsTagger/0.1', user_token=api_key)
 
    # find all directories containing flac files below fixdir
-   files = glob.glob(os.path.join(fixdir, '**', '*.flac'), recursive=True)
-   paths = list(set(map(os.path.dirname, files)))
-   pathbar = tqdm(range(len(paths)))
-   for i in pathbar:
-      shortpath = (
-         (PurePath(paths[i]).name[:40] + '..')
-         if len(PurePath(paths[i]).name) > 40
-         else PurePath(paths[i]).name
-      )
-      # timelog('Analyzing ', shortpath)
-      firstflac = next(Path(paths[i]).rglob('*.flac'), None)
-      tags = taglib.File(firstflac)
-      discogs = True
-      try:
-         discogs_id = int(flactag(tags, 'DISCOGS_RELEASE_ID'))
-      except:
-         discogs = False
-      # if we found discogs tags to work with go ahead
-      if discogs:
-         tag_album = flactag(tags, "ALBUM")
-         tag_artist = flactag(tags, "ALBUMARTIST")
-         samplerate = int(tags.sampleRate / 1000)
-         drelease = dclient.release(discogs_id)
-         # make Discogs API rate limit happy
-         time.sleep(3)
-         album_name = flactag(tags, 'ORIGINAL FILENAME').strip()
-         if album_name == "":
-            album_name = drelease.title.strip()
-         album_artist = flactag(tags, 'ALBUMARTIST')
-         songs = 0
-         # write new tags to files
-         for subdir, dirs, files in os.walk(paths[i]):
-            for filename in files:
-               filepath = paths[i] + os.sep + filename
-               if filepath.endswith('.flac'):
-                  dirty = False
-                  tags = taglib.File(filepath)
-                  try:
-                     lyrics = flactag(tags, 'LYRICS').strip()
-                  except KeyError:
-                     lyrics = ''
-                  if lyrics == '' or not re.match(r'\[\d\d\D\d\d\D\d\d\]', lyrics):
-                     lrc, lrctype = get_lrclyrics(tags, album_name)
-                     if lrctype == 'lrc':
-                        tags.tags['LYRICS'] = [lrc]
-                        lrcnew += 1
-                        lrctotal += 1
-                        dirty = True
-                        tqdm.write(
-                           '           LRC lyrics added for '
-                           + tags.tags['TITLE'][0]
-                           + ' ('
-                           + album_artist
-                           + ')'
-                        )
-                     elif lrctype == 'plain' and lyrics == '':
-                        tags.tags['LYRICS'] = [lrc]
-                        txtnew += 1
-                        txttotal += 1
-                        dirty = True
-                        tqdm.write(
-                           '           TXT lyrics added for '
-                           + tags.tags['TITLE'][0]
-                           + ' ('
-                           + album_artist
-                           + ')'
-                        )
-                     else:
-                        if lyrics != '':
-                           txttotal += 1
-                        else:
-                           nototal += 1
-                  else:
-                     if re.match(r'\[\d\d\D\d\d\D\d\d\]', lyrics):
-                        lrctotal += 1
-                  if dirty:
-                     tags.save()
-                     #// TODO: update MP3
-                  flac_files += 1
-      else:
-         timelog('No Discogs tags found in ', shortpath)
-   timelog('Finished analysis', fixdir)
-   tqdm.write(
-      '         '
-      + str(flac_files)
-      + ' FLAC files processed, '
-      + str(lrcnew)
-      + ' LRC lyrics and '
-      + str(txtnew)
-      + ' TXT lyrics added'
-   )
-   tqdm.write(
-      '         '
-      + str(flac_files)
-      + ' FLAC files processed, '
-      + str(lrctotal)
-      + ' LRC lyrics and '
-      + str(txttotal)
-      + ' TXT lyrics present, '
-      + str(nototal)
-      + ' files without lyrics'
-   )
+   first_flac = next((filename for filename in os.listdir(fixdir) if filename.endswith(".flac")), None)
+   if first_flac != None:
+      first_flac_path = os.path.join(fixdir, first_flac)
+   else:
+      return
+   tags = taglib.File(first_flac_path)
+   discogs = True
+   try:
+      discogs_id = int(flactag(tags, 'DISCOGS_RELEASE_ID'))
+   except:
+      discogs = False
+      return
+   # if we found discogs tags to work with go ahead
+   if discogs:
+      tag_album = flactag(tags, "ALBUM")
+      tag_artist = flactag(tags, "ALBUMARTIST")
+      samplerate = int(tags.sampleRate / 1000)
+      drelease = dclient.release(discogs_id)
+      # make Discogs API rate limit happy
+      time.sleep(3)
+      album_name = flactag(tags, 'ORIGINAL FILENAME').strip()
+      if album_name == "":
+         album_name = drelease.title.strip()
+      artist = flactag(tags, 'ARTIST')
+      songs = 0
+      # write new tags to files
+      for p in Path(fixdir).rglob('*.flac'):
+         fullfilename = str(PurePosixPath(p))
+         tags = taglib.File(fullfilename)
+         dirty = False
+         try:
+            lyrics = flactag(tags, 'LYRICS').strip()
+         except KeyError:
+            lyrics = ''
+         if lyrics == '' or not re.match(r'\[\d\d\D\d\d\D\d\d\]', lyrics):
+            lrc, lrctype = get_lrclyrics(tags, album_name)
+            if lrctype == 'lrc':
+               tags.tags['LYRICS'] = [lrc]
+               lrcnew += 1
+               lrctotal += 1
+               dirty = True
+               tqdm.write('           LRC lyrics added for ' + tags.tags['TITLE'][0] + ' (' + artist + ')')
+            elif lrctype == 'plain' and lyrics == '':
+               tags.tags['LYRICS'] = [lrc]
+               txtnew += 1
+               txttotal += 1
+               dirty = True
+               tqdm.write('           TXT lyrics added for ' + tags.tags['TITLE'][0] + ' (' + artist + ')')
+            else:
+               if lyrics != '':
+                  txttotal += 1
+               else:
+                  nototal += 1
+         else:
+            if re.match(r'\[\d\d\D\d\d\D\d\d\]', lyrics):
+               lrctotal += 1
+         if dirty:
+            tags.save()
+            #// TODO: update MP3
+         flac_files += 1
+   else:
+      timelog('No Discogs tags found in ', shortpath)
+   tqdm.write('         ' + str(flac_files) + ' FLAC files processed, ' + str(lrcnew) + ' LRC lyrics and ' + str(txtnew) + ' TXT lyrics added' )
+   tqdm.write('         ' + str(flac_files) + ' FLAC files processed, ' + str(lrctotal) + ' LRC lyrics and ' + str(txttotal) + ' TXT lyrics present, ' + str(nototal) + ' files without lyrics')
 
 
 def main():
@@ -190,11 +150,17 @@ def main():
       from config import flacdir
    else:
       flacdir = sys.argv[1]
-
-   timelog('Starting analysis', flacdir)
-
-   walkdirs(flacdir)
-
+   flac_directories = []
+   for root, dirs, files in os.walk(flacdir):
+      for file in files:
+         if file.endswith(".flac"):
+            flac_directories.append(root)
+            break
+   for directory in flac_directories:
+      if not hasSubDirs(directory):
+         timelog('Starting lyrics update in ', directory)
+         walkdirs(directory)
+   print("")
 
 if __name__ == '__main__':
    main()

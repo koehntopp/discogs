@@ -6,10 +6,17 @@ Goal: Make sure all my files
 - have associated Discogs releases
 - allow for their album names to be generated based on those tags
 
+## Recent Updates
+
+### 2024-06-17
+
+- Move functionality into separate programs, so that they each execute faster
+
 ## Here's how I use this:
 - For each album, add Discogs (https://www.discogs.com/) tags for the exact release with your favourite tagger (I use https://2manyrobots.com/yate/).
 - (To satify my OCD, I also add MusicBrainz (https://musicbrainz.org/) tags for good measure) 
 - Add decent cover art
+- (rsgain easy <directory> to create replay gain tags)
 - Run fixtags.py to normalize tags
 - Run bliss.py to normalize file and folder names, and create MP3 copies for mobile/car use
 
@@ -21,11 +28,23 @@ So now, I will not allow any program to touch my tags. Assigning to a Discogs re
 
 Tagging with Discogs and MusicBrainz releases may also allow me to recover from accidential access by other tools, as log as the release tags are still there.
 
+## Tagging suggestions
+
+- Start by adding Discogs and Qobuz tags 
+
+- In case of a weird filename (or "(Deluxe Edition)") put the disambigution into "ORIGINAL FILENAME" to avoid too many brackets
+
+- Put the source (vendor, medium) into DESCRIPTION
+
 ## Details
 
 ### Prerequisites
 
 In order to call the Discogs API you need to create a file called "config.py" and add a Discogs API key in there (as "api_key = xxxxx") - look into the sample config file for details.
+
+### update_lyrics.py
+
+update_lyrics.py <folder> will walk through a folder hierarchy and try to get LRC or TXT lyrics for songs. It will skip files that do not have a Discogs release assigned. 
 
 ### fixtags.py 
 
@@ -35,9 +54,17 @@ In detail:
 - find all FLAC files with Discogs tags
 - find the master release
 - get the original release date from the master
-- add custom name fields if available ("SACD")
+- add custom name fields if available ("SACD") from SUBTITLE tag
 - rewrite album title to add release year, custom tags, bitrate to allow differentiation of multiple releases of the same album
-- try to get lyrics (LRC synced lyrics, preferrably) for each title
+- calculate Dynamic Range (DR) values for tracks and album and write to tags
+
+Tag flow:
+
+Discogs title  ->  ORIGINAL_TITLE ("backup", used for lyrics search etc.)
+
+Discogs YEAR  ->  DATE (year of this release)
+
+Discogs main_release.year  ->  ORIGINALRELEASEDATE (first release date)
 
 ### bliss.py
 
@@ -53,9 +80,11 @@ In detail:
 ## Libraries and tools used
 
 - Python Discogs client https://github.com/joalla/discogs_client
+- Python taglib wrapper https://github.com/supermihi/pytaglib
 - Python tagger MusicTag https://github.com/KristoforMaynard/music-tag
 - Python Dynamic Range calculation by https://github.com/janw/drmeter/
 - Lyrics API by https://github.com/tranxuanthang/lrcget
+- Create replaygain tags https://github.com/complexlogic/rsgain
 
 ## To Do
 

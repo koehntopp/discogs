@@ -1,0 +1,6 @@
+#!/bin/sh
+/Applications/rsgain easy --skip-existing $1
+python3 calculate_fp.py $1
+python3 calculate_dr.py $1
+python3 update_lyrics.py $1
+python3 fixtags.py $1

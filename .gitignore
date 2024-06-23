@@ -15,3 +15,9 @@ albums.csv
 00_todo.txt
 musicbrainz.ipynb
 musicbrainz.ipynb
+test.csv
+test.py
+.vscode/launch.json
+check_subtitle.py
+migrate_tags.py
+pytag.py
