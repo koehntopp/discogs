@@ -157,9 +157,8 @@ def main():
             flac_directories.append(root)
             break
    for directory in flac_directories:
-      if not hasSubDirs(directory):
-         timelog('Starting lyrics update in ', directory)
-         walkdirs(directory)
+      timelog('Starting lyrics update in ', directory)
+      walkdirs(directory)
    print("")
 
 if __name__ == '__main__':

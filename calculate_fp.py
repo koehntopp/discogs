@@ -69,9 +69,8 @@ def main():
             flac_directories.append(root)
             break
    for directory in flac_directories:
-      if not hasSubDirs(directory):
-         timelog('Starting AcoustID fingerprint generation in ', directory)
-         calculate_fp(directory)
+      timelog('Starting AcoustID fingerprint generation in ', directory)
+      calculate_fp(directory)
    print("")
 
 if __name__ == '__main__':
