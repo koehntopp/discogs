@@ -81,7 +81,7 @@ def main():
             flac_directories.append(root)
             break
    for directory in flac_directories:
-      timelog('Starting Dynamic Range calculation in ', flacdir)
+      timelog('Starting Dynamic Range calculation in ', directory)
       calculate_dr(directory)
    print("")  
 

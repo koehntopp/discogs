@@ -83,14 +83,14 @@ def walkdirs(fixdir):
    if first_flac != None:
       first_flac_path = os.path.join(fixdir, first_flac)
    else:
-      return
+      return(lrcnew + txtnew)
    tags = taglib.File(first_flac_path)
    discogs = True
    try:
       discogs_id = int(flactag(tags, 'DISCOGS_RELEASE_ID'))
    except:
       discogs = False
-      return
+      return(lrcnew + txtnew)
    # if we found discogs tags to work with go ahead
    if discogs:
       tag_album = flactag(tags, "ALBUM")
@@ -143,7 +143,7 @@ def walkdirs(fixdir):
       timelog('No Discogs tags found in ', shortpath)
    tqdm.write('         ' + str(flac_files) + ' FLAC files processed, ' + str(lrcnew) + ' LRC lyrics and ' + str(txtnew) + ' TXT lyrics added' )
    tqdm.write('         ' + str(flac_files) + ' FLAC files processed, ' + str(lrctotal) + ' LRC lyrics and ' + str(txttotal) + ' TXT lyrics present, ' + str(nototal) + ' files without lyrics')
-
+   return(lrcnew + txtnew)
 
 def main():
    if len(sys.argv) != 2:
@@ -151,6 +151,7 @@ def main():
    else:
       flacdir = sys.argv[1]
    flac_directories = []
+   updated = 0
    for root, dirs, files in os.walk(flacdir):
       for file in files:
          if file.endswith(".flac"):
@@ -158,8 +159,9 @@ def main():
             break
    for directory in flac_directories:
       timelog('Starting lyrics update in ', directory)
-      walkdirs(directory)
+      updated += walkdirs(directory)
    print("")
+   timelog('Lyrics added: ', str(updated))
 
 if __name__ == '__main__':
    main()

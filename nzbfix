@@ -1,6 +1,13 @@
-#!/bin/sh
-/Applications/rsgain easy --skip-existing $1
-python3 calculate_fp.py $1
-python3 calculate_dr.py $1
-python3 update_lyrics.py $1
-python3 fixtags.py $1
+import os
+ 
+if len(sys.argv) != 2:
+   from config import flacdir
+else:
+   flacdir = sys.argv[1]
+
+os.system('/Applications/rsgain easy --skip-existing' + flacdir)
+
+os.system('python3 /Users/koehntopp/src/discogs/calculate_fp.py' + flacdir)
+os.system('python3 /Users/koehntopp/src/discogs/calculate_dr.py' + flacdir)
+os.system('python3 /Users/koehntopp/src/discogs/update_lyrics.py' + flacdir)
+os.system('python3 /Users/koehntopp/src/discogs/fixtags.py' + flacdir)
