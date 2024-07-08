@@ -21,3 +21,4 @@ test.py
 check_subtitle.py
 migrate_tags.py
 pytag.py
+nzbfix*
