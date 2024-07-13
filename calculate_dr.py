@@ -43,16 +43,19 @@ def calculate_dr(albumpath):
             try:
                result = dynamic_range(AudioData.from_soundfile(data))
                DR = round(result.overall_dr_score)
-            except: 
-               pass
+            except Exception as e: print(e)
+
+#            except: 
+#               pass
          if int(DR) != dr_song and DR != 0:
             timelog('DR old ' + str(dr_song).zfill(2) + ' --> new ' + str(DR).zfill(2), dr_tags.tags["TITLE"][0])
             dr_tags.tags["DYNAMIC RANGE"] = [str(DR).zfill(2)]
             dr_tags.save()
             dr_song = int(DR)
             dra_dirty = True
-      dr_tracks += 1
-      dr_sum += dr_song
+      if dsr_song > 0:
+         dr_tracks += 1
+         dr_sum += dr_song
    if dr_tracks > 0:
       dr_album = str(int(dr_sum / dr_tracks)).zfill(2)
    else:
