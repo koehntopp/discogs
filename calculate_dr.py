@@ -53,7 +53,7 @@ def calculate_dr(albumpath):
             dr_tags.save()
             dr_song = int(DR)
             dra_dirty = True
-      if dsr_song > 0:
+      if dr_song > 0:
          dr_tracks += 1
          dr_sum += dr_song
    if dr_tracks > 0:
