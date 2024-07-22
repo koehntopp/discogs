@@ -76,7 +76,7 @@ def walkdirs(fixdir):
    txtnew = 0
 
    # initialize Discogs API
-   dclient = discogs_client.Client('PyDiscogsTagger/0.1', user_token=api_key)
+   #dclient = discogs_client.Client('PyDiscogsTagger/0.1', user_token=api_key)
 
    # find all directories containing flac files below fixdir
    first_flac = next((filename for filename in os.listdir(fixdir) if filename.endswith(".flac")), None)
@@ -96,12 +96,15 @@ def walkdirs(fixdir):
       tag_album = flactag(tags, "ALBUM")
       tag_artist = flactag(tags, "ALBUMARTIST")
       samplerate = int(tags.sampleRate / 1000)
-      drelease = dclient.release(discogs_id)
+      #drelease = dclient.release(discogs_id)
       # make Discogs API rate limit happy
-      time.sleep(3)
-      album_name = flactag(tags, 'ORIGINAL FILENAME').strip()
+      #time.sleep(3)
+      #album_name = flactag(tags, 'ORIGINAL FILENAME').strip()
+      ### next line assumes ORIGINAL_TITLE has the original album title, from fixtags.py. Saves the discogs API querty.
+      album_name = flactag(tags, 'ORIGINAL_TITLE').strip()
       if album_name == "":
-         album_name = drelease.title.strip()
+         #album_name = drelease.title.strip()
+         pass
       artist = flactag(tags, 'ARTIST')
       songs = 0
       # write new tags to files
