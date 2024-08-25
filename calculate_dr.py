@@ -19,8 +19,8 @@ def hasSubDirs(dir_name):
    return(len(list(os.walk(dir_name))) > 1)
 
 # logging function
-def timelog(txt1, txt2):
-   log_msg = '[green]' + txt1 + '[/green]'
+def timelog(txt1, txt2, color = "green"):
+   log_msg = '[' + color + ']' + txt1 + '[/' + color + ']'
    log_msg = log_msg + ' ' * (60 - len(log_msg))
    rprint('[white]' + datetime.now().strftime('%H:%M:%S') + '[/white] ' + log_msg + txt2)
 
@@ -29,46 +29,57 @@ def calculate_dr(albumpath):
    # assumption: folder only contains a single album
    dr_sum = 0
    dr_tracks = 0
+   tracks = 0
    # iterate over FLAC files, calculate title DR (if possible)
    for p in Path(albumpath).rglob('*.flac'):
       fullfilename = str(PurePosixPath(p))
       dr_tags = taglib.File(fullfilename)
+      tracks += 1
       dr_song = 0
       DR = 0
       dra_dirty = False
       try:
+         # do we have a song DR entry
          dr_song = int(dr_tags.tags["DYNAMIC RANGE"][0])
       except:
+         # if we don't, calculate it
          with sf.SoundFile(fullfilename) as data:
             try:
                result = dynamic_range(AudioData.from_soundfile(data))
-               DR = round(result.overall_dr_score)
-            except Exception as e: print(e)
-
-#            except: 
-#               pass
-         if int(DR) != dr_song and DR != 0:
+               DR = int(round(result.overall_dr_score))
+            except Exception as e: 
+               print(e)
+               timelog('Error calculating DR:', dr_tags.tags["TITLE"][0], "red")
+         if DR != dr_song:
             timelog('DR old ' + str(dr_song).zfill(2) + ' --> new ' + str(DR).zfill(2), dr_tags.tags["TITLE"][0])
             dr_tags.tags["DYNAMIC RANGE"] = [str(DR).zfill(2)]
             dr_tags.save()
-            dr_song = int(DR)
+            dr_song = DR
             dra_dirty = True
       if dr_song > 0:
          dr_tracks += 1
          dr_sum += dr_song
-   if dr_tracks > 0:
-      dr_album = str(int(dr_sum / dr_tracks)).zfill(2)
+   if dr_tracks != tracks:
+      timelog('ERROR: Total tracks ' + str(tracks) + ' , tracks with DR ' + str(dr_tracks), "", "red")
    else:
-      timelog("ERROR calculating DR!", albumpath + ": " + str(dr_album))
-   if dra_dirty:
-      for p in Path(albumpath).rglob('*.flac'):
-         fullfilename = str(PurePosixPath(p))
-         dr_tags = taglib.File(fullfilename)
-         dr_tags.tags["ALBUM DYNAMIC RANGE"] = [str(dr_album).zfill(2)]
-         dr_tags.save()
-      timelog("Album DR calculated for ", dr_tags.tags["ALBUM"][0] + ": " + str(dr_album))
-   else:
-      timelog("Album DR for ", dr_tags.tags["ALBUM"][0] + ": " + str(dr_album))
+      if dr_tracks > 0:
+         dr_album = str(round(dr_sum / dr_tracks)).zfill(2)
+         try:
+            dr_album_old = dr_tags.tags["ALBUM DYNAMIC RANGE"][0]
+         except:
+            dr_album_old = ""
+         timelog("Album DR in files:", dr_album_old)
+         if dra_dirty or dr_album != dr_album_old:
+            for p in Path(albumpath).rglob('*.flac'):
+               fullfilename = str(PurePosixPath(p))
+               dr_tags = taglib.File(fullfilename)
+               dr_tags.tags["ALBUM DYNAMIC RANGE"] = [str(dr_album).zfill(2)]
+               dr_tags.save()
+            timelog("Album DR updated to:", str(dr_album), "red")
+         else:
+            timelog("Album DR for " +  dr_tags.tags["ALBUM"][0] + ":", str(dr_album))
+      else:
+         timelog("ERROR calculating DR!", albumpath + ": " + str(dr_album))
 
 
 def main():
