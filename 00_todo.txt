@@ -1,0 +1,9 @@
+bliss.py
+  - logging
+  - command line option --cleanup w/o flac checks
+  - better logging for flacpodfnjkdskjghjksdhgjkdshgjkdshgjskpooppppppooooopppppppppoooooo
+
+
+
+  ^q3gmkflqenrgkrnmbgkjkkkkkkfixtags.py
+  - extra logging argument color
