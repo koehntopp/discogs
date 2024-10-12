@@ -3,5 +3,6 @@ __pycache__/
 .venv/
 albums.csv
 .vscode/
-*.workspace
+*.code-workspace
 *.ipynb
+*.toml
