@@ -6,3 +6,4 @@ albums.csv
 *.code-workspace
 *.ipynb
 *.toml
+test.*
