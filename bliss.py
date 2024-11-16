@@ -1,3 +1,12 @@
+## TODO
+#
+# Moving <song> to <destination>
+# No MP3 for <song> - generating...
+# file by file, ignore albums
+
+
+
+
 from pathlib import Path, PurePosixPath
 import music_tag
 from mutagen import mp3

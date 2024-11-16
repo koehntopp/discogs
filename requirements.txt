@@ -1,1 +1,4 @@
-requirements.txt
+rich
+tqdm
+mutagen
+drmeter

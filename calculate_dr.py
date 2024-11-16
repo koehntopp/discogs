@@ -6,8 +6,8 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath, PurePath
 from tqdm import tqdm
 
-from mutagen.flac import FLAC 
-
+# https://github.com/supermihi/pytaglib
+import taglib
 
 # import DRMETER https://github.com/janw/drmeter/
 from drmeter.algorithm import dynamic_range
@@ -33,14 +33,14 @@ def calculate_dr(albumpath):
    # iterate over FLAC files, calculate title DR (if possible)
    for p in Path(albumpath).rglob('*.flac'):
       fullfilename = str(PurePosixPath(p))
-      dr_tags = FLAC(fullfilename)
+      dr_tags = taglib.File(fullfilename)
       tracks += 1
       dr_song = 0
       DR = 0
       dra_dirty = False
-         # do we have a song DR entry
       try:
-         dr_song = int(dr_tags['dynamic range'][0])
+         # do we have a song DR entry
+         dr_song = int(dr_tags.tags["DYNAMIC RANGE"][0])
       except:
          # if we don't, calculate it
          with sf.SoundFile(fullfilename) as data:
@@ -52,8 +52,8 @@ def calculate_dr(albumpath):
                print(fullfilename)
                #timelog('Error calculating DR:', dr_tags.tags["TITLE"][0], "red")
          if DR != dr_song:
-            timelog('DR old ' + str(dr_song).zfill(2) + ' --> new ' + str(DR).zfill(2), dr_tags.tags["TITLE"][0])
-            dr_tags['dynamic range'] = [str(DR).zfill(2)]
+            #timelog('DR old ' + str(dr_song).zfill(2) + ' --> new ' + str(DR).zfill(2), dr_tags.tags["TITLE"][0])
+            dr_tags.tags["DYNAMIC RANGE"] = [str(DR).zfill(2)]
             dr_tags.save()
             dr_song = DR
             dra_dirty = True
@@ -66,19 +66,19 @@ def calculate_dr(albumpath):
       if dr_tracks > 0:
          dr_album = str(round(dr_sum / dr_tracks)).zfill(2)
          try:
-            dr_album_old = dr_tags['album dynamic range'][0]
+            dr_album_old = dr_tags.tags["ALBUM DYNAMIC RANGE"][0]
          except:
             dr_album_old = ""
          timelog("Album DR in files:", dr_album_old)
          if dra_dirty or dr_album != dr_album_old:
             for p in Path(albumpath).rglob('*.flac'):
                fullfilename = str(PurePosixPath(p))
-               dr_tags = FLAC(fullfilename)
-               dr_tags['album dynamic range'] = [str(dr_album).zfill(2)]
+               dr_tags = taglib.File(fullfilename)
+               dr_tags.tags["ALBUM DYNAMIC RANGE"] = [str(dr_album).zfill(2)]
                dr_tags.save()
             timelog("Album DR updated to:", str(dr_album), "red")
          else:
-            timelog("Album DR for " +  dr_tags['album'][0] + ":", str(dr_album))
+            timelog("Album DR for " +  dr_tags.tags["ALBUM"][0] + ":", str(dr_album))
       else:
          timelog("ERROR calculating DR!", albumpath + ": " + str(dr_album))
 
