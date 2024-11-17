@@ -52,7 +52,7 @@ def calculate_dr(albumpath):
                print(fullfilename)
                #timelog('Error calculating DR:', dr_tags.tags["TITLE"][0], "red")
          if DR != dr_song:
-            #timelog('DR old ' + str(dr_song).zfill(2) + ' --> new ' + str(DR).zfill(2), dr_tags.tags["TITLE"][0])
+            timelog('DR old ' + str(dr_song).zfill(2) + ' --> new ' + str(DR).zfill(2), dr_tags.tags["TITLE"][0])
             dr_tags.tags["DYNAMIC RANGE"] = [str(DR).zfill(2)]
             dr_tags.save()
             dr_song = DR
