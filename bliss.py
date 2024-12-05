@@ -19,6 +19,7 @@ import taglib
 # Global variables
 flacroot = '/Volumes/FLAC/'
 mp3root = '/Volumes/MP3/'
+opusroot = '/Volumes/Opus/'
 
 def timelog(txt1, txt2):
    log_msg = "[green]" + txt1 + "[/green]"
@@ -175,6 +176,38 @@ def createMP3():
             rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + salbumtitle + ' - ' + stracktitle)
             flac2mp3 = "ffmpeg -i " + flacfilename + " -codec:a libmp3lame -qscale:a 2 -vsync 2 " + mp3filename + " > /dev/null 2>&1"
             os.system(flac2mp3)
+      except Exception as e: 
+         timelog('EXCEPTION RAISED:', str(e))
+      #except:
+         #break
+   log_msg = " [green]Done.[/green]"
+   log_msg = log_msg + ' ' * 8
+   rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg)
+
+def createOpus():
+   global opusroot, flacroot
+   log_msg = " [green]Creating missing Opus files in[/green]"
+   log_msg = log_msg + ' ' * 6
+   rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + opusroot)
+   for p in Path(flacroot).rglob('*.flac'):
+      artistdir = (PurePosixPath(p).parent).stem
+      flacfilename = str(PurePosixPath(p))
+      opusfilename = flacfilename.replace(flacroot, opusroot)
+      opusfilename = opusfilename.replace(".flac", ".mp3")
+      try:
+         if not os.path.isfile(opusfilename):
+            metadata = taglib.File(flacfilename)
+            stracktitle = clean(str(metadata.tags['TITLE'][0]))
+            salbumtitle = clean(str(metadata.tags['ALBUM'][0]))
+            sartist = clean(str(metadata.tags['ALBUMARTIST'][0]))
+            tobepathname = (opusroot + sartist + '/' + salbumtitle)
+            if not os.path.exists(tobepathname):
+               os.makedirs(tobepathname)
+            log_msg = " [red]Creating Opus for[/red]"
+            log_msg = log_msg + ' ' * 14
+            rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + salbumtitle + ' - ' + stracktitle)
+            flac2mp3 = "ffmpeg -i " + flacfilename + " -codec:a libmp3lame -qscale:a 2 -vsync 2 " + mp3filename + " > /dev/null 2>&1"
+            os.system(flac2opus)
       except Exception as e: 
          timelog('EXCEPTION RAISED:', str(e))
       #except:
