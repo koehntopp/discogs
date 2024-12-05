@@ -55,7 +55,7 @@ def fixdir(fixdir):
       # make Discogs API rate limit happy
       time.sleep(1)
       # if for some reason the Discogs filename has weird additions we can overwrite it with ORIGINAL FILENAME
-      discogs_name = drelease.title.strip()
+      discogs_name = drelease.master.title.strip()
       album_name = flactag(tags, 'ORIGINAL FILENAME').strip()
       if album_name == "":
          album_name = discogs_name
