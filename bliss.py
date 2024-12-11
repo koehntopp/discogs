@@ -40,7 +40,7 @@ def clean(dirty_text):
    clean_text = clean_text.replace(')', '')
    clean_text = clean_text.replace('\'', '')
    clean_text = clean_text.replace('&', 'and')
-   clean_text = clean_text.replace('+', 'and')
+   clean_text = clean_text.replace('+', 'plus')
    clean_text = clean_text.replace('´', '')
    clean_text = clean_text.replace('’', '')
    clean_text = clean_text.replace('″', '')
