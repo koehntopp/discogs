@@ -7,3 +7,6 @@ albums.csv
 *.ipynb
 *.toml
 test.*
+*.png
+*.psd
+*.jpg
