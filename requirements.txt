@@ -7,4 +7,6 @@ pyacoustid
 discogs_client
 music_tag
 pathvalidate
+wordcloud
+matplotlib
 

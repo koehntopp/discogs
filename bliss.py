@@ -5,12 +5,7 @@ from rich import print as rprint
 import os
 import shutil
 import time
-import csv
 from datetime import datetime
-from shlex import quote
-import subprocess
-import glob
-import re
 from tqdm import tqdm
 
 # https://github.com/supermihi/pytaglib
@@ -97,7 +92,7 @@ def removedirs(rootdir):
    log_msg = log_msg + ' ' * 8
    rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg)
 
-def checkMP3():
+def checkMP3():   
    global mp3root, flacroot
    log_msg = " [green]Checking MP3 folders in[/green]"
    log_msg = log_msg + ' ' * 7
