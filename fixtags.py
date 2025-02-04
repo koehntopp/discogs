@@ -6,6 +6,9 @@ from rich import print as rprint
 from datetime import datetime
 from pathlib import Path, PurePosixPath, PurePath
 from tqdm import tqdm
+from dataclasses import dataclass
+from typing import Optional
+import argparse
 
 # import music libraries
 # https://github.com/joalla/discogs_client
@@ -18,18 +21,68 @@ import taglib
 from config import api_key
 
 # logging function
-def timelog(txt1, txt2):
-   log_msg = '[green]' + txt1 + '[/green]'
-   log_msg = log_msg + ' ' * (60 - len(log_msg))
-   rprint('[white]' + datetime.now().strftime('%H:%M:%S') + '[/white] ' + log_msg + txt2)
+def timelog(txt1, txt2, colour: str = 'white'):
+   log_msg = f'[{colour}]' + txt1 + f'[/{colour}]'
+   log_msg = log_msg + ' ' * (40 - len(txt1))
+   rprint(f'[white]{datetime.now().strftime("%H:%M:%S")}[/white] ' + log_msg + txt2)
 
 # extract a single FLAC tag
 def flactag(song, tag):
    try:
       return(song.tags[tag][0])
    except: 
-      #timelog("Tag Error:", tag + " -- " + song.tags["ALBUMARTIST"][0] + " - " + song.tags["ALBUM"][0])
+      timelog("Tag Error:", tag + " -- " + song.tags["ALBUMARTIST"][0] + " - " + song.tags["ALBUM"][0], colour='red')
       return("")
+
+@dataclass
+class AlbumMetadata:
+    title: str
+    artist: str
+    year_release: int
+    year_master: int
+    description: str = 'CD'
+    dr_rating: str = ''
+    sample_rate: int = 0
+    discogs_title: str = ''
+    
+    @property
+    def formatted_year(self) -> str:
+        return str(self.year_release) + ' ' if self.year_release != 0 else ''
+    
+    @property
+    def formatted_dr(self) -> str:
+        return f" DR{self.dr_rating}" if self.dr_rating else ""
+    
+    def get_formatted_title(self) -> str:
+        return f"{self.title} [{self.formatted_year}{self.description} {self.sample_rate}kHz{self.formatted_dr}]"
+
+def extract_metadata(tags: taglib.File, drelease: discogs_client.models.Release) -> AlbumMetadata:
+    samplerate = int(tags.sampleRate / 1000)
+    discogs_name = drelease.master.title.strip()
+    album_name = flactag(tags, 'ORIGINAL FILENAME').strip() or discogs_name
+    album_artist = flactag(tags, 'ALBUMARTIST')
+    
+    album_year_release = drelease.year
+    album_year_master = drelease.master.main_release.year if drelease.master else album_year_release
+    
+    if album_year_release == 0 and album_year_master != 0:
+        album_year_release = album_year_master
+    if album_year_release != 0 and album_year_master == 0:
+        album_year_master = album_year_release
+        
+    description = flactag(tags, 'SUBTITLE').strip() or 'CD'
+    dr_rating = flactag(tags, "ALBUM DYNAMIC RANGE").strip()
+    
+    return AlbumMetadata(
+        title=album_name,
+        artist=album_artist,
+        year_release=album_year_release,
+        year_master=album_year_master,
+        description=description,
+        dr_rating=dr_rating,
+        sample_rate=samplerate,
+        discogs_title=discogs_name
+    )
 
 # fix tags for a single album (in a single directory)
 def fixdir(fixdir):
@@ -50,86 +103,81 @@ def fixdir(fixdir):
       return
    # if we found discogs tags to work with go ahead
    if discogs:
-      samplerate = int(tags.sampleRate / 1000)
-      drelease = dclient.release(discogs_id)
-      # make Discogs API rate limit happy
-      time.sleep(1)
-      # if for some reason the Discogs filename has weird additions we can overwrite it with ORIGINAL FILENAME
-      discogs_name = drelease.master.title.strip()
-      album_name = flactag(tags, 'ORIGINAL FILENAME').strip()
-      if album_name == "":
-         album_name = discogs_name
-      album_artist = flactag(tags, 'ALBUMARTIST')
-      # get the release date from the master release which will be used for all files
-      # release date goes into the album name instead
-      album_year_release = drelease.year
-      mrelease = drelease.master
-      if drelease.master:
-         album_year_master = mrelease.main_release.year
-      else:
-         album_year_master = album_year_release
-      if album_year_release == 0 and album_year_master != 0:
-         album_year_release = album_year_master
-      if album_year_release == 0:
-         album_year_release_str = ''
-      else:
-         album_year_release_str = str(album_year_release) + ' '
-      if album_year_release != 0 and album_year_master == 0:
-         album_year_master = album_year_release
-      try:
-         album_description = flactag(tags, 'SUBTITLE').strip() + ' '
-      except:
-         album_description = ''
-      if album_description.strip() == '':
-         album_description = 'CD '
-      try:
-         album_dr = " DR" + flactag(tags, "ALBUM DYNAMIC RANGE").strip()
-      except:
-         album_dr = ""
-         timelog("No album DR!", album_artist + " - " + album_name + " " + album_description)
-
-      album_newtitle = (album_name + ' [' + album_year_release_str + album_description + str(samplerate) + 'kHz' + album_dr + ']')
-      songs = 0
-      # write new tags to files
-
+      metadata = extract_metadata(tags, dclient.release(discogs_id))
+      album_newtitle = metadata.get_formatted_title()
+      
       for p in Path(fixdir).rglob('*.flac'):
          fullfilename = str(PurePosixPath(p))
          tags = taglib.File(fullfilename)
-         try:
-            del tags.tags["YEAR"]
-         except:
-            pass
-         try:
-            del tags.tags["DATE"]
-         except:
-            pass
-         tags.tags['RELEASEDATE'] = [str(album_year_release)]
-         tags.tags['DATE'] = [str(album_year_release)]
-         tags.tags['ORIGINALDATE'] = [str(album_year_master)]
-         tags.tags['ORIGINALRELEASEDATE'] = [str(album_year_master)]
-         tags.tags['ALBUM'] = [album_newtitle]
-         tags.tags['ORIGINAL_TITLE'] = [discogs_name]
-         tags.save()
-         flac_files += 1
-      timelog("Album title is ", album_newtitle)
+         
+         # Create new tags dictionary
+         new_tags = {
+            'RELEASEDATE': [str(metadata.year_release)],
+            'DATE': [str(metadata.year_release)],
+            'ORIGINALDATE': [str(metadata.year_master)],
+            'ORIGINALRELEASEDATE': [str(metadata.year_master)],
+            'ALBUM': [album_newtitle],
+            'ORIGINAL_TITLE': [metadata.discogs_title]
+         }
+         
+         # Check if any tags need updating
+         needs_update = False
+         for tag in ["YEAR", "DATE"]:
+            if tag in tags.tags:
+               needs_update = True
+               break
+                    
+         for tag, value in new_tags.items():
+            if tag not in tags.tags or tags.tags[tag] != value:
+               needs_update = True
+               break
+            
+         if needs_update:
+            # Remove old tags
+            for tag in ["YEAR", "DATE"]:
+               tags.tags.pop(tag, None)
+            
+            # Update with new tags
+            tags.tags.update(new_tags)
+            tags.save()
+            flac_files += 1
+      
+      if flac_files > 0:
+         timelog(f"Updated {flac_files} files with new title: ", album_newtitle, colour='green')
+      else:
+         timelog("No changes needed for ", album_newtitle, colour='green')
    else:
-      timelog('No Discogs tags found in ', shortpath)
+      timelog('No Discogs tags found in ', shortpath, colour='red')
 
 def main():
-   if len(sys.argv) != 2:
-      from config import flacdir
-   else:
-      flacdir = sys.argv[1]
-   flac_directories = []
-   for root, dirs, files in os.walk(flacdir):
-      for file in files:
-         if file.endswith(".flac"):
-            flac_directories.append(root)
-            break
-   for directory in flac_directories:
-      timelog('Starting to fix tags in ', directory)
-      fixdir(directory)
-   print("")
+    parser = argparse.ArgumentParser(description='Fix FLAC file tags using Discogs metadata')
+    parser.add_argument('--configfile', action='store_true', 
+                       help='use flacdir from config.py instead of command line')
+    parser.add_argument('directory', nargs='?', 
+                       help='directory containing FLAC files to process')
+    args = parser.parse_args()
+
+    # If no arguments provided, show help
+    if not any(vars(args).values()):
+        parser.print_help()
+        return
+
+    if args.configfile or not args.directory:
+        from config import flacdir
+    else:
+        flacdir = args.directory
+
+    flac_directories = []
+    for root, dirs, files in os.walk(flacdir):
+        for file in files:
+            if file.endswith(".flac"):
+                flac_directories.append(root)
+                break
+    
+    for directory in flac_directories:
+        timelog('Starting to fix tags in ', directory)
+        fixdir(directory)
+    print("")
 
 if __name__ == '__main__':
    main()
