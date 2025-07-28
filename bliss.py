@@ -13,7 +13,7 @@ import argparse
 import taglib
 
 # Global variables
-flacroot = '/Volumes/FLAC/'
+flacroot = '/Volumes/Data/FLAC/'
 mp3root = '/Volumes/MP3/'
 opusroot = '/Volumes/Opus/'
 
@@ -32,6 +32,7 @@ def clean(dirty_text):
    # Clean file and path names of stupid characters
    clean_text = sanitize_filename(dirty_text)
    clean_text = clean_text.replace('.', '')
+   clean_text = clean_text.replace('#', '')
    clean_text = clean_text.replace('(', '')
    clean_text = clean_text.replace(')', '')
    clean_text = clean_text.replace('\'', '')
@@ -44,8 +45,37 @@ def clean(dirty_text):
    clean_text = clean_text.replace(',', '')
    clean_text = clean_text.replace(';', '')
    clean_text = clean_text.replace(':', '')
+   clean_text = clean_text.replace('ä', 'ae')
+   clean_text = clean_text.replace('ö', 'oe')
+   clean_text = clean_text.replace('ü', 'ue')
+   clean_text = clean_text.replace('Ä', 'Ae')
+   clean_text = clean_text.replace('Ö', 'Oe')
+   clean_text = clean_text.replace('Ü', 'Ue')
+   clean_text = clean_text.replace('ß', 'ss')
    clean_text = clean_text.replace(' ', '_')
    return clean_text
+
+def movefiles(flacroot):
+   timelog("Checking FLAC folders in", flacroot)
+   currentalbum = ""
+   #   t = tqdm(total=1, unit="album", disable=not show_progress)
+   for p in Path(flacroot).rglob('*.flac'):
+      fullfilename = str(PurePosixPath(p))
+      metadata = taglib.File(fullfilename)
+      stracktitle = clean(str(metadata.tags['TITLE'][0]))
+      salbumtitle = clean(str(metadata.tags['ALBUM'][0]))
+      sartist = clean(str(metadata.tags['ALBUMARTIST'][0]))
+      tobefilename = (str(metadata.tags['DISCNUMBER'][0]).zfill(2) + '_' + str(metadata.tags['TRACKNUMBER'][0]).zfill(2) + '_' + stracktitle + '.flac')
+      tobepathname = (flacroot + sartist + '/' + salbumtitle + '/')
+      tobefullname = tobepathname + tobefilename
+      if unicodedata.normalize('NFD', fullfilename.lower()) != unicodedata.normalize('NFD', tobefullname.lower()):
+         if salbumtitle != currentalbum:
+            currentalbum = salbumtitle
+            timelog("Moving album", salbumtitle)
+         if not os.path.exists(tobepathname):
+            os.makedirs(tobepathname)
+         shutil.move(fullfilename, tobefullname)
+   timelog("Done.", "")
 
 def moveflacfiles(flacroot):
     timelog("Checking FLAC folders in", flacroot)
@@ -226,7 +256,7 @@ def main():
     
     # If no arguments provided, show help
     if not any(vars(args).values()):
-        moveflacfiles(flacroot)
+        movefiles(flacroot)
         removedirs(flacroot)
         return
     
