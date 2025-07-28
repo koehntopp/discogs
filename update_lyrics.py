@@ -31,10 +31,10 @@ def flactag(song, tag):
         return ""
 
 # logging function
-def timelog(txt1, txt2):
+def timelog(txt1, txt2, color: str = 'white'):
    log_msg = '[green]' + txt1 + '[/green]'
    log_msg = log_msg + ' ' * (60 - len(log_msg))
-   rprint('[white]' + datetime.now().strftime('%H:%M:%S') + '[/white] ' + log_msg + txt2)
+   rprint(f'[{color}]{datetime.now().strftime("%H:%M:%S")}[/{color}] ' + log_msg + txt2)
 
 def get_lrclyrics(flactags, albumtitle):
    """Query lrclib.net API to find lyrics for a song.
@@ -79,11 +79,11 @@ def process_flac_file(tags, album_name, artist):
         lrc, lrctype = get_lrclyrics(tags, album_name)
         if lrctype == 'lrc':
             tags.tags['LYRICS'] = [lrc]
-            console.print(f'           [cyan]LRC lyrics added[/cyan] for {tags.tags["TITLE"][0]} ([yellow]{artist}[/yellow])')
+            console.print(f'           [yellow]LRC lyrics added[/yellow] for {tags.tags["TITLE"][0]} ([yellow]{artist}[/yellow])')
             return 'lrc', True
         elif lrctype == 'plain' and lyrics == '':
             tags.tags['LYRICS'] = [lrc]
-            console.print(f'           [magenta]TXT lyrics added[/magenta] for {tags.tags["TITLE"][0]} ([yellow]{artist}[/yellow])')
+            console.print(f'           [yellow]TXT lyrics added[/yellow] for {tags.tags["TITLE"][0]} ([yellow]{artist}[/yellow])')
             return 'txt', True
         else:
             return ('txt' if lyrics else 'none'), False
