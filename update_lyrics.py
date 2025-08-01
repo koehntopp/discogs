@@ -1,3 +1,12 @@
+# /// script
+# dependencies = [
+#   "rich",
+#   "pytaglib",
+#   "requests",
+#   "alive-progress"
+# ]
+# ///
+
 # import system libraries
 import sys
 import os
@@ -5,9 +14,9 @@ import re
 from rich import print as rprint
 from datetime import datetime
 from pathlib import Path, PurePosixPath, PurePath
-from tqdm import tqdm
 import requests
-from rich.console import Console
+
+from alive_progress import alive_bar
 
 # import music libraries
 # https://github.com/joalla/discogs_client
@@ -19,8 +28,8 @@ import taglib
 # import config file containing Discogs api_key (String with API token from https://www.discogs.com/en/settings/developers?lang_alt=en )
 from config import api_key
 
-# Add this after imports:
-console = Console()
+# Initialize counters
+stats = {'flac_files': 0, 'lrc_total': 0, 'no_total': 0, 'lrc_new': 0, 'txt_total': 0, 'txt_new': 0, 'error': 0}
 
 # extract a single FLAC tag
 def flactag(song, tag):
@@ -53,6 +62,8 @@ def get_lrclyrics(flactags, albumtitle):
        'duration': str(round(flactags.length))
    }
    
+   pattern = r'\[(\d{2}:\d{2}\.\d{2})\d{1}\]'
+   
    try:
        response = requests.get(
            'https://lrclib.net/api/get',
@@ -62,7 +73,8 @@ def get_lrclyrics(flactags, albumtitle):
        data = response.json()
        
        if data['syncedLyrics']:
-           return data['syncedLyrics'], 'lrc'
+           syncedLyrics = re.sub(pattern, r'[\1]', data['syncedLyrics'])
+           return syncedLyrics, 'lrc'
        elif data['plainLyrics']:
            return data['plainLyrics'], 'plain'
            
@@ -79,22 +91,22 @@ def process_flac_file(tags, album_name, artist):
         lrc, lrctype = get_lrclyrics(tags, album_name)
         if lrctype == 'lrc':
             tags.tags['LYRICS'] = [lrc]
-            console.print(f'           [yellow]LRC lyrics added[/yellow] for {tags.tags["TITLE"][0]} ([yellow]{artist}[/yellow])')
+            rprint(f'         [yellow]LRC lyrics added[/yellow] for {tags.tags["TITLE"][0]} ([yellow]{artist}[/yellow])')
             return 'lrc', True
         elif lrctype == 'plain' and lyrics == '':
             tags.tags['LYRICS'] = [lrc]
-            console.print(f'           [yellow]TXT lyrics added[/yellow] for {tags.tags["TITLE"][0]} ([yellow]{artist}[/yellow])')
+            rprint(f'         [yellow]TXT lyrics added[/yellow] for {tags.tags["TITLE"][0]} ([yellow]{artist}[/yellow])')
             return 'txt', True
         else:
             return ('txt' if lyrics else 'none'), False
     else:
         return ('lrc' if re.match(r'\[\d\d\D\d\d\D\d\d\]', lyrics) else 'none'), False
 
-def walkdirs(fixdir):
-    # Initialize counters
-    stats = {'flac_files': 0, 'lrc_total': 0, 'no_total': 0, 
-            'lrc_new': 0, 'txt_total': 0, 'txt_new': 0}
-    
+def walkdirs(fixdir, bar):
+    global stats
+    stats['txt_new'] = 0
+    stats['lrc_new'] = 0    
+       
     # Get first FLAC file
     first_flac = next((filename for filename in os.listdir(fixdir) if filename.endswith(".flac")), None)
     if not first_flac:
@@ -107,7 +119,7 @@ def walkdirs(fixdir):
         album_name = flactag(tags, 'ORIGINAL_TITLE').strip()
         artist = flactag(tags, 'ARTIST')
     except:
-        timelog('No Discogs tags found in ', fixdir)
+        stats['error'] += 1
         return 0
 
     # Process each FLAC file
@@ -130,46 +142,45 @@ def walkdirs(fixdir):
             
         if is_dirty:
             tags.save()
+            
+        # Update progress bar
+        bar.title(f"{artist} - {album_name} : ")
+        bar.text(f"LRC: {stats['lrc_total']} , TXT: {stats['txt_total']} , No Lyrics: {stats['no_total']}")
+        bar()
 
-    # Print summary with colors, only showing when there are changes
-    if stats["lrc_new"] > 0 or stats["txt_new"] > 0:
-        summary_new = f'         {stats["flac_files"]} FLAC files processed'
-        if stats["lrc_new"] > 0:
-            summary_new += f', [cyan]{stats["lrc_new"]} LRC lyrics[/cyan]'
-        if stats["txt_new"] > 0:
-            summary_new += f', [magenta]{stats["txt_new"]} TXT lyrics[/magenta]'
-        summary_new += ' added'
-        console.print(summary_new)
-
-    summary_total = f'         {stats["flac_files"]} FLAC files processed'
-    if stats["lrc_total"] > 0:
-        summary_total += f', [cyan]{stats["lrc_total"]} LRC lyrics[/cyan]'
-    if stats["txt_total"] > 0:
-        summary_total += f', [magenta]{stats["txt_total"]} TXT lyrics[/magenta]'
-    if stats["no_total"] > 0:
-        summary_total += f', [red]{stats["no_total"]}[/red] files without lyrics'
-    summary_total += ' present'
-    console.print(summary_total)
-    
     return stats['lrc_new'] + stats['txt_new']
 
 def main():
-   if len(sys.argv) != 2:
-      from config import flacdir
-   else:
-      flacdir = sys.argv[1]
-   flac_directories = []
-   updated = 0
-   for root, dirs, files in os.walk(flacdir):
-      for file in files:
-         if file.endswith(".flac"):
-            flac_directories.append(root)
-            break
-   for directory in flac_directories:
-      timelog('Starting lyrics update in ', directory)
-      updated += walkdirs(directory)
-   print("")
-   timelog('Lyrics added: ', str(updated))
+    if len(sys.argv) != 2:
+        from config import flacdir
+    else:
+        flacdir = sys.argv[1]
+
+    flac_directories = []
+    updated = 0
+
+    # Find all directories containing FLAC files
+    for root, dirs, files in os.walk(flacdir):
+        for file in files:
+            if file.endswith(".flac"):
+                flac_directories.append(root)
+                break
+
+    # Process each directory
+    with alive_bar(enrich_print=False, monitor="{count}", length=20, spinner=None, bar=None) as bar:
+        print("")
+        timelog('Starting lyrics update in ', str(flacdir))
+        print("")
+        for directory in flac_directories:
+            updated += walkdirs(directory, bar)
+            bar()
+        bar.title("")
+        
+        bar()          
+        print("")
+        timelog('Total Lyrics: ', f"LRC: {stats['lrc_total']} , TXT: {stats['txt_total']}, No Lyrics: {stats['no_total']}")
+        timelog('Lyrics added: ', str(updated))
+        print("")
 
 if __name__ == '__main__':
-   main()
+    main()
