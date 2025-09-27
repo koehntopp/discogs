@@ -1,3 +1,14 @@
+# /// script
+# dependencies = [
+#   "rich",
+#   "pytaglib",
+#   "requests",
+#   "alive-progress",
+#   "discogs_client",
+#   "tqdm"
+# ]
+# ///
+
 # import system libraries
 import time
 import sys
@@ -62,34 +73,36 @@ def fixdir(fixdir):
          discogs_name = drelease.title.strip()
       album_name = flactag(tags, 'ORIGINAL FILENAME').strip() or discogs_name
       bitrate = int(tags.sampleRate / 1000)
-      album_year_release = drelease.year
-      album_year_master = drelease.master.main_release.year if drelease.master else album_year_release         
+      try:
+          album_year_release = int(flactag(tags, 'DATE'))
+      except:
+          album_year_release = drelease.year
+      album_year_master = drelease.master.main_release.year if drelease.master else album_year_release
       if album_year_release == 0 and album_year_master != 0:
          album_year_release = album_year_master
       if album_year_release != 0 and album_year_master == 0:
-         album_year_master = album_year_release            
+         album_year_master = album_year_release
       album_description = flactag(tags, 'SUBTITLE').strip() or 'CD'
       dr_rating = flactag(tags, "ALBUM DYNAMIC RANGE").strip()
+
+      album_newtitle = (f"{album_name} [{str(album_year_release)} {album_description} {str(bitrate)}kHz DR{dr_rating}]")
+      # Create new tags dictionary once, as it's the same for all files in the album.
+      new_tags = {
+         'RELEASEDATE': [str(album_year_release)],
+         'DATE': [str(album_year_release)],
+         'ORIGINALDATE': [str(album_year_master)],
+         'ORIGINALRELEASEDATE': [str(album_year_master)],
+         'ALBUM': [album_newtitle],
+         'ORIGINAL_TITLE': [discogs_name]
+      }
 
       for p in Path(fixdir).rglob('*.flac'):
          fullfilename = str(PurePosixPath(p))
          tags = taglib.File(fullfilename)
-         album_newtitle = (f"{album_name} ({str(album_year_release)} {album_description} {str(bitrate)}kHz DR{dr_rating})")
-
-         # Create new tags dictionary
-         new_tags = {
-            'RELEASEDATE': [str(album_year_release)],
-            'DATE': [str(album_year_release)],
-            'ORIGINALDATE': [str(album_year_master)],
-            'ORIGINALRELEASEDATE': [str(album_year_master)],
-            'ALBUM': [album_newtitle],
-            'ORIGINAL_TITLE': [discogs_name]
-         }
-         
-         # Update with new tags
-         tags.tags.update(new_tags)
-         tags.save()
-         flac_files += 1
+         if any(tags.tags.get(k) != v for k, v in new_tags.items()):
+            tags.tags.update(new_tags)
+            tags.save()
+            flac_files += 1
       
       if flac_files > 0:
          timelog(f"Updated {flac_files} files with new title: ", album_newtitle, colour='green')
