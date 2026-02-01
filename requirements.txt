@@ -9,4 +9,5 @@ music_tag
 pathvalidate
 wordcloud
 matplotlib
+watchdog
 

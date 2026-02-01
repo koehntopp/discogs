@@ -10,3 +10,17 @@ test.*
 *.png
 *.psd
 *.jpg
+nzbfix.__pycache__
+duck.py
+flac_metadata.duckdb
+.idea/discogs.iml
+Brewfile
+.idea/misc.xml
+.gitignore
+.idea/vcs.xml
+.gitignore
+.gitignore
+.idea/modules.xml
+.gitignore
+.idea/inspectionProfiles/profiles_settings.xml
+*.flac

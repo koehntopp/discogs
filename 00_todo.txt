@@ -1,9 +1,20 @@
 bliss.py
   - logging
+  - default: only scan top level dir, --all goes deep
   - command line option --cleanup w/o flac checks
-  - better logging for flacpodfnjkdskjghjksdhgjkdshgjkdshgjskpooppppppooooopppppppppoooooo
+  - better logging for flac
 
 
 
-  ^q3gmkflqenrgkrnmbgkjkkkkkkfixtags.py
+fixtags.py
   - extra logging argument color
+
+
+  Lyrics cloud, search for text, shows songs
+
+
+update_lyrics.py
+- upgrade to LRC only if len(lrc) > len(txt)
+
+
+updated lyrics don't trigger rclone update ;(
