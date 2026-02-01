@@ -3,7 +3,8 @@
 #   "rich",
 #   "pytaglib",
 #   "requests",
-#   "alive-progress"
+#   "alive-progress",
+#   "discogs_client"
 # ]
 # ///
 
