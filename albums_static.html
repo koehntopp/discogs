@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Albums — Handsontable (Horizon)</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable/styles/handsontable.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable/styles/ht-theme-main.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable/styles/ht-theme-classic.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable/styles/ht-theme-horizon.min.css">
+  <style>
+    html,body{height:100%;margin:0}
+    .wrap{padding:0;height:100%;box-sizing:border-box;background:#f5f5f5}
+    .toolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+    #hot{width:100%;height:calc(100vh - 120px);}
+    button{padding:8px 12px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="toolbar">
+      <button id="reload">Reload CSV</button>
+      <span id="status" style="color:#666;font-size:13px;margin-left:8px">Ready</span>
+    </div>
+
+    <div id="hot"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.js"></script>
+  <script>
+    // Simple CSV parser (handles quoted fields)
+    function parseCSVRow(row) {
+      const cells = [];
+      let cur = '';
+      let inQuotes = false;
+      for (let i = 0; i < row.length; i++) {
+        const ch = row[i];
+        if (ch === '"') {
+          if (inQuotes && row[i+1] === '"') { cur += '"'; i++; }
+          else inQuotes = !inQuotes;
+        } else if (ch === ',' && !inQuotes) {
+          cells.push(cur);
+          cur = '';
+        } else cur += ch;
+      }
+      cells.push(cur);
+      return cells;
+    }
+
+    async function loadCSV(url) {
+      const res = await fetch(url, {cache: 'no-store'});
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const txt = await res.text();
+      const lines = txt.replace(/\r/g,'').split('\n').filter(Boolean);
+      if (!lines.length) return {headers:[], rows:[]};
+      const headers = parseCSVRow(lines[0]).map(h => h.trim());
+      const rows = [];
+      for (let i = 1; i < lines.length; i++) rows.push(parseCSVRow(lines[i]));
+      return { headers, rows };
+    }
+
+    const container = document.getElementById('hot');
+    let hot = null;
+
+    function defaultWidthForHeader(h) {
+      const key = (h||'').toLowerCase();
+      if (key.includes('artist')) return 120;
+      //if (key === 'album') return 180;
+      if (key.includes('title')) return 120;
+      if (key === 'dr') return 25;
+      if (key.includes('date')) return 50;
+      if (key === 'discogs') return 70;
+      if (key === 'musicbrainz') return 70;
+      if (key === 'catalog') return 70;
+      if (key === 'version') return 70;
+      return 120;
+    }
+
+    async function render() {
+      const status = document.getElementById('status');
+      try {
+        status.textContent = 'Loading albums.csv...';
+        const {headers, rows} = await loadCSV('albums.csv');
+        status.textContent = 'Initializing grid...';
+
+        // Build a colWidths array (simple, per docs example)
+        const colWidths = headers.map(h => defaultWidthForHeader(h));
+
+        // Destroy previous if present
+        if (hot) try { hot.destroy(); } catch(e) {}
+
+        hot = new Handsontable(container, {
+          data: rows,
+          colHeaders: headers,
+          rowHeaders: false,
+          width: '100%',
+          height: 'calc(100vh - 120px)',
+          licenseKey: 'non-commercial-and-evaluation',
+          themeName: 'ht-theme-classic',
+          readOnly: true,
+          filters: true,
+          dropdownMenu: true,
+          columnSorting: true,
+          manualColumnResize: true,
+          colWidths: colWidths,
+          stretchH: 'all'
+        });
+
+        status.textContent = 'Loaded ' + rows.length + ' rows';
+      } catch (e) {
+        status.textContent = 'Error: ' + e.message;
+        console.error(e);
+      }
+    }
+
+    document.getElementById('reload').addEventListener('click', () => {
+      render();
+    });
+
+    // Initial render
+    render();
+  </script>
+</body>
+</html>
