@@ -1,3 +1,14 @@
+# /// script
+# dependencies = [
+#   "rich",
+#   "datetime",
+#   "pathlib",
+#   "tqdm",
+#   "pytaglib",
+#   "drmeter",   
+# ]
+# ///
+ 
 # import system libraries
 import sys
 import os
@@ -9,7 +20,7 @@ from tqdm import tqdm
 # https://github.com/supermihi/pytaglib
 import taglib
 
-# import DRMETER https://github.com/janw/drmeter/
+# import DRMETER https://codeberg.org/janw/drmeter
 from drmeter.algorithm import dynamic_range
 from drmeter.models import AudioData
 import soundfile as sf
