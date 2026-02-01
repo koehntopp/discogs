@@ -1,3 +1,16 @@
+# /// script
+# dependencies = [
+#   "rich",
+#   "tqdm",
+#   "pytaglib",
+#   "requests",
+#   "discogs_client",
+#   "alive-progress",
+#   "pyacoustid",
+#   "pathvalidate"
+# ]
+# ///
+
 from pathlib import Path, PurePosixPath
 from pathvalidate import sanitize_filename
 import unicodedata
@@ -13,7 +26,7 @@ import argparse
 import taglib
 
 # Global variables
-flacroot = '/Volumes/Data/FLAC/'
+flacroot = '/Volumes/flac/'
 mp3root = '/Volumes/MP3/'
 opusroot = '/Volumes/Opus/'
 
@@ -55,86 +68,95 @@ def clean(dirty_text):
    clean_text = clean_text.replace(' ', '_')
    return clean_text
 
-def movefiles(flacroot):
-   timelog("Checking FLAC folders in", flacroot)
+def get_target_path_and_filename(flac_file, root_dir):
+   """Extract metadata from FLAC and return (target_path, target_filename, metadata_dict)"""
+   metadata = taglib.File(flac_file)
+   track_title = clean(str(metadata.tags['TITLE'][0]))
+   album_title = clean(str(metadata.tags['ALBUM'][0]))
+   artist = clean(str(metadata.tags['ALBUMARTIST'][0]))
+   
+   filename = (str(metadata.tags['DISCNUMBER'][0]).zfill(2) + '_' + 
+               str(metadata.tags['TRACKNUMBER'][0]).zfill(2) + '_' + 
+               track_title + '.flac')
+   path = os.path.join(root_dir, artist, album_title) + '/'
+   
+   return path, filename, {
+      'artist': artist,
+      'album': album_title,
+      'track': track_title
+   }
+
+def move_flac_file(source_file, target_path, target_filename):
+   """Move FLAC file to target location, creating directory if needed"""
+   target_fullname = target_path + target_filename
+   
+   # Create target directory if it doesn't exist
+   if not os.path.exists(target_path):
+      os.makedirs(target_path)
+   
+   # Only move if paths are different (case-insensitive comparison)
+   if unicodedata.normalize('NFD', source_file.lower()) != unicodedata.normalize('NFD', target_fullname.lower()):
+      shutil.move(source_file, target_fullname)
+      return True
+   return False
+
+def movefiles(flacroot, full: bool = False):
+   # If full==False, only check for .flac files directly in the flacroot directory (non-recursive).
+   # If full==True, scan the whole tree recursively.
+   timelog("Checking FLAC folders in", flacroot + (" (full recursive)" if full else " (root-only)"))
    currentalbum = ""
-   #   t = tqdm(total=1, unit="album", disable=not show_progress)
-   for p in Path(flacroot).rglob('*.flac'):
+   pattern_iter = Path(flacroot).rglob('*.flac') if full else Path(flacroot).glob('*.flac')
+
+   for p in pattern_iter:
       fullfilename = str(PurePosixPath(p))
-      metadata = taglib.File(fullfilename)
-      stracktitle = clean(str(metadata.tags['TITLE'][0]))
-      salbumtitle = clean(str(metadata.tags['ALBUM'][0]))
-      sartist = clean(str(metadata.tags['ALBUMARTIST'][0]))
-      tobefilename = (str(metadata.tags['DISCNUMBER'][0]).zfill(2) + '_' + str(metadata.tags['TRACKNUMBER'][0]).zfill(2) + '_' + stracktitle + '.flac')
-      tobepathname = (flacroot + sartist + '/' + salbumtitle + '/')
-      tobefullname = tobepathname + tobefilename
-      if unicodedata.normalize('NFD', fullfilename.lower()) != unicodedata.normalize('NFD', tobefullname.lower()):
-         if salbumtitle != currentalbum:
-            currentalbum = salbumtitle
-            timelog("Moving album", salbumtitle)
-         if not os.path.exists(tobepathname):
-            os.makedirs(tobepathname)
-         shutil.move(fullfilename, tobefullname)
+      try:
+         # Use safer tag access with defaults
+         metadata = taglib.File(fullfilename)
+         stracktitle = clean(str(metadata.tags.get('TITLE', [''])[0]))
+         salbumtitle = clean(str(metadata.tags.get('ALBUM', [''])[0]))
+         sartist = clean(str(metadata.tags.get('ALBUMARTIST', metadata.tags.get('ARTIST', ['']))[0]))
+         tobefilename = (str(metadata.tags.get('DISCNUMBER', ['0'])[0]).zfill(2) + '_' + str(metadata.tags.get('TRACKNUMBER', ['0'])[0]).zfill(2) + '_' + stracktitle + '.flac')
+         tobepathname = (flacroot + sartist + '/' + salbumtitle + '/')
+         tobefullname = tobepathname + tobefilename
+
+         if unicodedata.normalize('NFD', fullfilename.lower()) != unicodedata.normalize('NFD', tobefullname.lower()):
+            if salbumtitle != currentalbum:
+               currentalbum = salbumtitle
+               timelog("Moving album", salbumtitle)
+            if not os.path.exists(tobepathname):
+               os.makedirs(tobepathname)
+            shutil.move(fullfilename, tobefullname)
+      except Exception as e:
+         timelog("Error moving file", f"{fullfilename}: {str(e)}", color='red')
+         continue
    timelog("Done.", "")
 
-def moveflacfiles(flacroot):
-    timelog("Checking FLAC folders in", flacroot)
-
-    # Iterate over directories containing FLAC files
-    directories_with_flac = set([p.parent for p in Path(flacroot).rglob('*.flac')])
-
-    for directory in tqdm(directories_with_flac, desc="Processing FLAC directories", unit="directory"):
-        try:
-            # Get the first .flac file in the directory
-            first_flac = next(directory.glob('*.flac'), None)
-            if not first_flac:
-                continue  # Skip if no .flac files are found (shouldn't happen)
-
-            fullfilename = str(PurePosixPath(first_flac))
-
-            # Open the first FLAC file and get its metadata
-            with taglib.File(fullfilename) as metadata:
-                # Get required tags with fallbacks for missing metadata
-                tags = metadata.tags
-                stracktitle = clean(str(tags.get('TITLE', ['Unknown Title'])[0]))
-                salbumtitle = clean(str(tags.get('ALBUM', ['Unknown Album'])[0]))
-                sartist = clean(str(tags.get('ALBUMARTIST', tags.get('ARTIST', ['Unknown Artist']))[0]))
-                disc_num = str(tags.get('DISCNUMBER', ['1'])[0]).zfill(2)
-                track_num = str(tags.get('TRACKNUMBER', ['0'])[0]).zfill(2)
-
-            # Construct new file path for this directory
-            tobepathname = Path(flacroot) / sartist / salbumtitle
-            new_fullname = str(tobepathname / f"{disc_num}_{track_num}_{stracktitle}.flac")
-
-            # If the first FLAC file is in its correct location, skip further processing
-            if unicodedata.normalize('NFD', fullfilename.lower()) == unicodedata.normalize('NFD', new_fullname.lower()):
-                continue
-
-            # Process all files in the directory
-            timelog("Processing album", salbumtitle)
-            tobepathname.mkdir(parents=True, exist_ok=True)
-            for flac_file in directory.glob('*.flac'):
-                try:
-                    fullfilename = str(PurePosixPath(flac_file))
-                    with taglib.File(fullfilename) as metadata:
-                        tags = metadata.tags
-                        stracktitle = clean(str(tags.get('TITLE', ['Unknown Title'])[0]))
-                        disc_num = str(tags.get('DISCNUMBER', ['1'])[0]).zfill(2)
-                        track_num = str(tags.get('TRACKNUMBER', ['0'])[0]).zfill(2)
-
-                    # Construct new filename and move the file
-                    tobefilename = f"{disc_num}_{track_num}_{stracktitle}.flac"
-                    tobefullname = str(tobepathname / tobefilename)
-                    shutil.move(fullfilename, tobefullname)
-
-                except Exception as e:
-                    timelog("Error processing file", f"{fullfilename}: {str(e)}")
-
-        except Exception as e:
-            timelog("Error processing directory", f"{directory}: {str(e)}")
-            continue
-
-    timelog("Done.", "")
+def ingestfiles(ingest_dir):
+   """Ingest files from a directory and organize them into flacroot"""
+   global flacroot
+   timelog("Ingesting FLAC files from", ingest_dir)
+   currentalbum = ""
+   
+   if not os.path.exists(ingest_dir):
+      timelog("Error: Directory does not exist", ingest_dir, color='red')
+      return
+   
+   # Find all FLAC files in the ingest directory
+   for p in Path(ingest_dir).rglob('*.flac'):
+      fullfilename = str(PurePosixPath(p))
+      try:
+         target_path, target_filename, metadata = get_target_path_and_filename(fullfilename, flacroot)
+         
+         if metadata['album'] != currentalbum:
+            currentalbum = metadata['album']
+            timelog("Ingesting album", metadata['album'])
+         
+         if move_flac_file(fullfilename, target_path, target_filename):
+            timelog("Ingested", f"{metadata['track']}", color='green')
+      except Exception as e:
+         timelog("Error ingesting file", f"{fullfilename}: {str(e)}", color='red')
+   
+   timelog("Done.", "Ingest complete")
 
 def removedirs(rootdir):
     timelog("Removing empty dirs in", rootdir)
@@ -247,24 +269,36 @@ def createMP3():
 
    timelog("Done.", "")
 
-
 def main():
     parser = argparse.ArgumentParser(description='Music library management tool')
     parser.add_argument('--mp3', action='store_true', help='Create missing MP3 files from FLACs')
-    
+    parser.add_argument('--full', action='store_true', help='Scan entire flacroot recursively')
+    parser.add_argument('--ingest', type=str, metavar='DIRECTORY', help='Ingest FLAC files from a directory into the library')
+
     args = parser.parse_args()
-    
-    # If no arguments provided, show help
-    if not any(vars(args).values()):
-        movefiles(flacroot)
+
+    # If --ingest is specified, use it
+    if args.ingest:
+        ingestfiles(args.ingest)
+        removedirs(args.ingest)
+        return
+
+    # If --full is specified, do a recursive scan of flacroot
+    if args.full:
+        movefiles(flacroot, full=True)
         removedirs(flacroot)
         return
-    
+
     # Run selected operations
     if args.mp3:
         checkMP3()
         removedirs(mp3root)
         createMP3()
+
+    # If no arguments provided, default to root-only scan
+    if not any(vars(args).values()):
+        movefiles(flacroot, full=False)
+        return
 
 if __name__ == "__main__":
     main()
