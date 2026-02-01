@@ -24,3 +24,4 @@ Brewfile
 .gitignore
 .idea/inspectionProfiles/profiles_settings.xml
 *.flac
+config.py

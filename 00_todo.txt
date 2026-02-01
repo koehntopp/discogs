@@ -1,3 +1,16 @@
+log to syslog
+
+switch to uv shell scripts
+
+#!/usr/bin/env -S uv run --script
+#
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["httpx"]
+# ///
+
+remove path dependecies in nzbfix
+
 bliss.py
   - logging
   - default: only scan top level dir, --all goes deep
