@@ -1,3 +1,15 @@
+# /// script
+# dependencies = [
+#   "rich",
+#   "tqdm",
+#   "pytaglib",
+#   "requests",
+#   "discogs_client",
+#   "alive-progress",
+#   "pyacoustid"
+# ]
+# ///
+
 # import system libraries
 import sys
 import os
