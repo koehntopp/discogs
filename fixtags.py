@@ -83,7 +83,7 @@ def fixdir(fixdir):
       if album_year_release != 0 and album_year_master == 0:
          album_year_master = album_year_release
       album_description = flactag(tags, 'SUBTITLE').strip() or 'CD'
-      dr_rating = flactag(tags, "ALBUM DYNAMIC RANGE").strip()
+      dr_rating = flactag(tags, "ALBUM DYNAMIC RANGE").strip() or ''
 
       album_newtitle = (f"{album_name} [{str(album_year_release)} {album_description} {str(bitrate)}kHz DR{dr_rating}]")
       # Create new tags dictionary once, as it's the same for all files in the album.
