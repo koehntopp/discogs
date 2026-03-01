@@ -16,6 +16,7 @@ from rich import print as rprint
 from datetime import datetime
 from pathlib import Path, PurePosixPath, PurePath
 import requests
+from typing import Any
 
 from alive_progress import alive_bar
 
@@ -33,7 +34,7 @@ from config import api_key
 stats = {'flac_files': 0, 'lrc_total': 0, 'no_total': 0, 'lrc_new': 0, 'txt_total': 0, 'txt_new': 0, 'error': 0}
 
 # extract a single FLAC tag
-def flactag(song, tag):
+def flactag(song: taglib.File, tag: str) -> str:
     try:
         return song.tags.get(tag, [""])[0]
     except (KeyError, IndexError):
@@ -41,12 +42,12 @@ def flactag(song, tag):
         return ""
 
 # logging function
-def timelog(txt1, txt2, color: str = 'white'):
+def timelog(txt1: str, txt2: str, color: str = 'white') -> None:
    log_msg = '[green]' + txt1 + '[/green]'
    log_msg = log_msg + ' ' * (60 - len(log_msg))
    rprint(f'[{color}]{datetime.now().strftime("%H:%M:%S")}[/{color}] ' + log_msg + txt2)
 
-def get_lrclyrics(flactags, albumtitle):
+def get_lrclyrics(flactags: taglib.File, albumtitle: str) -> tuple[str, str]:
    """Query lrclib.net API to find lyrics for a song.
    
    Args:
@@ -84,7 +85,7 @@ def get_lrclyrics(flactags, albumtitle):
        
    return '', 'none'
 
-def process_flac_file(tags, album_name, artist):
+def process_flac_file(tags: taglib.File, album_name: str, artist: str) -> tuple[str, bool]:
     dirty = False
     lyrics = flactag(tags, 'LYRICS').strip() if 'LYRICS' in tags.tags else ''
     
@@ -103,7 +104,7 @@ def process_flac_file(tags, album_name, artist):
     else:
         return ('lrc' if re.match(r'\[\d\d\D\d\d\D\d\d\]', lyrics) else 'none'), False
 
-def walkdirs(fixdir, bar):
+def walkdirs(fixdir: str, bar: Any) -> int:
     global stats
     stats['txt_new'] = 0
     stats['lrc_new'] = 0    
@@ -151,7 +152,7 @@ def walkdirs(fixdir, bar):
 
     return stats['lrc_new'] + stats['txt_new']
 
-def main():
+def main() -> None:
     if len(sys.argv) != 2:
         from config import flacdir
     else:

@@ -4,9 +4,7 @@
 #   "tqdm",
 #   "pytaglib",
 #   "requests",
-#   "discogs_client",
-#   "alive-progress",
-#   "pyacoustid"
+#   "pyacoustid",
 # ]
 # ///
 
@@ -27,18 +25,18 @@ import taglib
 # https://github.com/beetbox/pyacoustid/tree/master
 import acoustid
 
-def hasSubDirs(dir_name):
+def hasSubDirs(dir_name: str) -> bool:
    subdirs = list(os.walk(dir_name))
    return(len(list(os.walk(dir_name))) > 1)
 
 # logging function
-def timelog(txt1, txt2):
+def timelog(txt1: str, txt2: str) -> None:
    log_msg = '[green]' + txt1 + '[/green]'
    log_msg = log_msg + ' ' * (60 - len(log_msg))
    rprint('[white]' + datetime.now().strftime('%H:%M:%S') + '[/white] ' + log_msg + txt2)
 
 # calculate song and album dynamic range and write tags to files
-def calculate_fp(albumpath):
+def calculate_fp(albumpath: str) -> None:
    total = 0
    calculated = 0
    # assumption: folder only contains a single album
@@ -61,7 +59,7 @@ def calculate_fp(albumpath):
                timelog("Fingerprint could not be calculated - ", fullfilename)      
    timelog("AcoustID fingerprints generated for ", str(calculated) + " of " + str(total) + " files.")
 
-def listdirs(flacdir):
+def listdirs(flacdir: str) -> list[str]:
    flac_directories = []
    for pattern in glob.iglob(os.path.join(flacdir, "**", "*.flac")):
    # Extract the directory path from the matched FLAC file path
@@ -69,7 +67,7 @@ def listdirs(flacdir):
       flac_directories.append(dirpath)
    return list(set(flac_directories))
 
-def main():
+def main() -> None:
    if len(sys.argv) != 2:
       from config import flacdir
    else:

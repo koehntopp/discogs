@@ -4,7 +4,8 @@
 #   "pytaglib",
 #   "alive-progress",
 #   "pandas",
-#   "watchdog"
+#   "watchdog",
+#   "matplotlib"
 # ]
 # ///
 
@@ -19,16 +20,20 @@ import time
 from threading import Lock
 
 from alive_progress import alive_bar
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 # import file monitoring
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
+from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
 # import music libraries
 
 # https://github.com/supermihi/pytaglib
 import taglib
 import pandas as pd
+from typing import Any
 
 # Define album-related tags to extract
 ALBUM_TAGS = ['ALBUMARTIST', 'ALBUM', 'ALBUM DYNAMIC RANGE', 'ORIGINAL_TITLE', 
@@ -53,7 +58,7 @@ DISPLAY_NAMES = {
 ALBUM_TAGS_WITH_PATH = ALBUM_TAGS + ['_DIRECTORY_PATH']
 
 # extract a single FLAC tag
-def flactag(song, tag):
+def flactag(song: taglib.File, tag: str) -> str:
     try:
         return song.tags.get(tag, [""])[0]
     except (KeyError, IndexError):
@@ -61,13 +66,13 @@ def flactag(song, tag):
         return ""
 
 # logging function
-def timelog(txt1, txt2, color: str = 'white'):
+def timelog(txt1: str, txt2: str, color: str = 'white') -> None:
    log_msg = '[green]' + txt1 + '[/green]'
    log_msg = log_msg + ' ' * (60 - len(log_msg))
    rprint(f'[{color}]{datetime.now().strftime("%H:%M:%S")}[/{color}] ' + log_msg + txt2)
 
 # Save dataframe with consistent column order and display names
-def save_csv(df):
+def save_csv(df: pd.DataFrame) -> None:
     # Only select columns that exist in the dataframe
     existing_tags = [tag for tag in ALBUM_TAGS if tag in df.columns]
     df_ordered = df[existing_tags].copy()
@@ -75,11 +80,30 @@ def save_csv(df):
     df_ordered.columns = [DISPLAY_NAMES.get(col, col) for col in df_ordered.columns]
     # Save with explicit flush and sync
     df_ordered.to_csv('albums.csv', index=False)
+    # Save DR distribution chart
+    if 'ALBUM DYNAMIC RANGE' in df.columns:
+        dr_series = df['ALBUM DYNAMIC RANGE'].fillna("").astype(str).str.strip()
+        dr_series = dr_series[dr_series != ""]
+        if not dr_series.empty:
+            counts = dr_series.value_counts().sort_index()
+            plt.figure(figsize=(10, 5))
+            cmap = plt.get_cmap('RdYlGn')
+            if len(counts) > 1:
+                colors = [cmap(i / (len(counts) - 1)) for i in range(len(counts))]
+            else:
+                colors = [cmap(0.5)]
+            counts.plot(kind='bar', color=colors)
+            plt.title('Albums per DR value')
+            plt.xlabel('Album DR')
+            plt.ylabel('Number of albums')
+            plt.tight_layout()
+            plt.savefig('albums_dr.png', dpi=150)
+            plt.close()
     # Force flush to disk
     import sys
     sys.stdout.flush()
 
-def walkdirs(fixdir, bar):
+def walkdirs(fixdir: str, bar: Any) -> dict[str, str] | None:
        
    # Get first FLAC file
    first_flac = next((filename for filename in os.listdir(fixdir) if filename.endswith(".flac")), None)
@@ -103,7 +127,7 @@ def walkdirs(fixdir, bar):
    return album_data
 
 
-def main():
+def main() -> None:
     if len(sys.argv) != 2:
         from config import flacdir
     else:
@@ -147,26 +171,26 @@ def main():
 
     # Create file system event handler
     class AlbumChangeHandler(FileSystemEventHandler):
-        def on_modified(self, event):
+        def on_modified(self, event: FileSystemEvent) -> None:
             if event.is_directory:
                 return
             if event.src_path.endswith('.flac'):
                 self._handle_flac_change(event.src_path)
 
-        def on_created(self, event):
+        def on_created(self, event: FileSystemEvent) -> None:
             if event.is_directory:
                 return
             if event.src_path.endswith('.flac'):
                 self._handle_flac_change(event.src_path)
 
-        def on_deleted(self, event):
+        def on_deleted(self, event: FileSystemEvent) -> None:
             if event.is_directory:
                 # Remove albums from deleted directory
                 self._handle_directory_delete(event.src_path)
             elif event.src_path.endswith('.flac'):
                 self._handle_flac_delete(event.src_path)
 
-        def _handle_flac_change(self, filepath):
+        def _handle_flac_change(self, filepath: str) -> None:
             # Find the directory containing the FLAC file
             directory = os.path.dirname(filepath)
             
@@ -180,9 +204,9 @@ def main():
             
             # Create a dummy progress bar for the function
             class DummyBar:
-                def title(self, msg):
+                def title(self, msg: str) -> None:
                     pass
-                def __call__(self):
+                def __call__(self) -> None:
                     pass
             
             album_data = walkdirs(directory, DummyBar())
@@ -220,7 +244,7 @@ def main():
                     # Update timestamp for this album
                     recently_updated[album_key] = current_time
 
-        def _handle_directory_delete(self, directory):
+        def _handle_directory_delete(self, directory: str) -> None:
             with data_lock:
                 # Remove all albums from the deleted directory
                 if '_DIRECTORY_PATH' in df.columns:
@@ -234,7 +258,7 @@ def main():
                             rprint(f"  [red]✗[/red] {artist} - {album}")
                         save_csv(df)
 
-        def _handle_flac_delete(self, filepath):
+        def _handle_flac_delete(self, filepath: str) -> None:
             # Check if all FLAC files are gone from this directory
             directory = os.path.dirname(filepath)
             flac_files = [f for f in os.listdir(directory) if f.endswith('.flac')] if os.path.exists(directory) else []

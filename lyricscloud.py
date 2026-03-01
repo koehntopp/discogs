@@ -1,3 +1,13 @@
+# /// script
+# dependencies = [
+#   "wordcloud",
+#   "matplotlib",
+#   "numpy",
+#   "pillow",
+#   "pytaglib",
+# ]
+# ///
+
 # import system libraries
 import time
 import sys
@@ -16,7 +26,7 @@ import taglib
 lyricscloud = ""
 
 # walk flacdir searching for directories holding albums with flac files
-def walkdirs(fixdir):
+def walkdirs(fixdir: str) -> None:
    global lyricscloud
    for p in Path(fixdir).rglob('*.flac'):
       fullfilename = str(PurePosixPath(p))
@@ -29,7 +39,7 @@ def walkdirs(fixdir):
          pass
    return
 
-def main():
+def main() -> None:
    #flacdir = "/Volumes/Frank/00NZB/complete"
    flacdir = "/Volumes/FLAC/Taylor_Swift"
    flac_directories = []

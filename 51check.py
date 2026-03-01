@@ -1,3 +1,12 @@
+# /// script
+# dependencies = [
+#   "rich",
+#   "music-tag",
+#   "mutagen",
+#   "pathvalidate",
+# ]
+# ///
+
 # walks along $flacroot and identifies the number of channels in album to identify 5.1 and mono versions
 from pathlib import Path, PurePosixPath
 import music_tag
@@ -9,10 +18,10 @@ from datetime import datetime
 
 from config import flacroot
 
-def hasSubDirs(dir_name):
+def hasSubDirs(dir_name: str) -> bool:
    return(len(list(os.walk(dir_name))) > 1)
 
-def clean(dirty_text):
+def clean(dirty_text: str) -> str:
    # Clean file and path names of stupid characters
    clean_text = sanitize_filename(dirty_text)
    clean_text = clean_text.replace('.', '')
@@ -27,7 +36,7 @@ def clean(dirty_text):
    clean_text = clean_text.replace(' ', '_')
    return clean_text
 
-def checktags(flacroot):
+def checktags(flacroot: str) -> None:
    log_msg = " [green]Checking FLAC files in[/green]"
    log_msg = log_msg + ' ' * 8
    rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + flacroot)
@@ -68,7 +77,7 @@ def checktags(flacroot):
    rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + str(albumcount) + " albums scanned.")
 
 
-def main():
+def main() -> None:
    checktags(flacroot)
 
 

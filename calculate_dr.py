@@ -1,11 +1,10 @@
 # /// script
 # dependencies = [
 #   "rich",
-#   "datetime",
-#   "pathlib",
 #   "tqdm",
 #   "pytaglib",
-#   "drmeter",   
+#   "drmeter",
+#   "soundfile",
 # ]
 # ///
  
@@ -25,18 +24,18 @@ from drmeter.algorithm import dynamic_range
 from drmeter.models import AudioData
 import soundfile as sf
 
-def hasSubDirs(dir_name):
+def hasSubDirs(dir_name: str) -> bool:
    subdirs = list(os.walk(dir_name))
    return(len(list(os.walk(dir_name))) > 1)
 
 # logging function
-def timelog(txt1, txt2, color = "green"):
+def timelog(txt1: str, txt2: str, color: str = "green") -> None:
    log_msg = '[' + color + ']' + txt1 + '[/' + color + ']'
    log_msg = log_msg + ' ' * (60 - len(log_msg))
    rprint('[white]' + datetime.now().strftime('%H:%M:%S') + '[/white] ' + log_msg + txt2)
 
 # calculate song and album dynamic range and write tags to files
-def calculate_dr(albumpath):
+def calculate_dr(albumpath: str) -> None:
    # assumption: folder only contains a single album
    dr_sum = 0
    dr_tracks = 0
@@ -93,7 +92,7 @@ def calculate_dr(albumpath):
       timelog("ERROR calculating DR!", albumpath + ": " + str(dr_album))
 
 
-def main():
+def main() -> None:
    if len(sys.argv) != 2:
       from config import flacdir
    else:

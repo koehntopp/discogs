@@ -1,13 +1,6 @@
 # /// script
 # dependencies = [
 #   "rich",
-#   "tqdm",
-#   "pytaglib",
-#   "requests",
-#   "discogs_client",
-#   "alive-progress",
-#   "pyacoustid",
-#   "drmeter"
 # ]
 # ///
 
@@ -19,7 +12,7 @@ from datetime import datetime
 
 
 # logging function
-def timelog(txt1, txt2):
+def timelog(txt1: str, txt2: str) -> None:
    log_msg = '[green]' + txt1 + '[/green]'
    log_msg = log_msg + ' ' * (60 - len(log_msg))
    rprint('[white]' + datetime.now().strftime('%H:%M:%S') + '[/white] ' + log_msg + txt2)

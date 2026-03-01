@@ -31,21 +31,21 @@ import taglib
 from config import api_key
 
 # logging function
-def timelog(txt1, txt2, colour: str = 'white'):
+def timelog(txt1: str, txt2: str, colour: str = 'white') -> None:
    log_msg = f'[{colour}]' + txt1 + f'[/{colour}]'
    log_msg = log_msg + ' ' * (40 - len(txt1))
    rprint(f'[white]{datetime.now().strftime("%H:%M:%S")}[/white] ' + log_msg + txt2)
 
 # extract a single FLAC tag
-def flactag(song, tag):
+def flactag(song: taglib.File, tag: str) -> str:
    try:
       return(song.tags[tag][0])
-   except: 
+   except:
       timelog("Tag Error:", tag + " -- " + song.tags["ALBUMARTIST"][0] + " - " + song.tags["ALBUM"][0], colour='red')
       return("")
 
 # fix tags for a single album (in a single directory)
-def fixdir(fixdir):
+def fixdir(fixdir: str) -> None:
    flac_files = 0
    # initialize Discogs API
    dclient = discogs_client.Client('PyDiscogsTagger/0.1', user_token=api_key)
@@ -109,9 +109,9 @@ def fixdir(fixdir):
       else:
          timelog("No changes needed for ", album_newtitle, colour='green')
    else:
-      timelog('No Discogs tags found in ', shortpath, colour='red')
+      timelog('No Discogs tags found in ', fixdir, colour='red')
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description='Fix FLAC file tags using Discogs metadata')
     parser.add_argument('--configfile', action='store_true', 
                        help='use flacdir from config.py instead of command line')

@@ -3,11 +3,7 @@
 #   "rich",
 #   "tqdm",
 #   "pytaglib",
-#   "requests",
-#   "discogs_client",
-#   "alive-progress",
-#   "pyacoustid",
-#   "pathvalidate"
+#   "pathvalidate",
 # ]
 # ///
 
@@ -31,17 +27,17 @@ mp3root = '/Volumes/MP3/'
 opusroot = '/Volumes/Opus/'
 
 # logging function
-def timelog(txt1, txt2, color: str = 'white'):
+def timelog(txt1: str, txt2: str, color: str = 'white') -> None:
    log_msg = '[green]' + txt1 + '[/green]'
    log_msg = log_msg + ' ' * (60 - len(log_msg))
    rprint(f'[{color}]{datetime.now().strftime("%H:%M:%S")}[/{color}] ' + log_msg + txt2)
 
-def hasSubDirs(dir_name):
+def hasSubDirs(dir_name: str) -> bool:
    subdirs = list(os.walk(dir_name))
    return(len(list(os.walk(dir_name))) > 1)
 
 
-def clean(dirty_text):
+def clean(dirty_text: str) -> str:
    # Clean file and path names of stupid characters
    clean_text = sanitize_filename(dirty_text)
    clean_text = clean_text.replace('.', '')
@@ -68,7 +64,7 @@ def clean(dirty_text):
    clean_text = clean_text.replace(' ', '_')
    return clean_text
 
-def get_target_path_and_filename(flac_file, root_dir):
+def get_target_path_and_filename(flac_file: str, root_dir: str) -> tuple[str, str, dict[str, str]]:
    """Extract metadata from FLAC and return (target_path, target_filename, metadata_dict)"""
    metadata = taglib.File(flac_file)
    track_title = clean(str(metadata.tags['TITLE'][0]))
@@ -86,7 +82,7 @@ def get_target_path_and_filename(flac_file, root_dir):
       'track': track_title
    }
 
-def move_flac_file(source_file, target_path, target_filename):
+def move_flac_file(source_file: str, target_path: str, target_filename: str) -> bool:
    """Move FLAC file to target location, creating directory if needed"""
    target_fullname = target_path + target_filename
    
@@ -100,7 +96,7 @@ def move_flac_file(source_file, target_path, target_filename):
       return True
    return False
 
-def movefiles(flacroot, full: bool = False):
+def movefiles(flacroot: str, full: bool = False) -> None:
    # If full==False, only check for .flac files directly in the flacroot directory (non-recursive).
    # If full==True, scan the whole tree recursively.
    timelog("Checking FLAC folders in", flacroot + (" (full recursive)" if full else " (root-only)"))
@@ -131,7 +127,7 @@ def movefiles(flacroot, full: bool = False):
          continue
    timelog("Done.", "")
 
-def ingestfiles(ingest_dir):
+def ingestfiles(ingest_dir: str) -> None:
    """Ingest files from a directory and organize them into flacroot"""
    global flacroot
    timelog("Ingesting FLAC files from", ingest_dir)
@@ -158,7 +154,7 @@ def ingestfiles(ingest_dir):
    
    timelog("Done.", "Ingest complete")
 
-def removedirs(rootdir):
+def removedirs(rootdir: str) -> None:
     timelog("Removing empty dirs in", rootdir)
     is_dirty = True
     
@@ -181,7 +177,7 @@ def removedirs(rootdir):
     
     timelog("Done.", "")
 
-def checkMP3():   
+def checkMP3() -> None:
    global mp3root, flacroot
    log_msg = " [green]Checking MP3 folders in[/green]"
    log_msg = log_msg + ' ' * 7
@@ -230,7 +226,7 @@ def checkMP3():
    timelog("Done.", "")
 
 
-def createMP3():
+def createMP3() -> None:
    global mp3root, flacroot
    timelog("Creating missing MP3s in", mp3root)
    
@@ -269,7 +265,7 @@ def createMP3():
 
    timelog("Done.", "")
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description='Music library management tool')
     parser.add_argument('--mp3', action='store_true', help='Create missing MP3 files from FLACs')
     parser.add_argument('--full', action='store_true', help='Scan entire flacroot recursively')
