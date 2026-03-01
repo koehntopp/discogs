@@ -24,10 +24,6 @@ from drmeter.algorithm import dynamic_range
 from drmeter.models import AudioData
 import soundfile as sf
 
-def hasSubDirs(dir_name: str) -> bool:
-   subdirs = list(os.walk(dir_name))
-   return(len(list(os.walk(dir_name))) > 1)
-
 # logging function
 def timelog(txt1: str, txt2: str, color: str = "green") -> None:
    log_msg = '[' + color + ']' + txt1 + '[/' + color + ']'
@@ -51,7 +47,7 @@ def calculate_dr(albumpath: str) -> None:
       try:
          # do we have a song DR entry
          dr_song = int(dr_tags.tags["DYNAMIC RANGE"][0])
-      except:
+      except (KeyError, IndexError, ValueError):
          # if we don't, calculate it
          with sf.SoundFile(fullfilename) as data:
             try:
@@ -76,7 +72,7 @@ def calculate_dr(albumpath: str) -> None:
       dr_album = str(round(dr_sum / dr_tracks)).zfill(2)
       try:
          dr_album_old = dr_tags.tags["ALBUM DYNAMIC RANGE"][0]
-      except:
+      except (KeyError, IndexError):
          dr_album_old = ""
       timelog("Album DR in files:", dr_album_old)
       if dra_dirty or dr_album != dr_album_old:
@@ -89,7 +85,7 @@ def calculate_dr(albumpath: str) -> None:
       else:
          timelog("Album DR for " +  dr_tags.tags["ALBUM"][0] + ":", str(dr_album))
    else:
-      timelog("ERROR calculating DR!", albumpath + ": " + str(dr_album))
+      timelog("ERROR calculating DR!", albumpath)
 
 
 def main() -> None:

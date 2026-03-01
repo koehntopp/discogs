@@ -40,7 +40,7 @@ def timelog(txt1: str, txt2: str, colour: str = 'white') -> None:
 def flactag(song: taglib.File, tag: str) -> str:
    try:
       return(song.tags[tag][0])
-   except:
+   except (KeyError, IndexError):
       timelog("Tag Error:", tag + " -- " + song.tags["ALBUMARTIST"][0] + " - " + song.tags["ALBUM"][0], colour='red')
       return("")
 
@@ -50,7 +50,7 @@ def fixdir(fixdir: str) -> None:
    # initialize Discogs API
    dclient = discogs_client.Client('PyDiscogsTagger/0.1', user_token=api_key)
    first_flac = next((filename for filename in os.listdir(fixdir) if filename.endswith(".flac")), None)
-   if first_flac != None:
+   if first_flac is not None:
       first_flac_path = os.path.join(fixdir, first_flac)
    else:
       return
@@ -58,7 +58,7 @@ def fixdir(fixdir: str) -> None:
    discogs = True
    try:
       discogs_id = int(flactag(tags, 'DISCOGS_RELEASE_ID'))
-   except:
+   except ValueError:
       discogs = False
       return
    # if we found discogs tags to work with go ahead
@@ -69,13 +69,13 @@ def fixdir(fixdir: str) -> None:
 
       try:
          discogs_name = drelease.master.title.strip()
-      except:
+      except AttributeError:
          discogs_name = drelease.title.strip()
       album_name = flactag(tags, 'ORIGINAL FILENAME').strip() or discogs_name
       bitrate = int(tags.sampleRate / 1000)
       try:
           album_year_release = int(flactag(tags, 'DATE'))
-      except:
+      except ValueError:
           album_year_release = drelease.year
       album_year_master = drelease.master.main_release.year if drelease.master else album_year_release
       if album_year_release == 0 and album_year_master != 0:

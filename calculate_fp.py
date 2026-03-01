@@ -25,10 +25,6 @@ import taglib
 # https://github.com/beetbox/pyacoustid/tree/master
 import acoustid
 
-def hasSubDirs(dir_name: str) -> bool:
-   subdirs = list(os.walk(dir_name))
-   return(len(list(os.walk(dir_name))) > 1)
-
 # logging function
 def timelog(txt1: str, txt2: str) -> None:
    log_msg = '[green]' + txt1 + '[/green]'
@@ -48,24 +44,16 @@ def calculate_fp(albumpath: str) -> None:
       fingerprint = ""
       try:
          fingerprint = dr_tags.tags['ACOUSTID FINGERPRINT'][0].strip()
-      except:
+      except (KeyError, IndexError):
          if fingerprint == "":
             try:
                duration, fingerprint = acoustid.fingerprint_file(fullfilename, maxlength=10000, force_fpcalc=False)
-               dr_tags.tags['Acoustid Fingerprint'] = [fingerprint]
+               dr_tags.tags['ACOUSTID FINGERPRINT'] = [fingerprint]
                dr_tags.save()
                calculated += 1
             except acoustid.FingerprintGenerationError:
                timelog("Fingerprint could not be calculated - ", fullfilename)      
    timelog("AcoustID fingerprints generated for ", str(calculated) + " of " + str(total) + " files.")
-
-def listdirs(flacdir: str) -> list[str]:
-   flac_directories = []
-   for pattern in glob.iglob(os.path.join(flacdir, "**", "*.flac")):
-   # Extract the directory path from the matched FLAC file path
-      dirpath = os.path.dirname(pattern)
-      flac_directories.append(dirpath)
-   return list(set(flac_directories))
 
 def main() -> None:
    if len(sys.argv) != 2:

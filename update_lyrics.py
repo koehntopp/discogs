@@ -4,7 +4,6 @@
 #   "pytaglib",
 #   "requests",
 #   "alive-progress",
-#   "discogs_client"
 # ]
 # ///
 
@@ -80,9 +79,9 @@ def get_lrclyrics(flactags: taglib.File, albumtitle: str) -> tuple[str, str]:
        elif data['plainLyrics']:
            return data['plainLyrics'], 'plain'
            
-   except:
+   except Exception:
        pass
-       
+
    return '', 'none'
 
 def process_flac_file(tags: taglib.File, album_name: str, artist: str) -> tuple[str, bool]:
@@ -120,7 +119,7 @@ def walkdirs(fixdir: str, bar: Any) -> int:
         discogs_id = int(flactag(tags, 'DISCOGS_RELEASE_ID'))
         album_name = flactag(tags, 'ORIGINAL_TITLE').strip()
         artist = flactag(tags, 'ARTIST')
-    except:
+    except ValueError:
         stats['error'] += 1
         return 0
 
