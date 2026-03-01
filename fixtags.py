@@ -45,10 +45,8 @@ def flactag(song: taglib.File, tag: str) -> str:
       return("")
 
 # fix tags for a single album (in a single directory)
-def fixdir(fixdir: str) -> None:
+def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
    flac_files = 0
-   # initialize Discogs API
-   dclient = discogs_client.Client('PyDiscogsTagger/0.1', user_token=api_key)
    first_flac = next((filename for filename in os.listdir(fixdir) if filename.endswith(".flac")), None)
    if first_flac is not None:
       first_flac_path = os.path.join(fixdir, first_flac)
@@ -136,9 +134,10 @@ def main() -> None:
                 flac_directories.append(root)
                 break
     
+    dclient = discogs_client.Client('PyDiscogsTagger/0.1', user_token=api_key)
     for directory in flac_directories:
         timelog('Starting to fix tags in ', directory)
-        fixdir(directory)
+        fixdir(directory, dclient)
     print("")
 
 if __name__ == '__main__':

@@ -29,6 +29,8 @@ import taglib
 # import config file containing Discogs api_key (String with API token from https://www.discogs.com/en/settings/developers?lang_alt=en )
 from config import api_key
 
+LRC_PATTERN = re.compile(r'\[\d\d\D\d\d\D\d\d\]')
+
 # Initialize counters
 stats = {'flac_files': 0, 'lrc_total': 0, 'no_total': 0, 'lrc_new': 0, 'txt_total': 0, 'txt_new': 0, 'error': 0}
 
@@ -88,7 +90,7 @@ def process_flac_file(tags: taglib.File, album_name: str, artist: str) -> tuple[
     dirty = False
     lyrics = flactag(tags, 'LYRICS').strip() if 'LYRICS' in tags.tags else ''
     
-    if lyrics == '' or not re.match(r'\[\d\d\D\d\d\D\d\d\]', lyrics):
+    if lyrics == '' or not LRC_PATTERN.match(lyrics):
         lrc, lrctype = get_lrclyrics(tags, album_name)
         if lrctype == 'lrc':
             tags.tags['LYRICS'] = [lrc]
@@ -101,7 +103,7 @@ def process_flac_file(tags: taglib.File, album_name: str, artist: str) -> tuple[
         else:
             return ('txt' if lyrics else 'none'), False
     else:
-        return ('lrc' if re.match(r'\[\d\d\D\d\d\D\d\d\]', lyrics) else 'none'), False
+        return 'lrc', False
 
 def walkdirs(fixdir: str, bar: Any) -> int:
     global stats

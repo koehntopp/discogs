@@ -36,9 +36,11 @@ def calculate_dr(albumpath: str) -> None:
    dr_sum = 0
    dr_tracks = 0
    tracks = 0
+   flac_files: list[str] = []
    # iterate over FLAC files, calculate title DR (if possible)
    for p in Path(albumpath).rglob('*.flac'):
       fullfilename = str(PurePosixPath(p))
+      flac_files.append(fullfilename)
       dr_tags = taglib.File(fullfilename)
       tracks += 1
       dr_song = 0
@@ -76,8 +78,7 @@ def calculate_dr(albumpath: str) -> None:
          dr_album_old = ""
       timelog("Album DR in files:", dr_album_old)
       if dra_dirty or dr_album != dr_album_old:
-         for p in Path(albumpath).rglob('*.flac'):
-            fullfilename = str(PurePosixPath(p))
+         for fullfilename in flac_files:
             dr_tags = taglib.File(fullfilename)
             dr_tags.tags["ALBUM DYNAMIC RANGE"] = [str(dr_album).zfill(2)]
             dr_tags.save()

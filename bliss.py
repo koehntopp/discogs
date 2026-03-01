@@ -17,6 +17,7 @@ import time
 from datetime import datetime
 from tqdm import tqdm
 import argparse
+import subprocess
 
 # https://github.com/supermihi/pytaglib
 import taglib
@@ -33,8 +34,7 @@ def timelog(txt1: str, txt2: str, color: str = 'white') -> None:
    rprint(f'[{color}]{datetime.now().strftime("%H:%M:%S")}[/{color}] ' + log_msg + txt2)
 
 def hasSubDirs(dir_name: str) -> bool:
-   subdirs = list(os.walk(dir_name))
-   return(len(list(os.walk(dir_name))) > 1)
+   return len(list(os.walk(dir_name))) > 1
 
 
 def clean(dirty_text: str) -> str:
@@ -257,7 +257,7 @@ def createMP3() -> None:
                mp3filename,
                "-loglevel", "error"
             ]
-            os.system(" ".join(f'"{arg}"' for arg in flac2mp3))
+            subprocess.run(flac2mp3)
             
       except Exception as e:
          timelog("Error creating MP3", f"{flacfilename}: {str(e)}", color='red')
