@@ -26,12 +26,32 @@ import soundfile as sf
 
 # logging function
 def timelog(txt1: str, txt2: str, color: str = "green") -> None:
+   """Print a timestamped log line with rich color formatting.
+
+   Args:
+       txt1: Label text displayed in the given color.
+       txt2: Value text appended after the label.
+       color: Rich color name for the label; defaults to 'green'.
+   """
    log_msg = '[' + color + ']' + txt1 + '[/' + color + ']'
    log_msg = log_msg + ' ' * (60 - len(log_msg))
    rprint('[white]' + datetime.now().strftime('%H:%M:%S') + '[/white] ' + log_msg + txt2)
 
 # calculate song and album dynamic range and write tags to files
 def calculate_dr(albumpath: str) -> None:
+   """Calculate the Dynamic Range score for every track in an album directory.
+
+   Iterates all FLAC files in albumpath (recursively). For each file, reads the
+   existing DYNAMIC RANGE tag; if absent, computes it with drmeter and writes the
+   result back. After processing all tracks, derives the album-level DR score as the
+   mean of per-track scores and writes ALBUM DYNAMIC RANGE to every file if the
+   value changed.
+
+   Logs a warning when some tracks are missing a DR score (e.g. corrupt files).
+
+   Args:
+       albumpath: Absolute path to the album directory.
+   """
    # assumption: folder only contains a single album
    dr_sum = 0
    dr_tracks = 0
@@ -90,6 +110,12 @@ def calculate_dr(albumpath: str) -> None:
 
 
 def main() -> None:
+   """Entry point: walk a FLAC directory tree and calculate DR for every album.
+
+   Reads the root directory from config.flacdir or a single positional command-line
+   argument, discovers all album directories containing FLAC files, and calls
+   calculate_dr() for each one in sequence.
+   """
    if len(sys.argv) != 2:
       from config import flacdir
    else:

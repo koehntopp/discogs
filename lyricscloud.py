@@ -27,6 +27,14 @@ lyricscloud = ""
 
 # walk flacdir searching for directories holding albums with flac files
 def walkdirs(fixdir: str) -> None:
+   """Accumulate all LYRICS tag content from FLAC files under fixdir into lyricscloud.
+
+   Appends the LYRICS tag of every FLAC file found (recursively) to the global
+   lyricscloud string.  Files without a LYRICS tag are silently skipped.
+
+   Args:
+       fixdir: Root directory to search for FLAC files.
+   """
    global lyricscloud
    for p in Path(fixdir).rglob('*.flac'):
       fullfilename = str(PurePosixPath(p))
@@ -40,6 +48,15 @@ def walkdirs(fixdir: str) -> None:
    return
 
 def main() -> None:
+   """Generate a word-cloud image from lyrics embedded in a FLAC library.
+
+   Collects all LYRICS tags from the hardcoded Taylor Swift directory, then renders
+   two output images using a mask PNG:
+       swiftie_colour.png  – three-panel matplotlib figure (plain, recoloured, mask)
+       swiftie_cloud.png   – standalone word-cloud PNG
+
+   Paths are currently hardcoded; edit flacdir and the mask/colour PNG paths to adapt.
+   """
    #flacdir = "/Volumes/Frank/00NZB/complete"
    flacdir = "/Volumes/FLAC/Taylor_Swift"
    flac_directories = []

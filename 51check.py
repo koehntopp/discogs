@@ -19,9 +19,28 @@ from datetime import datetime
 from config import flacroot
 
 def hasSubDirs(dir_name: str) -> bool:
+   """Return True if dir_name contains at least one subdirectory.
+
+   Args:
+       dir_name: Path to the directory to inspect.
+
+   Returns:
+       True when the directory has subdirectories, False otherwise.
+   """
    return(len(list(os.walk(dir_name))) > 1)
 
 def clean(dirty_text: str) -> str:
+   """Sanitise a string for use as a filesystem path component.
+
+   Removes punctuation and characters problematic on common filesystems and
+   replaces spaces with underscores.
+
+   Args:
+       dirty_text: Raw string (e.g. an album title from a tag).
+
+   Returns:
+       Sanitised string safe to use as a directory or file name.
+   """
    # Clean file and path names of stupid characters
    clean_text = sanitize_filename(dirty_text)
    clean_text = clean_text.replace('.', '')
@@ -37,6 +56,15 @@ def clean(dirty_text: str) -> str:
    return clean_text
 
 def checktags(flacroot: str) -> None:
+   """Scan all FLAC files under flacroot and report 5.1 (6-channel) or mono (1-channel) albums.
+
+   Iterates every FLAC file recursively, reading the channel count via mutagen.
+   Logs a warning for each album (identified by a title change) that is either
+   surround-sound (6 channels) or mono (1 channel), then prints a summary count.
+
+   Args:
+       flacroot: Root directory of the FLAC library to inspect.
+   """
    log_msg = " [green]Checking FLAC files in[/green]"
    log_msg = log_msg + ' ' * 8
    rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + flacroot)
@@ -78,6 +106,7 @@ def checktags(flacroot: str) -> None:
 
 
 def main() -> None:
+   """Entry point: check all albums in flacroot for non-stereo channel counts."""
    checktags(flacroot)
 
 

@@ -16,18 +16,12 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath, PurePath
 import requests
 from typing import Any
+from concurrent.futures import ThreadPoolExecutor
 
 from alive_progress import alive_bar
 
-# import music libraries
-# https://github.com/joalla/discogs_client
-import discogs_client
-
 # https://github.com/supermihi/pytaglib
 import taglib
-
-# import config file containing Discogs api_key (String with API token from https://www.discogs.com/en/settings/developers?lang_alt=en )
-from config import api_key
 
 LRC_PATTERN = re.compile(r'\[\d\d\D\d\d\D\d\d\]')
 
@@ -36,6 +30,15 @@ stats = {'flac_files': 0, 'lrc_total': 0, 'no_total': 0, 'lrc_new': 0, 'txt_tota
 
 # extract a single FLAC tag
 def flactag(song: taglib.File, tag: str) -> str:
+    """Extract a single tag value from a FLAC file's metadata.
+
+    Args:
+        song: TagLib file object with loaded tags.
+        tag: Tag key to retrieve.
+
+    Returns:
+        First value for the tag, or empty string if not found.
+    """
     try:
         return song.tags.get(tag, [""])[0]
     except (KeyError, IndexError):
@@ -44,12 +47,19 @@ def flactag(song: taglib.File, tag: str) -> str:
 
 # logging function
 def timelog(txt1: str, txt2: str, color: str = 'white') -> None:
+   """Print a timestamped log line with rich color formatting.
+
+   Args:
+       txt1: Label text displayed in green.
+       txt2: Value text appended after the label.
+       color: Rich color name for the timestamp; defaults to 'white'.
+   """
    log_msg = '[green]' + txt1 + '[/green]'
    log_msg = log_msg + ' ' * (60 - len(log_msg))
    rprint(f'[{color}]{datetime.now().strftime("%H:%M:%S")}[/{color}] ' + log_msg + txt2)
 
 def get_lrclyrics(flactags: taglib.File, albumtitle: str) -> tuple[str, str]:
-   """Query lrclib.net API to find lyrics for a song.
+   """Query the lrclib.net API to retrieve lyrics for a single track.
    
    Args:
        flactags: TagLib file object containing song metadata
@@ -86,26 +96,50 @@ def get_lrclyrics(flactags: taglib.File, albumtitle: str) -> tuple[str, str]:
 
    return '', 'none'
 
-def process_flac_file(tags: taglib.File, album_name: str, artist: str) -> tuple[str, bool]:
-    dirty = False
-    lyrics = flactag(tags, 'LYRICS').strip() if 'LYRICS' in tags.tags else ''
-    
-    if lyrics == '' or not LRC_PATTERN.match(lyrics):
-        lrc, lrctype = get_lrclyrics(tags, album_name)
-        if lrctype == 'lrc':
-            tags.tags['LYRICS'] = [lrc]
-            rprint(f'         [yellow]LRC lyrics added[/yellow] for {tags.tags["TITLE"][0]} ([yellow]{artist}[/yellow])')
-            return 'lrc', True
-        elif lrctype == 'plain' and lyrics == '':
-            tags.tags['LYRICS'] = [lrc]
-            rprint(f'         [yellow]TXT lyrics added[/yellow] for {tags.tags["TITLE"][0]} ([yellow]{artist}[/yellow])')
-            return 'txt', True
-        else:
-            return ('txt' if lyrics else 'none'), False
-    else:
-        return 'lrc', False
+def _fetch_track_lyrics(flac_path: str, album_name: str) -> tuple[str, str, str, str, bool]:
+    """Fetch lyrics for a single track (runs in thread pool — no file writes).
+
+    Opens its own taglib.File instance so it is safe to call concurrently.
+    Skips the network call when the file already contains LRC-format lyrics.
+
+    Args:
+        flac_path: Absolute path to the FLAC file.
+        album_name: Album title passed to the lrclib.net API.
+
+    Returns:
+        Tuple of (flac_path, title, lyrics_text, lyrics_type, is_dirty) where
+        is_dirty is True when new lyrics were fetched and should be written back.
+    """
+    tags = taglib.File(flac_path)
+    title = flactag(tags, 'TITLE')
+    existing = flactag(tags, 'LYRICS').strip() if 'LYRICS' in tags.tags else ''
+
+    if existing and LRC_PATTERN.match(existing):
+        return flac_path, title, existing, 'lrc', False
+
+    lrc, lrctype = get_lrclyrics(tags, album_name)
+    if lrctype == 'lrc':
+        return flac_path, title, lrc, 'lrc', True
+    if lrctype == 'plain' and not existing:
+        return flac_path, title, lrc, 'txt', True
+    return flac_path, title, existing, ('txt' if existing else 'none'), False
 
 def walkdirs(fixdir: str, bar: Any) -> int:
+    """Process all FLAC files in an album directory, fetching lyrics where missing.
+
+    Reads the DISCOGS_RELEASE_ID and ORIGINAL_TITLE tags from the first FLAC file to
+    identify the album, then fetches lyrics for all tracks concurrently (up to 8
+    simultaneous lrclib.net requests) via _fetch_track_lyrics().  Results are applied
+    sequentially in the main thread. Skips the directory if no FLAC files are found or
+    DISCOGS_RELEASE_ID is absent. Updates global stats counters for reporting.
+
+    Args:
+        fixdir: Path to the album directory to process.
+        bar: alive-progress bar object supporting .title(str), .text(str), and __call__().
+
+    Returns:
+        Number of files that had new lyrics written (lrc_new + txt_new for this call).
+    """
     global stats
     stats['txt_new'] = 0
     stats['lrc_new'] = 0    
@@ -125,28 +159,33 @@ def walkdirs(fixdir: str, bar: Any) -> int:
         stats['error'] += 1
         return 0
 
-    # Process each FLAC file
-    for p in Path(fixdir).rglob('*.flac'):
-        tags = taglib.File(str(PurePosixPath(p)))
-        lyric_type, is_dirty = process_flac_file(tags, album_name, artist)
-        
-        # Update statistics
+    # Collect FLAC paths, then fetch lyrics concurrently (HTTP only, no writes)
+    flac_paths = [str(PurePosixPath(p)) for p in Path(fixdir).rglob('*.flac')]
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(_fetch_track_lyrics, p, album_name) for p in flac_paths]
+        fetch_results = [f.result() for f in futures]
+
+    # Apply results sequentially (file writes are not thread-safe)
+    for flac_path, title, lyrics, lyric_type, is_dirty in fetch_results:
         stats['flac_files'] += 1
         if lyric_type == 'lrc':
             stats['lrc_total'] += 1
             if is_dirty:
                 stats['lrc_new'] += 1
+                rprint(f'         [yellow]LRC lyrics added[/yellow] for {title} ([yellow]{artist}[/yellow])')
         elif lyric_type == 'txt':
             stats['txt_total'] += 1
             if is_dirty:
                 stats['txt_new'] += 1
+                rprint(f'         [yellow]TXT lyrics added[/yellow] for {title} ([yellow]{artist}[/yellow])')
         else:
             stats['no_total'] += 1
-            
+
         if is_dirty:
+            tags = taglib.File(flac_path)
+            tags.tags['LYRICS'] = [lyrics]
             tags.save()
-            
-        # Update progress bar
+
         bar.title(f"{artist} - {album_name} : ")
         bar.text(f"LRC: {stats['lrc_total']} , TXT: {stats['txt_total']} , No Lyrics: {stats['no_total']}")
         bar()
@@ -154,6 +193,12 @@ def walkdirs(fixdir: str, bar: Any) -> int:
     return stats['lrc_new'] + stats['txt_new']
 
 def main() -> None:
+    """Entry point: walk a FLAC directory tree and update lyrics for all albums.
+
+    Reads the root directory from config.flacdir or a single positional command-line
+    argument. Processes each album directory in sequence with an alive-progress bar
+    and prints summary totals on completion.
+    """
     if len(sys.argv) != 2:
         from config import flacdir
     else:

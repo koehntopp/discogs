@@ -32,12 +32,30 @@ from config import api_key
 
 # logging function
 def timelog(txt1: str, txt2: str, colour: str = 'white') -> None:
+   """Print a timestamped log line with rich colour formatting.
+
+   Args:
+       txt1: Label text displayed in the given colour.
+       txt2: Value text appended after the label.
+       colour: Rich colour name applied to both the timestamp and label; defaults to 'white'.
+   """
    log_msg = f'[{colour}]' + txt1 + f'[/{colour}]'
    log_msg = log_msg + ' ' * (40 - len(txt1))
    rprint(f'[white]{datetime.now().strftime("%H:%M:%S")}[/white] ' + log_msg + txt2)
 
 # extract a single FLAC tag
 def flactag(song: taglib.File, tag: str) -> str:
+   """Extract a single tag value from a FLAC file's metadata.
+
+   Logs a warning when the tag is missing, including album context for diagnosis.
+
+   Args:
+       song: TagLib file object with loaded tags.
+       tag: Tag key to retrieve (e.g. 'ALBUM', 'ARTIST').
+
+   Returns:
+       First value for the tag, or empty string if the key is absent.
+   """
    try:
       return(song.tags[tag][0])
    except (KeyError, IndexError):
@@ -46,6 +64,25 @@ def flactag(song: taglib.File, tag: str) -> str:
 
 # fix tags for a single album (in a single directory)
 def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
+   """Enrich all FLAC files in a single album directory with Discogs metadata.
+
+   Reads the DISCOGS_RELEASE_ID tag from the first FLAC file found, queries the
+   Discogs API for release and master-release data, then updates every FLAC file in
+   the directory with a normalised set of tags:
+
+       RELEASEDATE / DATE    – release year of this specific pressing
+       ORIGINALDATE / ORIGINALRELEASEDATE – year of the master (original) release
+       ALBUM                 – formatted title: "<name> [<year> <desc> <kHz>DR<dr>]"
+       ORIGINAL_TITLE        – canonical Discogs title (from master release if available)
+
+   Skips the directory silently if no FLAC files exist or if DISCOGS_RELEASE_ID is
+   missing / non-numeric. Sleeps 1 second after each Discogs API call to respect the
+   rate limit.
+
+   Args:
+       fixdir: Absolute path to the album directory to process.
+       dclient: Authenticated Discogs client instance.
+   """
    flac_files = 0
    first_flac = next((filename for filename in os.listdir(fixdir) if filename.endswith(".flac")), None)
    if first_flac is not None:
@@ -110,6 +147,12 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
       timelog('No Discogs tags found in ', fixdir, colour='red')
 
 def main() -> None:
+    """Entry point: locate all FLAC album directories and apply Discogs tag enrichment.
+
+    Accepts either a positional directory argument or --configfile to use flacdir
+    from config.py. Creates a single authenticated Discogs client and processes each
+    discovered album directory in sequence.
+    """
     parser = argparse.ArgumentParser(description='Fix FLAC file tags using Discogs metadata')
     parser.add_argument('--configfile', action='store_true', 
                        help='use flacdir from config.py instead of command line')

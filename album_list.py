@@ -59,6 +59,15 @@ ALBUM_TAGS_WITH_PATH = ALBUM_TAGS + ['_DIRECTORY_PATH']
 
 # extract a single FLAC tag
 def flactag(song: taglib.File, tag: str) -> str:
+    """Extract a single tag value from a FLAC file's metadata.
+
+    Args:
+        song: TagLib file object with loaded tags.
+        tag: Tag key to retrieve (e.g. 'ALBUM', 'ARTIST').
+
+    Returns:
+        First value for the tag, or empty string if not found.
+    """
     try:
         return song.tags.get(tag, [""])[0]
     except (KeyError, IndexError):
@@ -67,12 +76,28 @@ def flactag(song: taglib.File, tag: str) -> str:
 
 # logging function
 def timelog(txt1: str, txt2: str, color: str = 'white') -> None:
+   """Print a timestamped log line with rich color formatting.
+
+   Args:
+       txt1: Label text displayed in green.
+       txt2: Value text appended after the label.
+       color: Rich color name for the timestamp; defaults to 'white'.
+   """
    log_msg = '[green]' + txt1 + '[/green]'
    log_msg = log_msg + ' ' * (60 - len(log_msg))
    rprint(f'[{color}]{datetime.now().strftime("%H:%M:%S")}[/{color}] ' + log_msg + txt2)
 
 # Save dataframe with consistent column order and display names
 def save_csv(df: pd.DataFrame) -> None:
+    """Write the album DataFrame to albums.csv and generate a DR distribution chart.
+
+    Exports columns defined in ALBUM_TAGS using display-friendly header names from
+    DISPLAY_NAMES. Also writes albums_dr.png (bar chart coloured red-to-green by DR
+    value) when the 'ALBUM DYNAMIC RANGE' column is populated.
+
+    Args:
+        df: DataFrame containing album metadata with ALBUM_TAGS columns.
+    """
     # Only select columns that exist in the dataframe
     existing_tags = [tag for tag in ALBUM_TAGS if tag in df.columns]
     df_ordered = df[existing_tags].copy()
@@ -104,7 +129,17 @@ def save_csv(df: pd.DataFrame) -> None:
     sys.stdout.flush()
 
 def walkdirs(fixdir: str, bar: Any) -> dict[str, str] | None:
-       
+   """Read album metadata from the first FLAC file found in a directory.
+
+   Args:
+       fixdir: Path to a directory expected to contain FLAC files.
+       bar: Progress bar object supporting .title(str) and __call__().
+
+   Returns:
+       Dictionary of tag values keyed by ALBUM_TAGS names plus '_DIRECTORY_PATH',
+       or None if no FLAC files are present in the directory.
+   """
+
    # Get first FLAC file
    first_flac = next((filename for filename in os.listdir(fixdir) if filename.endswith(".flac")), None)
    if not first_flac:
@@ -128,6 +163,13 @@ def walkdirs(fixdir: str, bar: Any) -> dict[str, str] | None:
 
 
 def main() -> None:
+    """Scan a FLAC directory tree, write a CSV inventory, then monitor for changes.
+
+    Reads the root directory from config.flacdir or a single positional command-line
+    argument. Performs an initial full recursive scan, saves albums.csv and
+    albums_dr.png, then starts a watchdog observer that updates the CSV whenever FLAC
+    files are added, modified, or deleted. Runs until Ctrl-C.
+    """
     if len(sys.argv) != 2:
         from config import flacdir
     else:
