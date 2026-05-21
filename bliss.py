@@ -4,12 +4,14 @@
 #   "tqdm",
 #   "pytaglib",
 #   "pathvalidate",
+#   "unidecode"
 # ]
 # ///
 
 from pathlib import Path, PurePosixPath
 from pathvalidate import sanitize_filename
 import unicodedata
+from unidecode import unidecode
 from rich import print as rprint
 import os
 import shutil
@@ -89,7 +91,7 @@ def clean(dirty_text: str) -> str:
    clean_text = clean_text.replace('Ü', 'Ue')
    clean_text = clean_text.replace('ß', 'ss')
    clean_text = clean_text.replace(' ', '_')
-   return clean_text
+   return unidecode(clean_text)
 
 def get_target_path_and_filename(flac_file: str, root_dir: str) -> tuple[str, str, dict[str, str]]:
    """Compute the canonical destination path and filename for a FLAC file.
