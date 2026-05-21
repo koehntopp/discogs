@@ -35,7 +35,7 @@ call(['dot_clean', flacdir], stdout=DEVNULL, stderr=DEVNULL)
 call(['uv', 'run', str(SCRIPTS_DIR / 'calculate_dr.py'), flacdir])
 
 timelog('Starting replay gain calculation in', flacdir)
-call(['/Applications/rsgain', 'easy', '-m', 'MAX', '--skip-existing', flacdir],
+call(['rsgain', 'easy', '-p', 'rsgain', '-m', 'MAX', flacdir],
      stdout=DEVNULL, stderr=DEVNULL)
 
 call(['uv', 'run', str(SCRIPTS_DIR / 'calculate_fp.py'), flacdir])
