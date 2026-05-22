@@ -4,7 +4,8 @@
 #   "tqdm",
 #   "pytaglib",
 #   "pathvalidate",
-#   "unidecode"
+#   "unidecode",
+#   "python-slugify",
 # ]
 # ///
 
@@ -12,6 +13,7 @@ from pathlib import Path, PurePosixPath
 from pathvalidate import sanitize_filename
 import unicodedata
 from unidecode import unidecode
+from slugify import slugify
 from rich import print as rprint
 import os
 import shutil
@@ -68,31 +70,8 @@ def clean(dirty_text: str) -> str:
        Sanitised string safe to use as a directory or file name.
    """
    # Clean file and path names of stupid characters
-   clean_text = sanitize_filename(dirty_text)
-   clean_text = clean_text.replace('.', '')
-   clean_text = clean_text.replace('#', '')
-   clean_text = clean_text.replace('(', '')
-   clean_text = clean_text.replace(')', '')
-   clean_text = clean_text.replace('\'', '')
-   clean_text = clean_text.replace('&', 'and')
-   clean_text = clean_text.replace('+', 'plus')
-   clean_text = clean_text.replace('´', '')
-   clean_text = clean_text.replace('’', '')
-   clean_text = clean_text.replace('″', '')
-   clean_text = clean_text.replace('\"', '')
-   clean_text = clean_text.replace(',', '')
-   clean_text = clean_text.replace(';', '')
-   clean_text = clean_text.replace(':', '')
-   clean_text = clean_text.replace('ä', 'ae')
-   clean_text = clean_text.replace('ö', 'oe')
-   clean_text = clean_text.replace('ü', 'ue')
-   clean_text = clean_text.replace('Ä', 'Ae')
-   clean_text = clean_text.replace('Ö', 'Oe')
-   clean_text = clean_text.replace('Ü', 'Ue')
-   clean_text = clean_text.replace('ß', 'ss')
-   clean_text = clean_text.replace(' ', '_')
-   return unidecode(clean_text)
-
+   return sanitize_filename(slugify(dirty_text, lowercase=False, separator='_'))
+   
 def get_target_path_and_filename(flac_file: str, root_dir: str) -> tuple[str, str, dict[str, str]]:
    """Compute the canonical destination path and filename for a FLAC file.
 
