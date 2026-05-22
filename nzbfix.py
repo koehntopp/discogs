@@ -5,7 +5,7 @@
 # ///
 
 import os, sys
-from subprocess import call, DEVNULL
+from subprocess import call, Popen, DEVNULL
 from pathlib import Path
 from rich import print as rprint
 from datetime import datetime
@@ -32,12 +32,15 @@ else:
 
 call(['dot_clean', flacdir], stdout=DEVNULL, stderr=DEVNULL)
 
-call(['uv', 'run', str(SCRIPTS_DIR / 'calculate_dr.py'), flacdir])
+timelog('Starting parallel processing in', flacdir)
+parallel = [
+    ('calculate_dr',  Popen(['uv', 'run', str(SCRIPTS_DIR / 'calculate_dr.py'), flacdir])),
+    ('rsgain',        Popen(['rsgain', 'easy', '-p', 'rsgain', '-m', 'MAX', flacdir], stdout=DEVNULL, stderr=DEVNULL)),
+    ('calculate_fp',  Popen(['uv', 'run', str(SCRIPTS_DIR / 'calculate_fp.py'), flacdir])),
+]
+for name, p in parallel:
+    if p.wait() != 0:
+        timelog('Warning: non-zero exit from', name)
 
-timelog('Starting replay gain calculation in', flacdir)
-call(['rsgain', 'easy', '-p', 'rsgain', '-m', 'MAX', flacdir],
-     stdout=DEVNULL, stderr=DEVNULL)
-
-call(['uv', 'run', str(SCRIPTS_DIR / 'calculate_fp.py'), flacdir])
 call(['uv', 'run', str(SCRIPTS_DIR / 'fixtags.py'), flacdir])
 call(['uv', 'run', str(SCRIPTS_DIR / 'update_lyrics.py'), flacdir])
