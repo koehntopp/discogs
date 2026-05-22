@@ -124,9 +124,160 @@ def save_csv(df: pd.DataFrame) -> None:
             plt.tight_layout()
             plt.savefig('albums_dr.png', dpi=150)
             plt.close()
+    save_html(df)
     # Force flush to disk
     import sys
     sys.stdout.flush()
+
+
+def save_html(df: pd.DataFrame) -> None:
+    import json
+
+    album_count = len(df)
+
+    artist_headers = ['Album Artist', 'Albums', 'Avg DR']
+    artist_rows: list = []
+    if 'ALBUM DYNAMIC RANGE' in df.columns and 'ALBUMARTIST' in df.columns:
+        dr_numeric = pd.to_numeric(df['ALBUM DYNAMIC RANGE'], errors='coerce')
+        artist_dr = (
+            df.assign(_dr=dr_numeric)
+            .groupby('ALBUMARTIST')['_dr']
+            .agg(Albums='count', avg_dr='mean')
+            .reset_index()
+            .rename(columns={'ALBUMARTIST': 'Album Artist', 'avg_dr': 'Avg DR'})
+            .sort_values('Album Artist')
+        )
+        artist_dr['Avg DR'] = artist_dr['Avg DR'].round(1)
+        artist_rows = artist_dr[artist_headers].values.tolist()
+
+    artist_count = len(artist_rows)
+    artist_headers_js = json.dumps(artist_headers)
+    artist_rows_js = json.dumps(artist_rows)
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Albums</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable/styles/handsontable.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable/styles/ht-theme-classic.min.css">
+  <style>
+    html,body{{height:100%;margin:0}}
+    .wrap{{padding:0;height:100%;box-sizing:border-box;background:#f5f5f5}}
+    .toolbar{{display:flex;gap:8px;align-items:center;padding:6px 8px}}
+    .tab-btn{{padding:6px 14px;border-radius:6px 6px 0 0;border:1px solid #ccc;border-bottom:none;background:#eee;cursor:pointer;font-size:13px}}
+    .tab-btn.active{{background:#fff;font-weight:bold}}
+    .tab-content{{display:none}}
+    .tab-content.active{{display:block}}
+    #hot-albums,#hot-artists{{width:100%;height:calc(100vh - 76px)}}
+    button#reload{{padding:6px 12px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="toolbar">
+      <button class="tab-btn active" data-tab="albums">Albums ({album_count})</button>
+      <button class="tab-btn" data-tab="artists">Artists by DR ({artist_count})</button>
+      <button id="reload">Reload CSV</button>
+      <span id="status" style="color:#666;font-size:13px;margin-left:4px">Ready</span>
+    </div>
+    <div id="tab-albums" class="tab-content active"><div id="hot-albums"></div></div>
+    <div id="tab-artists" class="tab-content"><div id="hot-artists"></div></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.js"></script>
+  <script>
+    function parseCSVRow(row) {{
+      const cells = [];
+      let cur = '', inQuotes = false;
+      for (let i = 0; i < row.length; i++) {{
+        const ch = row[i];
+        if (ch === '"') {{
+          if (inQuotes && row[i+1] === '"') {{ cur += '"'; i++; }}
+          else inQuotes = !inQuotes;
+        }} else if (ch === ',' && !inQuotes) {{ cells.push(cur); cur = ''; }}
+        else cur += ch;
+      }}
+      cells.push(cur);
+      return cells;
+    }}
+
+    async function loadCSV(url) {{
+      const res = await fetch(url, {{cache: 'no-store'}});
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const txt = await res.text();
+      const lines = txt.replace(/\\r/g,'').split('\\n').filter(Boolean);
+      if (!lines.length) return {{headers:[], rows:[]}};
+      return {{ headers: parseCSVRow(lines[0]).map(h => h.trim()), rows: lines.slice(1).map(parseCSVRow) }};
+    }}
+
+    function defaultWidth(h) {{
+      const k = (h||'').toLowerCase();
+      if (k.includes('artist')) return 120;
+      if (k.includes('title')) return 120;
+      if (k === 'dr' || k === 'avg dr') return 50;
+      if (k === 'albums') return 60;
+      if (k.includes('date')) return 50;
+      if (k === 'discogs' || k === 'musicbrainz' || k === 'catalog' || k === 'version') return 70;
+      return 120;
+    }}
+
+    let hotAlbums = null, hotArtists = null;
+
+    async function renderAlbums() {{
+      const status = document.getElementById('status');
+      try {{
+        status.textContent = 'Loading albums.csv...';
+        const {{headers, rows}} = await loadCSV('albums.csv');
+        if (hotAlbums) {{ try {{ hotAlbums.destroy(); }} catch(e) {{}} }}
+        hotAlbums = new Handsontable(document.getElementById('hot-albums'), {{
+          data: rows, colHeaders: headers, rowHeaders: false,
+          width: '100%', height: 'calc(100vh - 76px)',
+          licenseKey: 'non-commercial-and-evaluation',
+          themeName: 'ht-theme-classic', readOnly: true,
+          filters: true, dropdownMenu: true, columnSorting: true,
+          manualColumnResize: true, colWidths: headers.map(defaultWidth), stretchH: 'all'
+        }});
+        status.textContent = 'Loaded ' + rows.length + ' rows';
+      }} catch(e) {{ status.textContent = 'Error: ' + e.message; }}
+    }}
+
+    function renderArtists() {{
+      const headers = {artist_headers_js};
+      const rows = {artist_rows_js};
+      if (hotArtists) {{ try {{ hotArtists.destroy(); }} catch(e) {{}} }}
+      hotArtists = new Handsontable(document.getElementById('hot-artists'), {{
+        data: rows, colHeaders: headers, rowHeaders: false,
+        width: '100%', height: 'calc(100vh - 76px)',
+        licenseKey: 'non-commercial-and-evaluation',
+        themeName: 'ht-theme-classic', readOnly: true,
+        filters: true, dropdownMenu: true, columnSorting: true,
+        manualColumnResize: true, colWidths: headers.map(defaultWidth), stretchH: 'all'
+      }});
+    }}
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {{
+      btn.addEventListener('click', () => {{
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        if (btn.dataset.tab === 'albums' && hotAlbums) hotAlbums.render();
+        if (btn.dataset.tab === 'artists' && hotArtists) hotArtists.render();
+      }});
+    }});
+
+    document.getElementById('reload').addEventListener('click', renderAlbums);
+
+    renderAlbums();
+    renderArtists();
+  </script>
+</body>
+</html>"""
+
+    with open('albums.html', 'w', encoding='utf-8') as f:
+        f.write(html)
 
 def walkdirs(fixdir: str, bar: Any) -> dict[str, str] | None:
    """Read album metadata from the first FLAC file found in a directory.
