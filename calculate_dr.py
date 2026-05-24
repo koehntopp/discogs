@@ -25,17 +25,17 @@ from drmeter.models import AudioData
 import soundfile as sf
 
 # logging function
-def timelog(txt1: str, txt2: str, color: str = "green") -> None:
-   """Print a timestamped log line with rich color formatting.
+def timelog(txt1: str, txt2: str, colour: str = 'white') -> None:
+   """Print a timestamped log line with rich colour formatting.
 
    Args:
-       txt1: Label text displayed in the given color.
+       txt1: Label text displayed in the given colour.
        txt2: Value text appended after the label.
-       color: Rich color name for the label; defaults to 'green'.
+       colour: Rich colour name applied to both the timestamp and label; defaults to 'white'.
    """
-   log_msg = '[' + color + ']' + txt1 + '[/' + color + ']'
-   log_msg = log_msg + ' ' * (60 - len(log_msg))
-   rprint('[white]' + datetime.now().strftime('%H:%M:%S') + '[/white] ' + log_msg + txt2)
+   log_msg = f'[{colour}]' + txt1 + f'[/{colour}]'
+   log_msg = log_msg + ' ' * (40 - len(txt1))
+   rprint(f'[white]{datetime.now().strftime("%H:%M:%S")}[/white] ' + log_msg + txt2)
 
 # calculate song and album dynamic range and write tags to files
 def calculate_dr(albumpath: str) -> None:

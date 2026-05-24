@@ -32,17 +32,17 @@ mp3root = '/Volumes/MP3/'
 opusroot = '/Volumes/Opus/'
 
 # logging function
-def timelog(txt1: str, txt2: str, color: str = 'white') -> None:
-   """Print a timestamped log line with rich color formatting.
+def timelog(txt1: str, txt2: str, colour: str = 'white') -> None:
+   """Print a timestamped log line with rich colour formatting.
 
    Args:
-       txt1: Label text displayed in green.
+       txt1: Label text displayed in the given colour.
        txt2: Value text appended after the label.
-       color: Rich color name for the timestamp; defaults to 'white'.
+       colour: Rich colour name applied to both the timestamp and label; defaults to 'white'.
    """
-   log_msg = '[green]' + txt1 + '[/green]'
-   log_msg = log_msg + ' ' * (60 - len(log_msg))
-   rprint(f'[{color}]{datetime.now().strftime("%H:%M:%S")}[/{color}] ' + log_msg + txt2)
+   log_msg = f'[{colour}]' + txt1 + f'[/{colour}]'
+   log_msg = log_msg + ' ' * (40 - len(txt1))
+   rprint(f'[white]{datetime.now().strftime("%H:%M:%S")}[/white] ' + log_msg + txt2)
 
 def hasSubDirs(dir_name: str) -> bool:
    """Return True if dir_name contains at least one subdirectory.
@@ -169,7 +169,7 @@ def movefiles(flacroot: str, full: bool = False) -> None:
                os.makedirs(tobepathname)
             shutil.move(fullfilename, tobefullname)
       except Exception as e:
-         timelog("Error moving file", f"{fullfilename}: {str(e)}", color='red')
+         timelog("Error moving file", f"{fullfilename}: {str(e)}", colour='red')
          continue
    timelog("Done.", "")
 
@@ -188,7 +188,7 @@ def ingestfiles(ingest_dir: str) -> None:
    currentalbum = ""
    
    if not os.path.exists(ingest_dir):
-      timelog("Error: Directory does not exist", ingest_dir, color='red')
+      timelog("Error: Directory does not exist", ingest_dir, colour='red')
       return
    
    # Find all FLAC files in the ingest directory
@@ -202,9 +202,9 @@ def ingestfiles(ingest_dir: str) -> None:
             timelog("Ingesting album", metadata['album'])
          
          if move_flac_file(fullfilename, target_path, target_filename):
-            timelog("Ingested", f"{metadata['track']}", color='green')
+            timelog("Ingested", f"{metadata['track']}", colour='green')
       except Exception as e:
-         timelog("Error ingesting file", f"{fullfilename}: {str(e)}", color='red')
+         timelog("Error ingesting file", f"{fullfilename}: {str(e)}", colour='red')
    
    timelog("Done.", "Ingest complete")
 
@@ -233,9 +233,9 @@ def removedirs(rootdir: str) -> None:
                try:
                   shutil.rmtree(dir_path)
                   is_dirty = True
-                  timelog("Removing directory", str(dir_path), color='red')
+                  timelog("Removing directory", str(dir_path), colour='red')
                except OSError as err:
-                  timelog("Error removing directory", f"{str(dir_path)}: {err}", color='red')
+                  timelog("Error removing directory", f"{str(dir_path)}: {err}", colour='red')
 
    timelog("Done.", "")
 
@@ -285,14 +285,14 @@ def checkMP3() -> None:
                    sartist = clean(str(metadata.tags['ALBUMARTIST'][0]))
                    
                    if not os.path.isfile(firstflac):
-                       timelog("MP3 but no FLAC - deleting", f"{sartist} - {salbumtitle}", color='red')
+                       timelog("MP3 but no FLAC - deleting", f"{sartist} - {salbumtitle}", colour='red')
                        shutil.rmtree(mp3dir)
                    elif mp3time < flactime:
-                       timelog("FLAC dir newer - deleting", f"{sartist} - {salbumtitle}", color='red')
+                       timelog("FLAC dir newer - deleting", f"{sartist} - {salbumtitle}", colour='red')
                        shutil.rmtree(mp3dir)
                        
                except Exception as e:
-                   timelog("Error processing directory", f"{mp3dir}: {str(e)}", color='red')
+                   timelog("Error processing directory", f"{mp3dir}: {str(e)}", colour='red')
                    continue
 
    timelog("Done.", "")
@@ -325,7 +325,7 @@ def createMP3() -> None:
             tobepathname = Path(mp3root) / sartist / salbumtitle
             tobepathname.mkdir(parents=True, exist_ok=True)
             
-            timelog("Creating MP3 for", f"{salbumtitle} - {stracktitle}", color='red')
+            timelog("Creating MP3 for", f"{salbumtitle} - {stracktitle}", colour='red')
             
             # Construct and execute ffmpeg command with proper escaping
             flac2mp3 = [
@@ -339,7 +339,7 @@ def createMP3() -> None:
             subprocess.run(flac2mp3)
             
       except Exception as e:
-         timelog("Error creating MP3", f"{flacfilename}: {str(e)}", color='red')
+         timelog("Error creating MP3", f"{flacfilename}: {str(e)}", colour='red')
          continue
 
    timelog("Done.", "")

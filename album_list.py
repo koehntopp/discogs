@@ -75,17 +75,17 @@ def flactag(song: taglib.File, tag: str) -> str:
         return ""
 
 # logging function
-def timelog(txt1: str, txt2: str, color: str = 'white') -> None:
-   """Print a timestamped log line with rich color formatting.
+def timelog(txt1: str, txt2: str, colour: str = 'white') -> None:
+   """Print a timestamped log line with rich colour formatting.
 
    Args:
-       txt1: Label text displayed in green.
+       txt1: Label text displayed in the given colour.
        txt2: Value text appended after the label.
-       color: Rich color name for the timestamp; defaults to 'white'.
+       colour: Rich colour name applied to both the timestamp and label; defaults to 'white'.
    """
-   log_msg = '[green]' + txt1 + '[/green]'
-   log_msg = log_msg + ' ' * (60 - len(log_msg))
-   rprint(f'[{color}]{datetime.now().strftime("%H:%M:%S")}[/{color}] ' + log_msg + txt2)
+   log_msg = f'[{colour}]' + txt1 + f'[/{colour}]'
+   log_msg = log_msg + ' ' * (40 - len(txt1))
+   rprint(f'[white]{datetime.now().strftime("%H:%M:%S")}[/white] ' + log_msg + txt2)
 
 # Save dataframe with consistent column order and display names
 def save_csv(df: pd.DataFrame) -> None:
