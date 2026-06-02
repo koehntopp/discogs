@@ -149,26 +149,20 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 def main() -> None:
     """Entry point: locate all FLAC album directories and apply Discogs tag enrichment.
 
-    Accepts either a positional directory argument or --configfile to use flacdir
-    from config.py. Creates a single authenticated Discogs client and processes each
-    discovered album directory in sequence.
+    Accepts an optional positional directory argument; falls back to flacdir from
+    config.py when none is given. Creates a single authenticated Discogs client and
+    processes each discovered album directory in sequence.
     """
     parser = argparse.ArgumentParser(description='Fix FLAC file tags using Discogs metadata')
-    parser.add_argument('--configfile', action='store_true', 
-                       help='use flacdir from config.py instead of command line')
-    parser.add_argument('directory', nargs='?', 
+    parser.add_argument('directory', nargs='?',
                        help='directory containing FLAC files to process')
     args = parser.parse_args()
 
-    # If no arguments provided, show help
-    if not any(vars(args).values()):
-        parser.print_help()
-        return
-
-    if args.configfile or not args.directory:
-        from config import flacdir
-    else:
+    if args.directory:
         flacdir = args.directory
+    else:
+        import config
+        flacdir = config.nzbdir
 
     flac_directories = []
     for root, dirs, files in os.walk(flacdir):

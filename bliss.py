@@ -26,10 +26,7 @@ import subprocess
 # https://github.com/supermihi/pytaglib
 import taglib
 
-# Global variables
-flacroot = '/Volumes/flac/'
-mp3root = '/Volumes/MP3/'
-opusroot = '/Volumes/Opus/'
+from config import flacroot, mp3root
 
 # logging function
 def timelog(txt1: str, txt2: str, colour: str = 'white') -> None:
@@ -57,7 +54,7 @@ def hasSubDirs(dir_name: str) -> bool:
 
 
 def clean(dirty_text: str) -> str:
-   """Sanitise a string for use as a filesystem path component.
+   """Sanitize a string for use as a filesystem path component.
 
    Removes or substitutes characters that are problematic on common filesystems,
    replaces spaces with underscores, and transliterates German umlauts to ASCII
@@ -183,7 +180,6 @@ def ingestfiles(ingest_dir: str) -> None:
    Args:
        ingest_dir: Source directory containing freshly downloaded/ripped FLAC files.
    """
-   global flacroot
    timelog("Ingesting FLAC files from", ingest_dir)
    currentalbum = ""
    
@@ -250,7 +246,6 @@ def checkMP3() -> None:
    Deletes the MP3 directory when either condition is true so that createMP3() can
    regenerate it from the current FLAC source.
    """
-   global mp3root, flacroot
    log_msg = " [green]Checking MP3 folders in[/green]"
    log_msg = log_msg + ' ' * 7
    rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + mp3root)
@@ -306,7 +301,6 @@ def createMP3() -> None:
    ffmpeg using libmp3lame VBR quality 2 (~190 kbps).  Directory structure is created
    automatically under mp3root.
    """
-   global mp3root, flacroot
    timelog("Creating missing MP3s in", mp3root)
    
    for p in Path(flacroot).rglob('*.flac'):

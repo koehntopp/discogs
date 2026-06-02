@@ -26,22 +26,33 @@ def timelog(txt1: str, txt2: str, colour: str = 'white') -> None:
    log_msg = log_msg + ' ' * (40 - len(txt1))
    rprint(f'[white]{datetime.now().strftime("%H:%M:%S")}[/white] ' + log_msg + txt2)
 
-if len(sys.argv) != 2:
-   from config import flacdir
-else:
-   flacdir = sys.argv[1]
+def main() -> None:
+   """Run the full NZB post-processing pipeline on a directory of FLAC files.
 
-call(['dot_clean', flacdir], stdout=DEVNULL, stderr=DEVNULL)
+   Reads the target directory from config.nzbdir or a single positional command-line
+   argument. Runs dot_clean, then calculate_dr, rsgain, and calculate_fp in parallel,
+   followed by fixtags and update_lyrics sequentially.
+   """
+   if len(sys.argv) != 2:
+      from config import nzbdir
+   else:
+      nzbdir = sys.argv[1]
 
-timelog('Starting parallel processing in', flacdir)
-parallel = [
-    ('calculate_dr',  Popen(['uv', 'run', str(SCRIPTS_DIR / 'calculate_dr.py'), flacdir])),
-    ('rsgain',        Popen(['rsgain', 'easy', '-p', 'rsgain', '-m', 'MAX', flacdir], stdout=DEVNULL, stderr=DEVNULL)),
-    ('calculate_fp',  Popen(['uv', 'run', str(SCRIPTS_DIR / 'calculate_fp.py'), flacdir])),
-]
-for name, p in parallel:
-    if p.wait() != 0:
-        timelog('Warning: non-zero exit from', name)
+   call(['dot_clean', nzbdir], stdout=DEVNULL, stderr=DEVNULL)
 
-call(['uv', 'run', str(SCRIPTS_DIR / 'fixtags.py'), flacdir])
-call(['uv', 'run', str(SCRIPTS_DIR / 'update_lyrics.py'), flacdir])
+   timelog('Starting parallel processing in', nzbdir)
+   parallel = [
+      ('calculate_dr',  Popen(['uv', 'run', str(SCRIPTS_DIR / 'calculate_dr.py'), nzbdir])),
+      ('rsgain',        Popen(['rsgain', 'easy', '-p', 'rsgain', '-m', 'MAX', nzbdir], stdout=DEVNULL, stderr=DEVNULL)),
+      ('calculate_fp',  Popen(['uv', 'run', str(SCRIPTS_DIR / 'calculate_fp.py'), nzbdir])),
+   ]
+   for name, p in parallel:
+      if p.wait() != 0:
+         timelog('Warning: non-zero exit from', name)
+
+   call(['uv', 'run', str(SCRIPTS_DIR / 'fixtags.py'), nzbdir])
+   call(['uv', 'run', str(SCRIPTS_DIR / 'update_lyrics.py'), nzbdir])
+
+
+if __name__ == '__main__':
+   main()
