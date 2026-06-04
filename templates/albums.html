@@ -1,0 +1,32 @@
+<span id="total-badge" style="display:none">{{ total }} albums</span>
+
+<table>
+  <thead>
+    <tr>
+      {% for col in columns %}
+      <th
+        class="{% if sort == col %}sorted-{{ order }}{% endif %}"
+        hx-get="/albums"
+        hx-target="#albums-table-wrap"
+        hx-swap="outerHTML"
+        hx-vals='{"sort": "{{ col }}", "order": "{% if sort == col %}{{ next_order }}{% else %}asc{% endif %}", "search": "{{ search }}"}'
+      >{{ col }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td>{{ row['Album Artist'] }}</td>
+      <td class="album">{{ row['Album'] }}</td>
+      <td class="dr {% if row['DR'] | int >= 12 %}dr-hi{% elif row['DR'] | int >= 8 %}dr-mid{% else %}dr-lo{% endif %}">
+        {{ row['DR'] }}
+      </td>
+      <td>{{ row['Original Date'] }}</td>
+      <td>{{ row['Release Date'] }}</td>
+      <td>{{ row['Catalog'] }}</td>
+      <td>{{ row['Version'] }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

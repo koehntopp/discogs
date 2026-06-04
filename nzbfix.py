@@ -1,30 +1,17 @@
 # /// script
 # dependencies = [
-#   "rich",
+#   "loguru",
 # ]
 # ///
 
-import os, sys
+from log import logger, timelog
+import os, sys, tempfile
 from subprocess import call, Popen, DEVNULL
 from pathlib import Path
-from rich import print as rprint
-from datetime import datetime
 
 SCRIPTS_DIR = Path(__file__).parent
 
 
-# logging function
-def timelog(txt1: str, txt2: str, colour: str = 'white') -> None:
-   """Print a timestamped log line with rich colour formatting.
-
-   Args:
-       txt1: Label text displayed in the given colour.
-       txt2: Value text appended after the label.
-       colour: Rich colour name applied to both the timestamp and label; defaults to 'white'.
-   """
-   log_msg = f'[{colour}]' + txt1 + f'[/{colour}]'
-   log_msg = log_msg + ' ' * (40 - len(txt1))
-   rprint(f'[white]{datetime.now().strftime("%H:%M:%S")}[/white] ' + log_msg + txt2)
 
 def main() -> None:
    """Run the full NZB post-processing pipeline on a directory of FLAC files.
@@ -38,17 +25,48 @@ def main() -> None:
    else:
       nzbdir = sys.argv[1]
 
+   from config import (
+      rsgain_loudness, rsgain_clip_mode, rsgain_max_peak,
+      rsgain_true_peak, rsgain_opus_mode, rsgain_skip,
+   )
+
+   # Generate a temporary rsgain preset from config values
+   preset_ini = (
+      '[Global]\n'
+      f'TargetLoudness={rsgain_loudness}\n'
+      f'ClipMode={rsgain_clip_mode}\n'
+      f'MaxPeakLevel={rsgain_max_peak}\n'
+      f'TruePeak={"true" if rsgain_true_peak else "false"}\n'
+      f'OpusMode={rsgain_opus_mode}\n'
+      'Album=true\n'
+      'TagMode=i\n'
+   )
+   preset_file = tempfile.NamedTemporaryFile(
+      mode='w', suffix='.ini', delete=False, prefix='rsgain_'
+   )
+   preset_file.write(preset_ini)
+   preset_file.close()
+
+   skip_flag = ['-S'] if rsgain_skip else []
+
    call(['dot_clean', nzbdir], stdout=DEVNULL, stderr=DEVNULL)
 
    timelog('Starting parallel processing in', nzbdir)
+   rsgain_cmd = ['rsgain', 'easy'] + skip_flag + ['-p', preset_file.name, nzbdir]
+   timelog('rsgain command: ', ' '.join(rsgain_cmd), colour='cyan')
    parallel = [
       ('calculate_dr',  Popen(['uv', 'run', str(SCRIPTS_DIR / 'calculate_dr.py'), nzbdir])),
-      ('rsgain',        Popen(['rsgain', 'easy', '-p', 'rsgain', '-m', 'MAX', nzbdir], stdout=DEVNULL, stderr=DEVNULL)),
+      ('rsgain',        Popen(rsgain_cmd)),
       ('calculate_fp',  Popen(['uv', 'run', str(SCRIPTS_DIR / 'calculate_fp.py'), nzbdir])),
    ]
    for name, p in parallel:
-      if p.wait() != 0:
-         timelog('Warning: non-zero exit from', name)
+      rc = p.wait()
+      if rc != 0:
+         timelog(f'Warning: {name} exited with code', str(rc), colour='red')
+      else:
+         timelog(f'{name} done', '', colour='green')
+
+   os.unlink(preset_file.name)
 
    call(['uv', 'run', str(SCRIPTS_DIR / 'fixtags.py'), nzbdir])
    call(['uv', 'run', str(SCRIPTS_DIR / 'update_lyrics.py'), nzbdir])

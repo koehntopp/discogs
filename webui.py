@@ -7,6 +7,7 @@
 #   "aiofiles",
 #   "mutagen",
 #   "python-multipart",
+#   "loguru",
 # ]
 # ///
 
@@ -18,6 +19,7 @@ import time
 from html import escape
 from pathlib import Path
 from datetime import datetime
+from log import logger
 
 import pandas as pd
 import uvicorn
@@ -26,12 +28,21 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 SCRIPTS_DIR = Path(__file__).parent
-CSV_PATH = SCRIPTS_DIR / 'albums.csv'
+
+def _config_dir() -> Path:
+	try:
+		from config import config_dir
+		p = Path(config_dir)
+	except Exception:
+		p = Path('.')
+	p.mkdir(parents=True, exist_ok=True)
+	return p
+
 
 app = FastAPI()
 app.mount('/favicon', StaticFiles(directory=str(SCRIPTS_DIR / 'favicon')), name='favicon')
 
-_refresh: dict = {'proc': None, 'started': 0.0, 'status': '', 'done': False}
+_sync: dict = {'proc': None}
 
 COLUMNS = ['Album Artist', 'Album', 'DR', 'Original Date', 'Release Date', 'Catalog', 'Version']
 
@@ -47,7 +58,7 @@ def dr_class(dr: str) -> str:
 
 
 def load_albums(search: str = '', sort: str = 'Album Artist', order: str = 'asc') -> list[dict]:
-	df = pd.read_csv(CSV_PATH, dtype=str).fillna('')
+	df = pd.read_csv(_config_dir() / 'albums.csv', dtype=str).fillna('')
 	if search:
 		mask = df.apply(lambda row: row.str.contains(search, case=False).any(), axis=1)
 		df = df[mask]
@@ -56,11 +67,25 @@ def load_albums(search: str = '', sort: str = 'Album Artist', order: str = 'asc'
 	return df.to_dict(orient='records')
 
 
+def _tagger_url(row: dict) -> str:
+	cfg = config_read()
+	scheme = cfg.get('tagger_scheme', '')
+	flacroot = cfg.get('flacroot', '')
+	flacroot_local = cfg.get('flacroot_local', flacroot)
+	directory = row.get('Directory', '')
+	if not scheme or not directory or not flacroot:
+		return ''
+	# make path relative to flacroot, then rebase onto flacroot_local
+	rel = Path(directory).relative_to(flacroot) if directory.startswith(flacroot) else Path(directory)
+	local_path = str(Path(flacroot_local) / rel)
+	return f'{scheme}{local_path}'
+
+
 def _album_link(row: dict) -> str:
 	album = escape(row.get('Album', ''))
-	rid = row.get('Discogs', '').strip()
-	if rid:
-		return f'<a href="https://www.discogs.com/release/{escape(rid)}" target="_blank" rel="noopener">{album}</a>'
+	url = _tagger_url(row)
+	if url:
+		return f'<a href="{escape(url)}" title="Open in tagger">{album}</a>'
 	return album
 
 
@@ -93,11 +118,11 @@ def render_row(row: dict, artist_id: str) -> str:
 	mb_id = row.get('MusicBrainz', '').strip()
 	discogs_cell = _icon_cell(
 		f'https://www.discogs.com/release/{escape(discogs_id)}' if discogs_id else '',
-		'https://www.discogs.com/favicon.ico', 'Discogs',
+		'/favicon/discogs.png', 'Discogs',
 	)
 	mb_cell = _icon_cell(
 		f'https://musicbrainz.org/release/{escape(mb_id)}' if mb_id else '',
-		'https://musicbrainz.org/favicon.ico', 'MusicBrainz',
+		'/favicon/musicbrainz.png', 'MusicBrainz',
 	)
 	return (
 		f'<tr>'
@@ -126,8 +151,8 @@ def render_table(rows: list[dict], sort: str, order: str, search: str) -> str:
 	for col in COLUMNS:
 		if col == 'Catalog':
 			for icon_col, favicon, label in [
-				('Discogs',     'https://www.discogs.com/favicon.ico',  'Discogs'),
-				('MusicBrainz', 'https://musicbrainz.org/favicon.ico',  'MusicBrainz'),
+				('Discogs',     '/favicon/discogs.png',     'Discogs'),
+				('MusicBrainz', '/favicon/musicbrainz.png', 'MusicBrainz'),
 			]:
 				cur = 'sorted-' + order if sort == icon_col else ''
 				col_order = next_order if sort == icon_col else 'asc'
@@ -171,6 +196,7 @@ INDEX_HTML = '''<!DOCTYPE html>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Discogs Library</title>
   <link rel="icon" type="image/x-icon" href="/favicon/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/favicon/android-chrome-192x192.png" />
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
@@ -190,15 +216,7 @@ INDEX_HTML = '''<!DOCTYPE html>
       flex: 1; max-width: 320px; padding: 4px 8px;
       border: 1px solid #ccc; border-radius: 4px; font-size: 13px;
     }
-    .tab-btn {
-      padding: 5px 12px; border: 1px solid #ccc; border-radius: 4px;
-      background: #eee; cursor: pointer; font-size: 13px;
-    }
-    .tab-btn.active { background: #fff; font-weight: 600; }
-    .panel { display: none; }
-    .panel.active { display: block; }
-    #albums-panel { overflow: auto; height: calc(100vh - 45px); }
-    table { border-collapse: collapse; width: 100%; }
+    table { border-collapse: collapse; width: 100%; font-size: 15px; }
     thead th {
       position: sticky; top: 0; background: #f0f0f0;
       border-bottom: 2px solid #ccc; padding: 5px 8px;
@@ -217,15 +235,35 @@ INDEX_HTML = '''<!DOCTYPE html>
     .dr-mid { color: #996600; }
     .dr-lo  { color: #cc2200; }
     #refresh-btn {
-      padding: 5px 12px; border: 1px solid #ccc; border-radius: 4px;
-      background: #eee; cursor: pointer; font-size: 13px;
+      padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px;
+      background: #eee; cursor: pointer; font-size: 13px; color: #555;
     }
+    #refresh-btn:hover { background: #e0e0e0; }
+    #refresh-btn.htmx-request i { animation: spin 0.8s linear infinite; display: inline-block; }
     #refresh-btn.htmx-request { color: #999; cursor: default; }
+    #lyrics-btn, #bliss-btn, #sync-btn {
+      padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px;
+      background: #eee; cursor: pointer; font-size: 13px; color: #555;
+    }
+    #lyrics-btn:hover, #bliss-btn:hover, #sync-btn:hover { background: #e0e0e0; }
+    #log-btn {
+      margin-left: auto;
+    }
     #settings-btn {
-      margin-left: auto; padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px;
+      padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px;
       background: #eee; cursor: pointer; font-size: 13px; color: #555;
     }
     #settings-btn:hover { background: #e0e0e0; }
+    #about-btn {
+      padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px;
+      background: #eee; cursor: pointer; font-size: 13px; color: #555;
+    }
+    #about-btn:hover { background: #e0e0e0; }
+    #log-btn {
+      padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px;
+      background: #eee; cursor: pointer; font-size: 13px; color: #555;
+    }
+    #log-btn:hover { background: #e0e0e0; }
     #modal-backdrop {
       position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100;
     }
@@ -269,50 +307,59 @@ INDEX_HTML = '''<!DOCTYPE html>
     .reprocess-btn.htmx-request { animation: spin 0.8s linear infinite; border-color: #99b; color: #339; }
     @keyframes spin { to { transform: rotate(360deg); } }
     #count { font-size: 12px; color: #666; margin-left: auto; }
-    #pipeline-panel { padding: 16px; height: calc(100vh - 45px); overflow: auto; }
-    .pipeline-form { display: flex; flex-direction: column; gap: 10px; max-width: 500px; }
-    .pipeline-form label { font-weight: 600; }
-    .pipeline-form input[type=text] {
-      padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;
-    }
-    .pipeline-form button {
-      padding: 7px 16px; border: 1px solid #999; border-radius: 4px;
-      background: #fff; cursor: pointer; font-size: 13px; width: fit-content;
-    }
-    .pipeline-form button:hover { background: #f0f0f0; }
-    #log {
-      margin-top: 16px; background: #1e1e1e; color: #d4d4d4;
-      padding: 12px; border-radius: 6px; font-family: monospace; font-size: 12px;
-      min-height: 120px; max-height: calc(100vh - 240px); overflow-y: auto;
-    }
-    .log-line { white-space: pre-wrap; line-height: 1.6; }
-    .log-done { color: #6ec96e; font-weight: 600; }
+    .about { padding: 24px; max-width: 640px; }
+    .about h2 { margin: 0 0 8px; font-size: 16px; }
+    .about h3 { margin: 24px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: #666; }
+    .about p { margin: 0 0 8px; line-height: 1.6; color: #444; }
+    .about-table { border-collapse: collapse; width: 100%; }
+    .about-table td { padding: 4px 12px 4px 0; vertical-align: top; font-size: 13px; border-bottom: 1px solid #eee; }
+    .about-table td:first-child { white-space: nowrap; font-weight: 500; width: 160px; }
+    .about a { color: #446; }
+    .about a:hover { color: #000; }
   </style>
 </head>
 <body>
   <div class="toolbar">
-    <h1>Discogs Library</h1>
-    <button class="tab-btn active" id="btn-albums" onclick="switchTab('albums')">Albums</button>
-    <button class="tab-btn" id="btn-pipeline" onclick="switchTab('pipeline')">Pipeline</button>
+    <h1><img src="/favicon/favicon-32x32.png" width="20" height="20" alt="" style="vertical-align:middle;margin-right:6px;margin-bottom:2px;">Discogs Library</h1>
     <input type="search" name="search" id="search-box" placeholder="Search…"
       hx-get="/albums" hx-trigger="input changed delay:300ms, search"
       hx-target="#albums-wrap" hx-swap="outerHTML"
       hx-include="[name='search']" />
     <button id="refresh-btn"
       hx-get="/refresh/start"
-      hx-target="#refresh-status"
-      hx-swap="outerHTML"
-      hx-disabled-elt="this">Refresh</button>
-    <span id="refresh-status"></span>
+      hx-target="#modal-wrap"
+      hx-swap="innerHTML">
+      <i class="fa-solid fa-arrows-rotate"></i>
+    </button>
+    <button id="lyrics-btn"
+      hx-get="/lyrics" hx-target="#modal-wrap" hx-swap="innerHTML">
+      <i class="fa-solid fa-music"></i>
+    </button>
+    <button id="bliss-btn"
+      hx-get="/bliss" hx-target="#modal-wrap" hx-swap="innerHTML">
+      <i class="fa-solid fa-folder-tree"></i>
+    </button>
+    <button id="sync-btn"
+      hx-get="/sync" hx-target="#modal-wrap" hx-swap="innerHTML">
+      <i class="fa-solid fa-cloud-arrow-up"></i>
+    </button>
     <span id="count"></span>
+    <button id="log-btn"
+      hx-get="/log" hx-target="#modal-wrap" hx-swap="innerHTML">
+      <i class="fa-regular fa-file-lines"></i>
+    </button>
     <button id="settings-btn"
       hx-get="/settings" hx-target="#modal-wrap" hx-swap="innerHTML">
       <i class="fa-solid fa-gear"></i>
     </button>
+    <button id="about-btn"
+      hx-get="/about" hx-target="#modal-wrap" hx-swap="innerHTML">
+      <i class="fa-solid fa-circle-info"></i>
+    </button>
   </div>
   <div id="modal-wrap"></div>
 
-  <div class="panel active" id="albums-panel">
+  <div id="albums-panel" style="overflow:auto;height:calc(100vh - 45px)">
     <div id="albums-wrap"
       hx-get="/albums" hx-trigger="load"
       hx-target="#albums-wrap" hx-swap="outerHTML">
@@ -320,27 +367,8 @@ INDEX_HTML = '''<!DOCTYPE html>
     </div>
   </div>
 
-  <div class="panel" id="pipeline-panel">
-    <div class="pipeline-form">
-      <label for="dir-input">Directory to process</label>
-      <input type="text" id="dir-input" name="directory" placeholder="/path/to/flacs" />
-      <button hx-get="/run-pipeline" hx-include="#dir-input"
-        hx-target="#log" hx-swap="innerHTML">Run Pipeline</button>
-    </div>
-    <div id="log"><span style="color:#666">Output will appear here.</span></div>
-  </div>
 
   <script>
-    function switchTab(name) {
-      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById(name + '-panel').classList.add('active');
-      document.getElementById('btn-' + name).classList.add('active');
-      const search = document.getElementById('search-box');
-      const count  = document.getElementById('count');
-      search.style.display = name === 'albums' ? '' : 'none';
-      count.style.display  = name === 'albums' ? '' : 'none';
-    }
     document.body.addEventListener('htmx:afterSwap', function() {
       const el = document.getElementById('count-data');
       if (el) document.getElementById('count').textContent = el.dataset.total + ' albums';
@@ -368,72 +396,45 @@ async def albums(
 	return HTMLResponse(render_table(rows, sort, order, search))
 
 
-_SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-
-def _status_span(elapsed: float, status: str = '') -> str:
-	spin = _SPINNER[int(elapsed) % len(_SPINNER)]
-	detail = f' {status}' if status else ''
-	return (
-		f'<span id="refresh-status" style="color:#666;font-family:monospace;font-size:12px"'
-		f' hx-get="/refresh/status" hx-trigger="every 1s" hx-swap="outerHTML">'
-		f'{spin} {elapsed:.0f}s{detail}'
-		f'</span>'
-	)
-
 
 @app.get('/refresh/start', response_class=HTMLResponse)
 async def refresh_start():
-	global _refresh
-	if _refresh['proc'] and _refresh['proc'].poll() is None:
-		_refresh['proc'].terminate()
+	import threading
 	from config import flacroot
+	logger.info('refresh: scanning library')
 	proc = subprocess.Popen(
 		['uv', 'run', str(SCRIPTS_DIR / 'album_list.py'), str(flacroot)],
-		stdout=subprocess.PIPE,
-		stderr=subprocess.STDOUT,
-		text=True,
+		stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
 		cwd=str(SCRIPTS_DIR),
 	)
-	_refresh = {'proc': proc, 'started': time.monotonic(), 'status': '', 'done': False}
-	return HTMLResponse(_status_span(0))
-
-
-@app.get('/refresh/status', response_class=HTMLResponse)
-async def refresh_status():
-	global _refresh
-	proc = _refresh.get('proc')
-	if proc is None:
-		return HTMLResponse('<span id="refresh-status"></span>')
-
-	elapsed = time.monotonic() - _refresh['started']
-
-	if not _refresh['done']:
-		import select
-		while select.select([proc.stdout], [], [], 0)[0]:
-			line = proc.stdout.readline()
-			if not line:
-				break
-			line = line.strip()
-			if 'Done:' in line:
-				proc.wait()
-				_refresh['done'] = True
-				_refresh['status'] = line
-				break
+	def _reader():
+		for line in proc.stdout:
+			line = line.rstrip()
 			if line:
-				_refresh['status'] = line
-
-	if _refresh['done']:
-		rows = load_albums()
-		table_html = render_table(rows, 'Album Artist', 'asc', '')
-		oob_table = table_html.replace('<div id="albums-wrap">', '<div id="albums-wrap" hx-swap-oob="outerHTML">', 1)
-		return HTMLResponse(f'<span id="refresh-status"></span>{oob_table}')
-
-	return HTMLResponse(_status_span(elapsed, _refresh['status']))
+				logger.info(f'refresh: {line}')
+		proc.wait()
+		if proc.returncode == 0:
+			logger.success('refresh: library scan complete')
+		else:
+			logger.error(f'refresh: scan failed (exit {proc.returncode})')
+	threading.Thread(target=_reader, daemon=True).start()
+	return await log_modal()
 
 
 @app.get('/reprocess', response_class=HTMLResponse)
 async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 	import os
+	from mutagen.flac import FLAC
+
+	def clean(text: str) -> str:
+		"""Replicate bliss.clean() to derive canonical directory names."""
+		import unicodedata
+		replacements = {'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'Ä': 'Ae', 'Ö': 'Oe', 'Ü': 'Ue', 'ß': 'ss'}
+		for k, v in replacements.items():
+			text = text.replace(k, v)
+		# Remove chars that are unsafe on common filesystems
+		text = re.sub(r'[^\w\s\-.]', '', unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode())
+		return re.sub(r'[\s]+', '_', text).strip('_')
 
 	ALBUM_TAGS = [
 		'ALBUMARTIST', 'ALBUM', 'ALBUM DYNAMIC RANGE', 'ORIGINAL_TITLE',
@@ -448,28 +449,11 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 		'MUSICBRAINZ_ALBUMID': 'MusicBrainz', 'SUBTITLE': 'Version',
 	}
 
-	# Run fixtags on each album dir, then bliss on the artist dir
-	if Path(artist_dir).is_dir():
-		for entry in sorted(Path(artist_dir).iterdir()):
-			if entry.is_dir() and any(f.suffix == '.flac' for f in entry.iterdir()):
-				subprocess.run(
-					['uv', 'run', str(SCRIPTS_DIR / 'fixtags.py'), str(entry)],
-					stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-					cwd=str(SCRIPTS_DIR),
-				)
-	subprocess.run(
-		['uv', 'run', str(SCRIPTS_DIR / 'bliss.py'), artist_dir],
-		stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-		cwd=str(SCRIPTS_DIR),
-	)
-
-	# Re-read all album subdirs under the artist directory
 	def read_album_dir(album_dir: str) -> dict | None:
 		first_flac = next((f for f in os.listdir(album_dir) if f.endswith('.flac')), None)
 		if not first_flac:
 			return None
 		try:
-			from mutagen.flac import FLAC
 			audio = FLAC(str(Path(album_dir) / first_flac))
 			raw = {k.upper(): v for k, v in audio.tags}
 		except Exception:
@@ -478,9 +462,52 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 		row['Directory'] = album_dir
 		return row
 
-	rows = []
+	# Read ALBUMARTIST before running anything — bliss may rename the artist dir
+	album_artist = None
 	if Path(artist_dir).is_dir():
 		for entry in sorted(Path(artist_dir).iterdir()):
+			if entry.is_dir():
+				first_flac = next((f for f in os.listdir(str(entry)) if f.endswith('.flac')), None)
+				if first_flac:
+					try:
+						audio = FLAC(str(entry / first_flac))
+						album_artist = audio.tags.get('ALBUMARTIST', [None])[0]
+					except Exception:
+						pass
+				if album_artist:
+					break
+
+	import asyncio
+
+	def run_scripts():
+		# Run fixtags on each album subdir
+		if Path(artist_dir).is_dir():
+			for entry in sorted(Path(artist_dir).iterdir()):
+				if entry.is_dir() and any(f.suffix == '.flac' for f in entry.iterdir()):
+					subprocess.run(
+						['uv', 'run', str(SCRIPTS_DIR / 'fixtags.py'), str(entry)],
+						stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+						cwd=str(SCRIPTS_DIR),
+					)
+		# Run bliss on artist dir
+		subprocess.run(
+			['uv', 'run', str(SCRIPTS_DIR / 'bliss.py'), artist_dir],
+			stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+			cwd=str(SCRIPTS_DIR),
+		)
+
+	await asyncio.to_thread(run_scripts)
+
+	# Derive the canonical new artist dir via bliss's clean() on the ALBUMARTIST tag
+	from config import flacroot
+	if album_artist:
+		new_artist_dir = str(Path(flacroot) / clean(album_artist))
+	else:
+		new_artist_dir = artist_dir  # fallback
+
+	rows = []
+	if Path(new_artist_dir).is_dir():
+		for entry in sorted(Path(new_artist_dir).iterdir()):
 			if entry.is_dir():
 				row = read_album_dir(str(entry))
 				if row:
@@ -491,6 +518,105 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 
 	artist = rows[0].get('Album Artist', '')
 	return HTMLResponse(render_artist_tbody(artist, rows))
+
+
+@app.get('/lyrics', response_class=HTMLResponse)
+async def lyrics_run():
+	import threading
+	from config import flacroot
+	logger.info('lyrics: starting update')
+	proc = subprocess.Popen(
+		['uv', 'run', str(SCRIPTS_DIR / 'update_lyrics.py'), str(flacroot)],
+		stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+		cwd=str(SCRIPTS_DIR),
+	)
+	def _reader():
+		for line in proc.stdout:
+			line = line.rstrip()
+			if line:
+				logger.info(f'lyrics: {line}')
+		proc.wait()
+		if proc.returncode == 0:
+			logger.success('lyrics: done')
+		else:
+			logger.error(f'lyrics: failed (exit {proc.returncode})')
+	threading.Thread(target=_reader, daemon=True).start()
+	return await log_modal()
+
+
+@app.get('/bliss', response_class=HTMLResponse)
+async def bliss_run():
+	import threading
+	logger.info('bliss: starting default organisation pass')
+	proc = subprocess.Popen(
+		['uv', 'run', str(SCRIPTS_DIR / 'bliss.py')],
+		stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+		cwd=str(SCRIPTS_DIR),
+	)
+	def _reader():
+		for line in proc.stdout:
+			line = line.rstrip()
+			if line:
+				logger.info(f'bliss: {line}')
+		proc.wait()
+		if proc.returncode == 0:
+			logger.success('bliss: done')
+		else:
+			logger.error(f'bliss: failed (exit {proc.returncode})')
+	threading.Thread(target=_reader, daemon=True).start()
+	return await log_modal()
+
+
+@app.get('/sync', response_class=HTMLResponse)
+async def sync_start():
+	global _sync
+	cfg = config_read()
+	flacroot  = cfg.get('flacroot', '')
+	remote    = cfg.get('flacroot_remote', '')
+	flags     = cfg.get('rclone_flags', 'sync')
+	transfers = cfg.get('rclone_transfers', '8')
+	stats     = cfg.get('rclone_stats', '5s')
+
+	if not flacroot or not remote:
+		logger.error('rclone sync: flacroot or flacroot_remote not set in config')
+	else:
+		if _sync.get('proc') and _sync['proc'].poll() is None:
+			_sync['proc'].terminate()
+		import threading
+		strip = {'-P', '--progress', '-v', '--verbose'}
+		clean_flags = [f for f in flags.split() if f not in strip]
+		rclone_log = _config_dir() / 'rclone.log'
+		rclone_log.write_text('')  # truncate on each run
+		cmd = ['rclone'] + clean_flags + [
+			'--log-file', str(rclone_log),
+			'--log-level', 'NOTICE',
+			'--stats-log-level', 'NOTICE',
+			'--stats-one-line', '--stats', stats,
+			'--transfers', transfers,
+			flacroot, remote,
+		]
+		proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+		_sync = {'proc': proc}
+		logger.info(f"rclone sync started: {' '.join(cmd)}")
+		def _reader():
+			with open(rclone_log, 'r') as f:
+				while proc.poll() is None:
+					line = f.readline()
+					if line:
+						logger.info(f"rclone: {line.rstrip()}")
+					else:
+						time.sleep(0.5)
+				for line in f:
+					if line.strip():
+						logger.info(f"rclone: {line.rstrip()}")
+			if proc.returncode == 0:
+				logger.success('rclone sync done (exit 0)')
+			else:
+				logger.error(f'rclone sync failed (exit {proc.returncode})')
+		threading.Thread(target=_reader, daemon=True).start()
+
+	# Return the standard log modal
+	return await log_modal()
 
 
 @app.get('/run-pipeline', response_class=StreamingResponse)
@@ -520,27 +646,53 @@ CONFIG_PATH = SCRIPTS_DIR / 'config.py'
 SETTINGS_TITLE = 'Settings'
 
 CONFIG_LABELS = {
-	'discogs_api_key': ('Discogs API Key',   'text'),
-	'tagger_scheme':   ('Tagger URL Scheme', 'text'),
-	'flacroot':        ('FLAC Library Root', 'text'),
-	'mp3root':         ('MP3 Mirror Root',   'text'),
-	'flacroot_local':  ('FLAC Root (local)', 'text'),
-	'rsgain_args':     ('rsgain Arguments', 'text'),
+	'config_dir':       ('Config / Data Directory',        'text'),
+	'discogs_api_key':  ('Discogs API Key',               'text'),
+	'tagger_scheme':    ('Tagger URL Scheme',              'text'),
+	'flacroot':         ('FLAC Library Root',              'text'),
+	'mp3root':          ('MP3 Mirror Root',                'text'),
+	'flacroot_local':   ('FLAC Root (local)',              'text'),
+	'nzbdir':           ('NZB Complete Dir',               'text'),
+	'rsgain_loudness':  ('rsgain Loudness (LUFS)',         'text'),
+	'rsgain_clip_mode': ('rsgain Clip Mode (n/p/a)',       'text'),
+	'rsgain_max_peak':  ('rsgain Max Peak (dBTP)',         'text'),
+	'rsgain_true_peak': ('rsgain True Peak (True/False)',  'text'),
+	'rsgain_opus_mode': ('rsgain Opus Mode (d/r/s/t/a)',   'text'),
+	'rsgain_skip':      ('rsgain Skip Existing (True/False)', 'text'),
+	'log_file':         ('Log File',                          'text'),
+	'log_rotation':     ('Log Rotation',                      'text'),
+	'log_retention':    ('Log Retention',                     'text'),
+	'flacroot_remote':   ('FLAC Remote (rclone destination)', 'text'),
+	'rclone_flags':      ('rclone Flags',                     'text'),
+	'rclone_transfers':  ('rclone Transfers',                  'text'),
+	'rclone_stats':      ('rclone Stats Interval',             'text'),
 }
 
 
 def config_read() -> dict[str, str]:
-	"""Parse config.py and return active (non-commented) key=value pairs."""
+	"""Parse config.py and return active (non-commented) key=value pairs as strings."""
 	text = CONFIG_PATH.read_text()
 	result = {}
 	for line in text.splitlines():
 		line = line.strip()
 		if line.startswith('#') or not line:
 			continue
+		# strip inline comment (outside of quotes)
+		line = re.sub(r'\s+#.*$', '', line)
+		# quoted string
 		m = re.match(r'^(\w+)\s*=\s*[\'"](.*)[\'"]\s*$', line)
 		if m:
 			result[m.group(1)] = m.group(2)
+			continue
+		# unquoted value (bool, int, float) — strip any accidental quotes
+		m = re.match(r'^(\w+)\s*=\s*(\S+)', line)
+		if m:
+			result[m.group(1)] = m.group(2).strip("'\"")
 	return result
+
+
+# Keys whose values are stored unquoted in config.py
+_UNQUOTED = {'rsgain_loudness', 'rsgain_max_peak', 'rsgain_true_peak', 'rsgain_skip', 'rclone_transfers'}
 
 
 def config_write(updates: dict[str, str]) -> None:
@@ -548,9 +700,17 @@ def config_write(updates: dict[str, str]) -> None:
 	lines = CONFIG_PATH.read_text().splitlines()
 	out = []
 	for line in lines:
+		# match quoted
 		m = re.match(r'^(\w+)\s*=\s*[\'"](.*)[\'"]\s*$', line.strip())
+		if not m:
+			# match unquoted
+			m = re.match(r'^(\w+)\s*=\s*(\S+)', line.strip())
 		if m and m.group(1) in updates:
 			key = m.group(1)
+			val = updates[key]
+			if key in _UNQUOTED:
+				out.append(f'{key} = {val}')
+				continue
 			# preserve original quote style
 			quote = "'" if line.strip()[len(key):].lstrip(' =')[0] == "'" else '"'
 			out.append(f"{key} = {quote}{updates[key]}{quote}")
@@ -586,6 +746,113 @@ def render_settings_modal(values: dict[str, str], saved: bool = False) -> str:
     </div>
   </form>
 </div>'''
+
+
+LOG_TAIL = 500  # lines to show
+
+
+_LOG_COLOURS = {
+	'SUCCESS':  '#6ec96e',
+	'ERROR':    '#f47f7f',
+	'WARNING':  '#e0a840',
+	'CRITICAL': '#ff5555',
+}
+
+
+def _read_log_html() -> str:
+	cfg = config_read()
+	log_path = _config_dir() / cfg.get('log_file', 'discogs.log')
+	if not log_path.exists():
+		return '<span style="color:#666">(log file not found)</span>'
+	lines = log_path.read_text(errors='replace').splitlines()[-LOG_TAIL:]
+	out = []
+	for line in lines:
+		colour = next((c for level, c in _LOG_COLOURS.items() if f'| {level}' in line), None)
+		escaped = escape(line)
+		out.append(f'<span style="color:{colour}">{escaped}</span>' if colour else escaped)
+	return '\n'.join(out)
+
+
+@app.get('/log', response_class=HTMLResponse)
+async def log_modal():
+	return HTMLResponse('''
+<div id="modal-backdrop" onclick="closeModal()"></div>
+<div id="modal" style="width:80vw;height:80vh;display:flex;flex-direction:column;">
+  <div id="modal-header">
+    <span>Log</span>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <label style="font-size:12px;font-weight:normal;display:flex;align-items:center;gap:4px;">
+        <input type="checkbox" id="log-autoscroll" checked> Auto-scroll
+      </label>
+      <label style="font-size:12px;font-weight:normal;display:flex;align-items:center;gap:4px;">
+        <input type="checkbox" id="log-autorefresh" checked> Live
+      </label>
+      <button onclick="closeModal()" title="Close">&times;</button>
+    </div>
+  </div>
+  <pre id="log-content"
+    hx-get="/log/content"
+    hx-trigger="every 3s [document.getElementById('log-autorefresh')?.checked]"
+    hx-swap="innerHTML"
+    hx-on::after-request="if(document.getElementById('log-autoscroll')?.checked){ var el=document.getElementById('log-content'); el.scrollTop=el.scrollHeight; }"
+    style="flex:1;overflow:auto;margin:0;padding:12px;background:#1e1e1e;color:#d4d4d4;
+           font-family:monospace;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all;"
+  >''' + _read_log_html() + '''</pre>
+</div>
+<script>
+  (function(){ var el=document.getElementById('log-content'); el.scrollTop=el.scrollHeight; })();
+</script>''')
+
+
+@app.get('/log/content', response_class=HTMLResponse)
+async def log_content():
+	return HTMLResponse(_read_log_html())
+
+
+@app.get('/about', response_class=HTMLResponse)
+async def about():
+	return HTMLResponse('''
+<div id="modal-backdrop" onclick="closeModal()"></div>
+<div id="modal" style="width:560px;max-height:80vh;display:flex;flex-direction:column;">
+  <div id="modal-header">
+    <span>About</span>
+    <button onclick="closeModal()" title="Close">&times;</button>
+  </div>
+  <div style="overflow-y:auto;padding:16px;" class="about">
+    <p>
+      A collection of Python tools for managing a local FLAC music library using
+      <a href="https://www.discogs.com" target="_blank" rel="noopener">Discogs</a> metadata,
+      with a web interface built on FastAPI and HTMX.
+    </p>
+    <h3>Python libraries</h3>
+    <table class="about-table">
+      <tr><td><a href="https://github.com/fastapi/fastapi" target="_blank" rel="noopener">FastAPI</a></td><td>Web framework powering this UI</td></tr>
+      <tr><td><a href="https://github.com/encode/uvicorn" target="_blank" rel="noopener">Uvicorn</a></td><td>ASGI server</td></tr>
+      <tr><td><a href="https://github.com/bigskysoftware/htmx" target="_blank" rel="noopener">HTMX</a></td><td>HTML-driven interactivity without JavaScript</td></tr>
+      <tr><td><a href="https://github.com/joalla/discogs_client" target="_blank" rel="noopener">discogs_client</a></td><td>Discogs API client</td></tr>
+      <tr><td><a href="https://github.com/supermihi/pytaglib" target="_blank" rel="noopener">pytaglib</a></td><td>FLAC tag reading and writing via TagLib</td></tr>
+      <tr><td><a href="https://github.com/quodlibet/mutagen" target="_blank" rel="noopener">mutagen</a></td><td>Pure-Python audio metadata library</td></tr>
+      <tr><td><a href="https://github.com/pandas-dev/pandas" target="_blank" rel="noopener">pandas</a></td><td>Album inventory as DataFrames</td></tr>
+      <tr><td><a href="https://github.com/matplotlib/matplotlib" target="_blank" rel="noopener">matplotlib</a></td><td>Dynamic Range distribution chart</td></tr>
+      <tr><td><a href="https://github.com/Textualize/rich" target="_blank" rel="noopener">Rich</a></td><td>Coloured terminal output and logging</td></tr>
+      <tr><td><a href="https://github.com/beetbox/pyacoustid" target="_blank" rel="noopener">pyacoustid</a></td><td>AcoustID acoustic fingerprinting</td></tr>
+      <tr><td><a href="https://pypi.org/project/drmeter/" target="_blank" rel="noopener">drmeter</a></td><td>Dynamic Range score calculation</td></tr>
+      <tr><td><a href="https://github.com/amueller/word_cloud" target="_blank" rel="noopener">wordcloud</a></td><td>Lyrics word cloud generation</td></tr>
+      <tr><td><a href="https://github.com/un33k/python-slugify" target="_blank" rel="noopener">python-slugify</a></td><td>Filename sanitisation</td></tr>
+      <tr><td><a href="https://github.com/avian2/unidecode" target="_blank" rel="noopener">Unidecode</a></td><td>Unicode to ASCII transliteration</td></tr>
+      <tr><td><a href="https://github.com/python-pillow/Pillow" target="_blank" rel="noopener">Pillow</a></td><td>Image handling for artwork</td></tr>
+      <tr><td><a href="https://github.com/bastibe/python-soundfile" target="_blank" rel="noopener">SoundFile</a></td><td>Audio file I/O</td></tr>
+    </table>
+    <h3>External tools</h3>
+    <table class="about-table">
+      <tr><td><a href="https://github.com/complexlogic/rsgain" target="_blank" rel="noopener">rsgain</a></td><td>ReplayGain tag calculation</td></tr>
+      <tr><td><a href="https://github.com/FFmpeg/FFmpeg" target="_blank" rel="noopener">FFmpeg</a></td><td>MP3 and Opus transcoding</td></tr>
+      <tr><td><a href="https://acoustid.org/chromaprint" target="_blank" rel="noopener">fpcalc / Chromaprint</a></td><td>Acoustic fingerprint generation</td></tr>
+      <tr><td><a href="https://lrclib.net" target="_blank" rel="noopener">lrclib.net</a></td><td>Synced lyrics source</td></tr>
+      <tr><td><a href="https://2manyrobots.com/yate/" target="_blank" rel="noopener">Yate</a></td><td>FLAC tagger (macOS)</td></tr>
+    </table>
+  </div>
+</div>''')
 
 
 @app.get('/settings', response_class=HTMLResponse)

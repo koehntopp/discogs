@@ -1,24 +1,21 @@
 # /// script
 # dependencies = [
-#   "rich",
+#   "loguru",
 #   "pytaglib",
 #   "requests",
-#   "alive-progress",
 # ]
 # ///
 
+from log import logger, timelog
 # import system libraries
 import sys
 import os
 import re
-from rich import print as rprint
-from datetime import datetime
 from pathlib import Path, PurePosixPath, PurePath
 import requests
-from typing import Any
 from concurrent.futures import ThreadPoolExecutor
 
-from alive_progress import alive_bar
+import time
 
 # https://github.com/supermihi/pytaglib
 import taglib
@@ -45,18 +42,6 @@ def flactag(song: taglib.File, tag: str) -> str:
         # timelog("Tag Error:", tag + " -- " + song.tags["ALBUMARTIST"][0] + " - " + song.tags["ALBUM"][0])
         return ""
 
-# logging function
-def timelog(txt1: str, txt2: str, colour: str = 'white') -> None:
-   """Print a timestamped log line with rich colour formatting.
-
-   Args:
-       txt1: Label text displayed in the given colour.
-       txt2: Value text appended after the label.
-       colour: Rich colour name applied to both the timestamp and label; defaults to 'white'.
-   """
-   log_msg = f'[{colour}]' + txt1 + f'[/{colour}]'
-   log_msg = log_msg + ' ' * (40 - len(txt1))
-   rprint(f'[white]{datetime.now().strftime("%H:%M:%S")}[/white] ' + log_msg + txt2)
 
 def get_lrclyrics(flactags: taglib.File, albumtitle: str) -> tuple[str, str]:
    """Query the lrclib.net API to retrieve lyrics for a single track.
@@ -124,7 +109,7 @@ def _fetch_track_lyrics(flac_path: str, album_name: str) -> tuple[str, str, str,
         return flac_path, title, lrc, 'txt', True
     return flac_path, title, existing, ('txt' if existing else 'none'), False
 
-def walkdirs(fixdir: str, bar: Any) -> int:
+def walkdirs(fixdir: str) -> int:
     """Process all FLAC files in an album directory, fetching lyrics where missing.
 
     Reads the DISCOGS_RELEASE_ID and ORIGINAL_TITLE tags from the first FLAC file to
@@ -135,7 +120,7 @@ def walkdirs(fixdir: str, bar: Any) -> int:
 
     Args:
         fixdir: Path to the album directory to process.
-        bar: alive-progress bar object supporting .title(str), .text(str), and __call__().
+
 
     Returns:
         Number of files that had new lyrics written (lrc_new + txt_new for this call).
@@ -172,12 +157,12 @@ def walkdirs(fixdir: str, bar: Any) -> int:
             stats['lrc_total'] += 1
             if is_dirty:
                 stats['lrc_new'] += 1
-                rprint(f'         [yellow]LRC lyrics added[/yellow] for {title} ([yellow]{artist}[/yellow])')
+                logger.success(f'LRC lyrics added for {title} ({artist})')
         elif lyric_type == 'txt':
             stats['txt_total'] += 1
             if is_dirty:
                 stats['txt_new'] += 1
-                rprint(f'         [yellow]TXT lyrics added[/yellow] for {title} ([yellow]{artist}[/yellow])')
+                logger.success(f'TXT lyrics added for {title} ({artist})')
         else:
             stats['no_total'] += 1
 
@@ -186,21 +171,17 @@ def walkdirs(fixdir: str, bar: Any) -> int:
             tags.tags['LYRICS'] = [lyrics]
             tags.save()
 
-        bar.title(f"{artist} - {album_name} : ")
-        bar.text(f"LRC: {stats['lrc_total']} , TXT: {stats['txt_total']} , No Lyrics: {stats['no_total']}")
-        bar()
-
     return stats['lrc_new'] + stats['txt_new']
 
 def main() -> None:
     """Entry point: walk a FLAC directory tree and update lyrics for all albums.
 
     Reads the root directory from config.flacdir or a single positional command-line
-    argument. Processes each album directory in sequence with an alive-progress bar
+    argument. Processes each album directory in sequence
     and prints summary totals on completion.
     """
     if len(sys.argv) != 2:
-        from config import flacdir
+        from config import nzbdir as flacdir
     else:
         flacdir = sys.argv[1]
 
@@ -214,21 +195,22 @@ def main() -> None:
                 flac_directories.append(root)
                 break
 
-    # Process each directory
-    with alive_bar(enrich_print=False, monitor="{count}", length=20, spinner=None, bar=None) as bar:
-        print("")
-        timelog('Starting lyrics update in ', str(flacdir))
-        print("")
-        for directory in flac_directories:
-            updated += walkdirs(directory, bar)
-            bar()
-        bar.title("")
-        
-        bar()          
-        print("")
-        timelog('Total Lyrics: ', f"LRC: {stats['lrc_total']} , TXT: {stats['txt_total']}, No Lyrics: {stats['no_total']}")
-        timelog('Lyrics added: ', str(updated))
-        print("")
+    total = len(flac_directories)
+    logger.info(f"Starting lyrics update in {flacdir} ({total} albums)")
+    last_report = time.monotonic()
+    for i, directory in enumerate(flac_directories, 1):
+        updated += walkdirs(directory)
+        if time.monotonic() - last_report >= 10:
+            logger.info(
+                f"Progress: {i}/{total} albums — "
+                f"LRC: {stats['lrc_total']} TXT: {stats['txt_total']} "
+                f"None: {stats['no_total']} New: {updated}"
+            )
+            last_report = time.monotonic()
+    logger.success(
+        f"Done — LRC: {stats['lrc_total']} TXT: {stats['txt_total']} "
+        f"None: {stats['no_total']} New: {updated}"
+    )
 
 if __name__ == '__main__':
     main()

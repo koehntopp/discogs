@@ -1,7 +1,6 @@
 # /// script
 # dependencies = [
-#   "rich",
-#   "tqdm",
+#   "loguru",
 #   "pytaglib",
 #   "pathvalidate",
 #   "unidecode",
@@ -9,17 +8,16 @@
 # ]
 # ///
 
+from log import logger, timelog
 from pathlib import Path, PurePosixPath
 from pathvalidate import sanitize_filename
 import unicodedata
 from unidecode import unidecode
 from slugify import slugify
-from rich import print as rprint
 import os
 import shutil
 import time
 from datetime import datetime
-from tqdm import tqdm
 import argparse
 import subprocess
 
@@ -28,18 +26,6 @@ import taglib
 
 from config import flacroot, mp3root
 
-# logging function
-def timelog(txt1: str, txt2: str, colour: str = 'white') -> None:
-   """Print a timestamped log line with rich colour formatting.
-
-   Args:
-       txt1: Label text displayed in the given colour.
-       txt2: Value text appended after the label.
-       colour: Rich colour name applied to both the timestamp and label; defaults to 'white'.
-   """
-   log_msg = f'[{colour}]' + txt1 + f'[/{colour}]'
-   log_msg = log_msg + ' ' * (40 - len(txt1))
-   rprint(f'[white]{datetime.now().strftime("%H:%M:%S")}[/white] ' + log_msg + txt2)
 
 def hasSubDirs(dir_name: str) -> bool:
    """Return True if dir_name contains at least one subdirectory.
@@ -246,10 +232,7 @@ def checkMP3() -> None:
    Deletes the MP3 directory when either condition is true so that createMP3() can
    regenerate it from the current FLAC source.
    """
-   log_msg = " [green]Checking MP3 folders in[/green]"
-   log_msg = log_msg + ' ' * 7
-   rprint("[white]" + datetime.now().strftime("%H:%M:%S") + "[/white]" + log_msg + mp3root)
-   timelog("Checking MP3 folders in", mp3root)
+   logger.info(f"Checking MP3 folders in {mp3root}")
    
    for root, dirs, _ in os.walk(mp3root, topdown=True):
        for dirname in dirs:
@@ -348,11 +331,18 @@ def main() -> None:
        (no flags)     Quick scan: reorganise only files directly in flacroot (not recursive).
    """
    parser = argparse.ArgumentParser(description='Music library management tool')
+   parser.add_argument('directory', nargs='?', help='Ingest FLAC files from this directory into the library')
    parser.add_argument('--mp3', action='store_true', help='Create missing MP3 files from FLACs')
    parser.add_argument('--full', action='store_true', help='Scan entire flacroot recursively')
    parser.add_argument('--ingest', type=str, metavar='DIRECTORY', help='Ingest FLAC files from a directory into the library')
 
    args = parser.parse_args()
+
+   # Positional directory argument — same as --ingest
+   if args.directory:
+      ingestfiles(args.directory)
+      removedirs(args.directory)
+      return
 
    # If --ingest is specified, use it
    if args.ingest:

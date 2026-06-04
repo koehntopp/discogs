@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Discogs Library</title>
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; font-size: 13px; margin: 0; background: #f5f5f5; color: #222; }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px; background: #fff; border-bottom: 1px solid #ddd;
+      position: sticky; top: 0; z-index: 10;
+    }
+    .toolbar h1 { margin: 0; font-size: 15px; font-weight: 600; flex: 0 0 auto; }
+    .toolbar input[type=search] {
+      flex: 1; max-width: 320px; padding: 4px 8px;
+      border: 1px solid #ccc; border-radius: 4px; font-size: 13px;
+    }
+    .tab-btn {
+      padding: 5px 12px; border: 1px solid #ccc; border-radius: 4px;
+      background: #eee; cursor: pointer; font-size: 13px;
+    }
+    .tab-btn.active { background: #fff; font-weight: 600; }
+
+    /* Tab panels */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* Albums table */
+    #albums-panel { overflow: auto; height: calc(100vh - 45px); }
+    table { border-collapse: collapse; width: 100%; }
+    thead th {
+      position: sticky; top: 0; background: #f0f0f0;
+      border-bottom: 2px solid #ccc; padding: 5px 8px;
+      text-align: left; white-space: nowrap; cursor: pointer; user-select: none;
+    }
+    thead th:hover { background: #e0e0e0; }
+    thead th.sorted-asc::after  { content: ' ↑'; }
+    thead th.sorted-desc::after { content: ' ↓'; }
+    tbody tr:nth-child(even) { background: #fafafa; }
+    tbody tr:hover { background: #eef4ff; }
+    td { padding: 4px 8px; border-bottom: 1px solid #eee; white-space: nowrap; }
+    td.album { white-space: normal; max-width: 400px; }
+    td.dr { font-weight: 600; text-align: center; }
+    .dr-hi  { color: #1a7f1a; }
+    .dr-mid { color: #996600; }
+    .dr-lo  { color: #cc2200; }
+    #count { font-size: 12px; color: #666; margin-left: auto; }
+
+    /* Pipeline panel */
+    #pipeline-panel { padding: 16px; height: calc(100vh - 45px); overflow: auto; }
+    .pipeline-form { display: flex; flex-direction: column; gap: 10px; max-width: 500px; }
+    .pipeline-form label { font-weight: 600; }
+    .pipeline-form input[type=text] {
+      padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;
+    }
+    .pipeline-form button {
+      padding: 7px 16px; border: 1px solid #999; border-radius: 4px;
+      background: #fff; cursor: pointer; font-size: 13px; width: fit-content;
+    }
+    .pipeline-form button:hover { background: #f0f0f0; }
+    #log {
+      margin-top: 16px; background: #1e1e1e; color: #d4d4d4;
+      padding: 12px; border-radius: 6px; font-family: monospace; font-size: 12px;
+      min-height: 120px; max-height: calc(100vh - 240px); overflow-y: auto;
+    }
+    .log-line { white-space: pre-wrap; line-height: 1.6; }
+    .log-done { color: #6ec96e; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <h1>Discogs Library</h1>
+
+    <button class="tab-btn active" id="btn-albums"
+      onclick="switchTab('albums')">Albums</button>
+    <button class="tab-btn" id="btn-pipeline"
+      onclick="switchTab('pipeline')">Pipeline</button>
+
+    <input type="search" name="search" placeholder="Search…"
+      id="search-box"
+      hx-get="/albums"
+      hx-trigger="input changed delay:300ms, search"
+      hx-target="#albums-table-wrap"
+      hx-include="[name='search']"
+    />
+
+    <span id="count"></span>
+  </div>
+
+  <!-- Albums tab -->
+  <div class="panel active" id="albums-panel">
+    <div id="albums-table-wrap"
+      hx-get="/albums"
+      hx-trigger="load"
+      hx-target="#albums-table-wrap"
+      hx-swap="outerHTML">
+      <p style="padding:16px;color:#666">Loading…</p>
+    </div>
+  </div>
+
+  <!-- Pipeline tab -->
+  <div class="panel" id="pipeline-panel">
+    <div class="pipeline-form">
+      <label for="dir-input">Directory to process</label>
+      <input type="text" id="dir-input" name="directory" placeholder="/path/to/flacs" />
+      <button
+        hx-get="/run-pipeline"
+        hx-include="#dir-input"
+        hx-target="#log"
+        hx-swap="innerHTML"
+        hx-indicator="#log">
+        Run Pipeline
+      </button>
+    </div>
+    <div id="log"><span style="color:#666">Output will appear here.</span></div>
+  </div>
+
+  <script>
+    function switchTab(name) {
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(name + '-panel').classList.add('active');
+      document.getElementById('btn-' + name).classList.add('active');
+      // hide search for pipeline tab
+      document.getElementById('search-box').style.display = name === 'albums' ? '' : 'none';
+      document.getElementById('count').style.display = name === 'albums' ? '' : 'none';
+    }
+
+    // Update count badge after table loads
+    document.body.addEventListener('htmx:afterSwap', function(e) {
+      const badge = document.getElementById('total-badge');
+      if (badge) document.getElementById('count').textContent = badge.textContent;
+    });
+  </script>
+</body>
+</html>

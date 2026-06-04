@@ -1,21 +1,18 @@
 # /// script
 # dependencies = [
-#   "rich",
-#   "tqdm",
+#   "loguru",
 #   "pytaglib",
 #   "requests",
 #   "pyacoustid",
 # ]
 # ///
 
+from log import logger, timelog
 # import system libraries
 import sys
 import os
 import glob
-from rich import print as rprint
-from datetime import datetime
 from pathlib import Path, PurePosixPath, PurePath
-from tqdm import tqdm
 import requests
 from urllib.parse import quote, urlencode
 
@@ -25,18 +22,6 @@ import taglib
 # https://github.com/beetbox/pyacoustid/tree/master
 import acoustid
 
-# logging function
-def timelog(txt1: str, txt2: str, colour: str = 'white') -> None:
-   """Print a timestamped log line with rich colour formatting.
-
-   Args:
-       txt1: Label text displayed in the given colour.
-       txt2: Value text appended after the label.
-       colour: Rich colour name applied to both the timestamp and label; defaults to 'white'.
-   """
-   log_msg = f'[{colour}]' + txt1 + f'[/{colour}]'
-   log_msg = log_msg + ' ' * (40 - len(txt1))
-   rprint(f'[white]{datetime.now().strftime("%H:%M:%S")}[/white] ' + log_msg + txt2)
 
 # calculate acoustic fingerprints and write tags to files
 def calculate_fp(albumpath: str) -> None:
@@ -79,7 +64,7 @@ def main() -> None:
    calculate_fp() for each one in sequence.
    """
    if len(sys.argv) != 2:
-      from config import flacdir
+      from config import nzbdir as flacdir
    else:
       flacdir = sys.argv[1]
    flac_directories = []
