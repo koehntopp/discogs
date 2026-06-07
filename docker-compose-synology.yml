@@ -1,0 +1,18 @@
+services:
+  discogs:
+    image: discogs:latest            # imported via Container Manager → Image → Add → Import
+    container_name: discogs
+    ports:
+      - "8765:8000"
+    volumes:
+      - /volume1/docker/discogs/config:/config   # config.py, logs, albums.csv, albums_dr.png
+      - /volume1/FLAC:/flac                      # FLAC library — adjust to your share name
+    environment:
+      - CONFIG_DIR=/config
+      - PORT=8000
+      - RCLONE_CONFIG=/config/rclone.conf
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    restart: unless-stopped

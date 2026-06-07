@@ -1,6 +1,6 @@
 # /// script
 # dependencies = [
-#   "loguru",
+#   "structlog",
 #   "pytaglib",
 #   "pandas",
 #   "matplotlib",
@@ -113,13 +113,13 @@ def main() -> None:
 			if done % 50 == 0 or done == len(flac_dirs):
 				logger.info(f"{done}/{len(flac_dirs)} scanned, {len(albums)} albums")
 
-	import config as _cfg
-	data_dir = Path(getattr(_cfg, 'config_dir', '.'))
+	import os as _os
+	data_dir = Path(_os.environ.get('CONFIG_DIR') or getattr(__import__('config'), 'config_dir', '.'))
 	data_dir.mkdir(parents=True, exist_ok=True)
 	df = pd.DataFrame(albums)
 	save_csv(df, data_dir / 'albums.csv')
 	save_chart(df, data_dir / 'albums_dr.png')
-	logger.success(f"Done: {len(albums)} albums written to {data_dir / 'albums.csv'}")
+	logger.info(f"Done: {len(albums)} albums written to {data_dir / 'albums.csv'}")
 
 
 if __name__ == '__main__':

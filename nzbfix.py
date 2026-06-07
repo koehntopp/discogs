@@ -1,10 +1,10 @@
 # /// script
 # dependencies = [
-#   "loguru",
+#   "structlog",
 # ]
 # ///
 
-from log import logger, timelog
+from log import logger, success
 import os, sys, tempfile
 from subprocess import call, Popen, DEVNULL
 from pathlib import Path
@@ -51,9 +51,9 @@ def main() -> None:
 
    call(['dot_clean', nzbdir], stdout=DEVNULL, stderr=DEVNULL)
 
-   timelog('Starting parallel processing in', nzbdir)
+   logger.info(f'Starting parallel processing in {nzbdir}')
    rsgain_cmd = ['rsgain', 'easy'] + skip_flag + ['-p', preset_file.name, nzbdir]
-   timelog('rsgain command: ', ' '.join(rsgain_cmd), colour='cyan')
+   logger.info(f"rsgain command: {' '.join(rsgain_cmd)}")
    parallel = [
       ('calculate_dr',  Popen(['uv', 'run', str(SCRIPTS_DIR / 'calculate_dr.py'), nzbdir])),
       ('rsgain',        Popen(rsgain_cmd)),
@@ -62,9 +62,9 @@ def main() -> None:
    for name, p in parallel:
       rc = p.wait()
       if rc != 0:
-         timelog(f'Warning: {name} exited with code', str(rc), colour='red')
+         logger.error(f'Warning: {name} exited with code {rc}')
       else:
-         timelog(f'{name} done', '', colour='green')
+         success(f'{name} done')
 
    os.unlink(preset_file.name)
 

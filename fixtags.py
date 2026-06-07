@@ -1,13 +1,13 @@
 # /// script
 # dependencies = [
-#   "loguru",
+#   "structlog",
 #   "pytaglib",
 #   "requests",
 #   "discogs_client",
 # ]
 # ///
 
-from log import logger, timelog
+from log import logger, success
 # import system libraries
 import time
 import sys
@@ -43,7 +43,7 @@ def flactag(song: taglib.File, tag: str) -> str:
    try:
       return(song.tags[tag][0])
    except (KeyError, IndexError):
-      timelog("Tag Error:", tag + " -- " + song.tags["ALBUMARTIST"][0] + " - " + song.tags["ALBUM"][0], colour='red')
+      logger.error(f'Tag Error: {tag} -- {song.tags["ALBUMARTIST"][0]} - {song.tags["ALBUM"][0]}')
       return("")
 
 # fix tags for a single album (in a single directory)
@@ -124,11 +124,11 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
             flac_files += 1
       
       if flac_files > 0:
-         timelog(f"Updated {flac_files} files with new title: ", album_newtitle, colour='green')
+         success(f'Updated {flac_files} files with new title: {album_newtitle}')
       else:
-         timelog("No changes needed for ", album_newtitle, colour='green')
+         logger.info(f'No changes needed for {album_newtitle}')
    else:
-      timelog('No Discogs tags found in ', fixdir, colour='red')
+      logger.error(f'No Discogs tags found in {fixdir}')
 
 def main() -> None:
     """Entry point: locate all FLAC album directories and apply Discogs tag enrichment.
@@ -157,9 +157,8 @@ def main() -> None:
     
     dclient = discogs_client.Client('PyDiscogsTagger/0.1', user_token=api_key)
     for directory in flac_directories:
-        timelog('Starting to fix tags in ', directory)
+        logger.info(f'Starting to fix tags in {directory}')
         fixdir(directory, dclient)
-    print("")
 
 if __name__ == '__main__':
    main()

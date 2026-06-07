@@ -1,12 +1,12 @@
 # /// script
 # dependencies = [
-#   "loguru",
+#   "structlog",
 #   "pytaglib",
 #   "requests",
 # ]
 # ///
 
-from log import logger, timelog
+from log import logger, success
 # import system libraries
 import sys
 import os
@@ -39,7 +39,7 @@ def flactag(song: taglib.File, tag: str) -> str:
     try:
         return song.tags.get(tag, [""])[0]
     except (KeyError, IndexError):
-        # timelog("Tag Error:", tag + " -- " + song.tags["ALBUMARTIST"][0] + " - " + song.tags["ALBUM"][0])
+        logger.warning(f'Tag Error: {tag} -- {song.tags.get("ALBUMARTIST", ["?"])[0]} - {song.tags.get("ALBUM", ["?"])[0]}')
         return ""
 
 
@@ -157,12 +157,12 @@ def walkdirs(fixdir: str) -> int:
             stats['lrc_total'] += 1
             if is_dirty:
                 stats['lrc_new'] += 1
-                logger.success(f'LRC lyrics added for {title} ({artist})')
+                success(f'LRC lyrics added for {title} ({artist})')
         elif lyric_type == 'txt':
             stats['txt_total'] += 1
             if is_dirty:
                 stats['txt_new'] += 1
-                logger.success(f'TXT lyrics added for {title} ({artist})')
+                success(f'TXT lyrics added for {title} ({artist})')
         else:
             stats['no_total'] += 1
 
@@ -207,7 +207,7 @@ def main() -> None:
                 f"None: {stats['no_total']} New: {updated}"
             )
             last_report = time.monotonic()
-    logger.success(
+    logger.info(
         f"Done — LRC: {stats['lrc_total']} TXT: {stats['txt_total']} "
         f"None: {stats['no_total']} New: {updated}"
     )

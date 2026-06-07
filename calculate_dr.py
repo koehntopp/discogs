@@ -1,13 +1,13 @@
 # /// script
 # dependencies = [
-#   "loguru",
+#   "structlog",
 #   "pytaglib",
 #   "drmeter",
 #   "soundfile",
 # ]
 # ///
  
-from log import logger, timelog
+from log import logger
 
 # import system libraries
 import sys
@@ -61,12 +61,10 @@ def calculate_dr(albumpath: str) -> None:
             try:
                result = dynamic_range(AudioData.from_soundfile(data))
                DR = int(round(result.overall_dr_score))
-            except Exception as e: 
-               print(e)
-               print(fullfilename)
-               #timelog('Error calculating DR:', dr_tags.tags["TITLE"][0], "red")
+            except Exception as e:
+               logger.error(f'DR calculation failed for {fullfilename}: {e}')
          if DR != dr_song:
-            timelog('DR old ' + str(dr_song).zfill(2) + ' --> new ' + str(DR).zfill(2), dr_tags.tags["TITLE"][0])
+            logger.info(f'DR {str(dr_song).zfill(2)} → {str(DR).zfill(2)}  {dr_tags.tags["TITLE"][0]}')
             dr_tags.tags["DYNAMIC RANGE"] = [str(DR).zfill(2)]
             dr_tags.save()
             dr_song = DR
@@ -75,24 +73,23 @@ def calculate_dr(albumpath: str) -> None:
          dr_tracks += 1
          dr_sum += dr_song
    if dr_tracks != tracks:
-      timelog('WARNING: Total tracks ' + str(tracks) + ' , tracks with DR ' + str(dr_tracks), "", "red")
+      logger.warning(f'Incomplete DR: {dr_tracks}/{tracks} tracks have DR scores')
    if dr_tracks > 0:
       dr_album = str(round(dr_sum / dr_tracks)).zfill(2)
       try:
          dr_album_old = dr_tags.tags["ALBUM DYNAMIC RANGE"][0]
       except (KeyError, IndexError):
          dr_album_old = ""
-      timelog("Album DR in files:", dr_album_old)
       if dra_dirty or dr_album != dr_album_old:
          for fullfilename in flac_files:
             dr_tags = taglib.File(fullfilename)
             dr_tags.tags["ALBUM DYNAMIC RANGE"] = [str(dr_album).zfill(2)]
             dr_tags.save()
-         timelog("Album DR updated to:", str(dr_album), "red")
+         logger.info(f'Album DR updated to {dr_album} for {dr_tags.tags["ALBUM"][0]}')
       else:
-         timelog("Album DR for " +  dr_tags.tags["ALBUM"][0] + ":", str(dr_album))
+         logger.info(f'Album DR {dr_album} unchanged for {dr_tags.tags["ALBUM"][0]}')
    else:
-      timelog("ERROR calculating DR!", albumpath)
+      logger.error(f'Could not calculate DR for {albumpath}')
 
 
 def main() -> None:
@@ -114,9 +111,8 @@ def main() -> None:
             flac_directories.append(root)
             break
    for directory in flac_directories:
-      timelog('Starting Dynamic Range calculation in ', directory)
+      logger.info(f'DR: {directory}')
       calculate_dr(directory)
-   print("")  
 
 if __name__ == '__main__':
    main()

@@ -7,7 +7,7 @@
 #   "aiofiles",
 #   "mutagen",
 #   "python-multipart",
-#   "loguru",
+#   "structlog",
 # ]
 # ///
 
@@ -15,11 +15,36 @@ from __future__ import annotations
 
 import re
 import subprocess
+
+def _relay_child_line(prefix: str, line: str) -> None:
+	"""Parse a JSON log line from a child process and re-log just the event."""
+	import json
+	line = line.strip()
+	if not line:
+		return
+	try:
+		rec = json.loads(line)
+		event = rec.get('event', line)
+		level = rec.get('level', 'info').lower()
+		if level == 'success':
+			success(f'{prefix}: {event}')
+		else:
+			getattr(logger, level, logger.info)(f'{prefix}: {event}')
+	except (json.JSONDecodeError, ValueError):
+		logger.info(f'{prefix}: {line}')
+import sys
+import os
 import time
 from html import escape
 from pathlib import Path
 from datetime import datetime
-from log import logger
+
+# Allow config.py to live in CONFIG_DIR (e.g. /config in Docker)
+_config_dir = os.environ.get('CONFIG_DIR')
+if _config_dir and _config_dir not in sys.path:
+	sys.path.insert(0, _config_dir)
+
+from log import logger, success
 
 import pandas as pd
 import uvicorn
@@ -30,11 +55,16 @@ from fastapi.staticfiles import StaticFiles
 SCRIPTS_DIR = Path(__file__).parent
 
 def _config_dir() -> Path:
-	try:
-		from config import config_dir
-		p = Path(config_dir)
-	except Exception:
-		p = Path('.')
+	# ENV var takes priority (set in Docker); fall back to config.py, then CWD
+	env = os.environ.get('CONFIG_DIR')
+	if env:
+		p = Path(env)
+	else:
+		try:
+			from config import config_dir
+			p = Path(config_dir)
+		except Exception:
+			p = Path('.')
 	p.mkdir(parents=True, exist_ok=True)
 	return p
 
@@ -43,6 +73,7 @@ app = FastAPI()
 app.mount('/favicon', StaticFiles(directory=str(SCRIPTS_DIR / 'favicon')), name='favicon')
 
 _sync: dict = {'proc': None}
+_refresh_done: dict = {'pending': False}
 
 COLUMNS = ['Album Artist', 'Album', 'DR', 'Original Date', 'Release Date', 'Catalog', 'Version']
 
@@ -58,7 +89,14 @@ def dr_class(dr: str) -> str:
 
 
 def load_albums(search: str = '', sort: str = 'Album Artist', order: str = 'asc') -> list[dict]:
-	df = pd.read_csv(_config_dir() / 'albums.csv', dtype=str).fillna('')
+	csv = _config_dir() / 'albums.csv'
+	if not csv.exists():
+		return []
+	try:
+		df = pd.read_csv(csv, dtype=str).fillna('')
+	except Exception as e:
+		logger.error(f'load_albums: {e}')
+		return []
 	if search:
 		mask = df.apply(lambda row: row.str.contains(search, case=False).any(), axis=1)
 		df = df[mask]
@@ -181,6 +219,12 @@ def render_table(rows: list[dict], sort: str, order: str, search: str) -> str:
 		tbodies += render_artist_tbody(artist, list(group))
 
 	total = len(rows)
+	if total == 0:
+		return (
+			'<div id="albums-wrap"'
+			' hx-get="/refresh/start" hx-trigger="load" hx-target="#modal-wrap" hx-swap="innerHTML">'
+			'</div>'
+		)
 	return (
 		f'<div id="albums-wrap">'
 		f'<span id="count-data" data-total="{total}" style="display:none"></span>'
@@ -376,6 +420,14 @@ INDEX_HTML = '''<!DOCTYPE html>
     function closeModal() {
       document.getElementById('modal-wrap').innerHTML = '';
     }
+    // Re-trigger log polling immediately when tab regains focus,
+    // compensating for browser throttling of background timers.
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible') {
+        const el = document.getElementById('log-content');
+        if (el) htmx.trigger(el, 'every 3s');
+      }
+    });
   </script>
 </body>
 </html>'''
@@ -399,22 +451,30 @@ async def albums(
 
 @app.get('/refresh/start', response_class=HTMLResponse)
 async def refresh_start():
-	import threading
-	from config import flacroot
-	logger.info('refresh: scanning library')
+	import threading, shutil
+	try:
+		from config import flacroot
+	except Exception as e:
+		logger.error(f'refresh: cannot import config: {e}')
+		return await log_modal()
+	uv = shutil.which('uv')
+	logger.info(f'refresh: uv={uv}, flacroot={flacroot}, config_dir={_config_dir()}')
+	if not Path(flacroot).exists():
+		logger.error(f'refresh: flacroot does not exist: {flacroot}')
+	script = SCRIPTS_DIR / 'album_list.py'
+	logger.info(f'refresh: running {script}')
 	proc = subprocess.Popen(
-		['uv', 'run', str(SCRIPTS_DIR / 'album_list.py'), str(flacroot)],
-		stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+		['uv', 'run', str(script), str(flacroot)],
+		stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
 		cwd=str(SCRIPTS_DIR),
 	)
 	def _reader():
 		for line in proc.stdout:
-			line = line.rstrip()
-			if line:
-				logger.info(f'refresh: {line}')
+			_relay_child_line('refresh', line)
 		proc.wait()
 		if proc.returncode == 0:
-			logger.success('refresh: library scan complete')
+			logger.info('refresh: library scan complete')
+			_refresh_done['pending'] = True
 		else:
 			logger.error(f'refresh: scan failed (exit {proc.returncode})')
 	threading.Thread(target=_reader, daemon=True).start()
@@ -527,17 +587,15 @@ async def lyrics_run():
 	logger.info('lyrics: starting update')
 	proc = subprocess.Popen(
 		['uv', 'run', str(SCRIPTS_DIR / 'update_lyrics.py'), str(flacroot)],
-		stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+		stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
 		cwd=str(SCRIPTS_DIR),
 	)
 	def _reader():
 		for line in proc.stdout:
-			line = line.rstrip()
-			if line:
-				logger.info(f'lyrics: {line}')
+			_relay_child_line('lyrics', line)
 		proc.wait()
 		if proc.returncode == 0:
-			logger.success('lyrics: done')
+			logger.info('lyrics: done')
 		else:
 			logger.error(f'lyrics: failed (exit {proc.returncode})')
 	threading.Thread(target=_reader, daemon=True).start()
@@ -550,17 +608,15 @@ async def bliss_run():
 	logger.info('bliss: starting default organisation pass')
 	proc = subprocess.Popen(
 		['uv', 'run', str(SCRIPTS_DIR / 'bliss.py')],
-		stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+		stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
 		cwd=str(SCRIPTS_DIR),
 	)
 	def _reader():
 		for line in proc.stdout:
-			line = line.rstrip()
-			if line:
-				logger.info(f'bliss: {line}')
+			_relay_child_line('bliss', line)
 		proc.wait()
 		if proc.returncode == 0:
-			logger.success('bliss: done')
+			logger.info('bliss: done')
 		else:
 			logger.error(f'bliss: failed (exit {proc.returncode})')
 	threading.Thread(target=_reader, daemon=True).start()
@@ -587,7 +643,10 @@ async def sync_start():
 		clean_flags = [f for f in flags.split() if f not in strip]
 		rclone_log = _config_dir() / 'rclone.log'
 		rclone_log.write_text('')  # truncate on each run
-		cmd = ['rclone'] + clean_flags + [
+		rclone_conf = _config_dir() / 'rclone.conf'
+		conf_flag = ['--config', str(rclone_conf)] if rclone_conf.exists() else []
+		cmd = ['rclone'] + conf_flag + clean_flags + [
+			'--exclude', '"**/@eaDir/**"',
 			'--log-file', str(rclone_log),
 			'--log-level', 'NOTICE',
 			'--stats-log-level', 'NOTICE',
@@ -610,7 +669,7 @@ async def sync_start():
 					if line.strip():
 						logger.info(f"rclone: {line.rstrip()}")
 			if proc.returncode == 0:
-				logger.success('rclone sync done (exit 0)')
+				logger.info('rclone sync done (exit 0)')
 			else:
 				logger.error(f'rclone sync failed (exit {proc.returncode})')
 		threading.Thread(target=_reader, daemon=True).start()
@@ -640,7 +699,8 @@ async def run_pipeline(directory: str = Query(...)):
 	return StreamingResponse(stream(), media_type='text/html')
 
 
-CONFIG_PATH = SCRIPTS_DIR / 'config.py'
+def _config_path() -> Path:
+	return _config_dir() / 'config.py'
 
 # Labels and ordering for the settings form
 SETTINGS_TITLE = 'Settings'
@@ -671,7 +731,7 @@ CONFIG_LABELS = {
 
 def config_read() -> dict[str, str]:
 	"""Parse config.py and return active (non-commented) key=value pairs as strings."""
-	text = CONFIG_PATH.read_text()
+	text = _config_path().read_text()
 	result = {}
 	for line in text.splitlines():
 		line = line.strip()
@@ -697,7 +757,7 @@ _UNQUOTED = {'rsgain_loudness', 'rsgain_max_peak', 'rsgain_true_peak', 'rsgain_s
 
 def config_write(updates: dict[str, str]) -> None:
 	"""Write updated values back to config.py, preserving comments and structure."""
-	lines = CONFIG_PATH.read_text().splitlines()
+	lines = _config_path().read_text().splitlines()
 	out = []
 	for line in lines:
 		# match quoted
@@ -716,7 +776,7 @@ def config_write(updates: dict[str, str]) -> None:
 			out.append(f"{key} = {quote}{updates[key]}{quote}")
 		else:
 			out.append(line)
-	CONFIG_PATH.write_text('\n'.join(out) + '\n')
+	_config_path().write_text('\n'.join(out) + '\n')
 
 
 def render_settings_modal(values: dict[str, str], saved: bool = False) -> str:
@@ -760,6 +820,7 @@ _LOG_COLOURS = {
 
 
 def _read_log_html() -> str:
+	import json
 	cfg = config_read()
 	log_path = _config_dir() / cfg.get('log_file', 'discogs.log')
 	if not log_path.exists():
@@ -767,8 +828,21 @@ def _read_log_html() -> str:
 	lines = log_path.read_text(errors='replace').splitlines()[-LOG_TAIL:]
 	out = []
 	for line in lines:
-		colour = next((c for level, c in _LOG_COLOURS.items() if f'| {level}' in line), None)
-		escaped = escape(line)
+		try:
+			rec = json.loads(line)
+			level = rec.get('level', '').upper()
+			ts = rec.get('timestamp', '')
+			event = rec.get('event', line)
+			# Extra keys beyond the standard three
+			extras = {k: v for k, v in rec.items() if k not in ('level', 'timestamp', 'event')}
+			text = f'{ts} | {level:<8} | {event}'
+			if extras:
+				text += '  ' + '  '.join(f'{k}={v}' for k, v in extras.items())
+		except (json.JSONDecodeError, ValueError):
+			level = next((l for l in _LOG_COLOURS if f'| {l}' in line), None)
+			text = line
+		colour = _LOG_COLOURS.get(level)
+		escaped = escape(text)
 		out.append(f'<span style="color:{colour}">{escaped}</span>' if colour else escaped)
 	return '\n'.join(out)
 
@@ -796,7 +870,7 @@ async def log_modal():
     hx-swap="innerHTML"
     hx-on::after-request="if(document.getElementById('log-autoscroll')?.checked){ var el=document.getElementById('log-content'); el.scrollTop=el.scrollHeight; }"
     style="flex:1;overflow:auto;margin:0;padding:12px;background:#1e1e1e;color:#d4d4d4;
-           font-family:monospace;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all;"
+           font-family:monospace;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all;user-select:text;"
   >''' + _read_log_html() + '''</pre>
 </div>
 <script>
@@ -806,7 +880,17 @@ async def log_modal():
 
 @app.get('/log/content', response_class=HTMLResponse)
 async def log_content():
-	return HTMLResponse(_read_log_html())
+	html = _read_log_html()
+	if _refresh_done.get('pending'):
+		_refresh_done['pending'] = False
+		# Out-of-band swap: replace #albums-wrap with a self-loading placeholder
+		html += (
+			'<div id="albums-wrap" hx-swap-oob="true"'
+			' hx-get="/albums" hx-trigger="load" hx-target="#albums-wrap" hx-swap="outerHTML">'
+			'<p style="padding:16px;color:#666">Reloading…</p>'
+			'</div>'
+		)
+	return HTMLResponse(html)
 
 
 @app.get('/about', response_class=HTMLResponse)
@@ -869,4 +953,27 @@ async def settings_save(request: Request):
 
 
 if __name__ == '__main__':
-	uvicorn.run('webui:app', host='127.0.0.1', port=8000, reload=True)
+	import socket
+	logger.info(f"Python {sys.version.split()[0]}, cwd={Path.cwd()}")
+	logger.info(f"SCRIPTS_DIR={SCRIPTS_DIR}")
+	logger.info(f"CONFIG_DIR env={os.environ.get('CONFIG_DIR', '(not set)')}")
+
+	cfg_dir = _config_dir()
+	logger.info(f"Resolved config dir: {cfg_dir}")
+	logger.info(f"config dir exists: {cfg_dir.exists()}, writable: {os.access(cfg_dir, os.W_OK)}")
+
+	try:
+		import config
+		logger.info(f"config.py loaded from: {config.__file__}")
+		logger.info(f"config.flacroot={getattr(config, 'flacroot', '(missing)')}")
+		logger.info(f"config.config_dir={getattr(config, 'config_dir', '(missing)')}")
+	except Exception as e:
+		logger.error(f"Failed to import config.py: {e}")
+
+	csv = cfg_dir / 'albums.csv'
+	logger.info(f"albums.csv path: {csv} — exists: {csv.exists()}")
+
+	host = '127.0.0.1' if not os.environ.get('CONFIG_DIR') else '0.0.0.0'
+	port = int(os.environ.get('PORT', 8765))
+	logger.info(f"Starting uvicorn on {host}:{port}")
+	uvicorn.run('webui:app', host=host, port=port, reload=False)

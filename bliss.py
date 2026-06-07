@@ -1,6 +1,6 @@
 # /// script
 # dependencies = [
-#   "loguru",
+#   "structlog",
 #   "pytaglib",
 #   "pathvalidate",
 #   "unidecode",
@@ -8,7 +8,7 @@
 # ]
 # ///
 
-from log import logger, timelog
+from log import logger, success
 from pathlib import Path, PurePosixPath
 from pathvalidate import sanitize_filename
 import unicodedata
@@ -128,7 +128,7 @@ def movefiles(flacroot: str, full: bool = False) -> None:
    """
    # If full==False, only check for .flac files directly in the flacroot directory (non-recursive).
    # If full==True, scan the whole tree recursively.
-   timelog("Checking FLAC folders in", flacroot + (" (full recursive)" if full else " (root-only)"))
+   logger.info(f'Checking FLAC folders in {flacroot}' + (' (full recursive)' if full else ' (root-only)'))
    currentalbum = ""
    pattern_iter = Path(flacroot).rglob('*.flac') if full else Path(flacroot).glob('*.flac')
 
@@ -147,14 +147,14 @@ def movefiles(flacroot: str, full: bool = False) -> None:
          if unicodedata.normalize('NFD', fullfilename.lower()) != unicodedata.normalize('NFD', tobefullname.lower()):
             if salbumtitle != currentalbum:
                currentalbum = salbumtitle
-               timelog("Moving album", salbumtitle)
+               logger.info(f'Moving album {salbumtitle}')
             if not os.path.exists(tobepathname):
                os.makedirs(tobepathname)
             shutil.move(fullfilename, tobefullname)
       except Exception as e:
-         timelog("Error moving file", f"{fullfilename}: {str(e)}", colour='red')
+         logger.error(f'Error moving file {fullfilename}: {e}')
          continue
-   timelog("Done.", "")
+   logger.info('Done.')
 
 def ingestfiles(ingest_dir: str) -> None:
    """Move all FLAC files from an ingest directory into the canonical flacroot structure.
@@ -166,29 +166,29 @@ def ingestfiles(ingest_dir: str) -> None:
    Args:
        ingest_dir: Source directory containing freshly downloaded/ripped FLAC files.
    """
-   timelog("Ingesting FLAC files from", ingest_dir)
+   logger.info(f'Ingesting FLAC files from {ingest_dir}')
    currentalbum = ""
-   
+
    if not os.path.exists(ingest_dir):
-      timelog("Error: Directory does not exist", ingest_dir, colour='red')
+      logger.error(f'Error: Directory does not exist: {ingest_dir}')
       return
-   
+
    # Find all FLAC files in the ingest directory
    for p in Path(ingest_dir).rglob('*.flac'):
       fullfilename = str(PurePosixPath(p))
       try:
          target_path, target_filename, metadata = get_target_path_and_filename(fullfilename, flacroot)
-         
+
          if metadata['album'] != currentalbum:
             currentalbum = metadata['album']
-            timelog("Ingesting album", metadata['album'])
-         
+            logger.info(f"Ingesting album {metadata['album']}")
+
          if move_flac_file(fullfilename, target_path, target_filename):
-            timelog("Ingested", f"{metadata['track']}", colour='green')
+            success(f"Ingested {metadata['track']}")
       except Exception as e:
-         timelog("Error ingesting file", f"{fullfilename}: {str(e)}", colour='red')
-   
-   timelog("Done.", "Ingest complete")
+         logger.error(f'Error ingesting file {fullfilename}: {e}')
+
+   logger.info('Done. Ingest complete.')
 
 def removedirs(rootdir: str) -> None:
    """Recursively remove empty directories (no FLAC or MP3 files) under rootdir.
@@ -199,7 +199,7 @@ def removedirs(rootdir: str) -> None:
    Args:
        rootdir: Root directory to clean up.
    """
-   timelog("Removing empty dirs in", rootdir)
+   logger.info(f'Removing empty dirs in {rootdir}')
    is_dirty = True
    
    while is_dirty:
@@ -215,11 +215,11 @@ def removedirs(rootdir: str) -> None:
                try:
                   shutil.rmtree(dir_path)
                   is_dirty = True
-                  timelog("Removing directory", str(dir_path), colour='red')
+                  logger.warning(f'Removing directory {dir_path}')
                except OSError as err:
-                  timelog("Error removing directory", f"{str(dir_path)}: {err}", colour='red')
+                  logger.error(f'Error removing directory {dir_path}: {err}')
 
-   timelog("Done.", "")
+   logger.info('Done.')
 
 def checkMP3() -> None:
    """Delete stale MP3 album directories that lack a corresponding FLAC source.
@@ -263,17 +263,17 @@ def checkMP3() -> None:
                    sartist = clean(str(metadata.tags['ALBUMARTIST'][0]))
                    
                    if not os.path.isfile(firstflac):
-                       timelog("MP3 but no FLAC - deleting", f"{sartist} - {salbumtitle}", colour='red')
+                       logger.warning(f'MP3 but no FLAC - deleting {sartist} - {salbumtitle}')
                        shutil.rmtree(mp3dir)
                    elif mp3time < flactime:
-                       timelog("FLAC dir newer - deleting", f"{sartist} - {salbumtitle}", colour='red')
+                       logger.warning(f'FLAC dir newer - deleting {sartist} - {salbumtitle}')
                        shutil.rmtree(mp3dir)
-                       
+
                except Exception as e:
-                   timelog("Error processing directory", f"{mp3dir}: {str(e)}", colour='red')
+                   logger.error(f'Error processing directory {mp3dir}: {e}')
                    continue
 
-   timelog("Done.", "")
+   logger.info('Done.')
 
 
 def createMP3() -> None:
@@ -284,7 +284,7 @@ def createMP3() -> None:
    ffmpeg using libmp3lame VBR quality 2 (~190 kbps).  Directory structure is created
    automatically under mp3root.
    """
-   timelog("Creating missing MP3s in", mp3root)
+   logger.info(f'Creating missing MP3s in {mp3root}')
    
    for p in Path(flacroot).rglob('*.flac'):
       try:
@@ -302,7 +302,7 @@ def createMP3() -> None:
             tobepathname = Path(mp3root) / sartist / salbumtitle
             tobepathname.mkdir(parents=True, exist_ok=True)
             
-            timelog("Creating MP3 for", f"{salbumtitle} - {stracktitle}", colour='red')
+            logger.info(f'Creating MP3 for {salbumtitle} - {stracktitle}')
             
             # Construct and execute ffmpeg command with proper escaping
             flac2mp3 = [
@@ -316,10 +316,10 @@ def createMP3() -> None:
             subprocess.run(flac2mp3)
             
       except Exception as e:
-         timelog("Error creating MP3", f"{flacfilename}: {str(e)}", colour='red')
+         logger.error(f'Error creating MP3 {flacfilename}: {e}')
          continue
 
-   timelog("Done.", "")
+   logger.info('Done.')
 
 def main() -> None:
    """Entry point for the bliss library management tool.

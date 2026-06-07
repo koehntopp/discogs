@@ -1,13 +1,13 @@
 # /// script
 # dependencies = [
-#   "loguru",
+#   "structlog",
 #   "pytaglib",
 #   "requests",
 #   "pyacoustid",
 # ]
 # ///
 
-from log import logger, timelog
+from log import logger
 # import system libraries
 import sys
 import os
@@ -53,8 +53,8 @@ def calculate_fp(albumpath: str) -> None:
                dr_tags.save()
                calculated += 1
             except acoustid.FingerprintGenerationError:
-               timelog("Fingerprint could not be calculated - ", fullfilename)      
-   timelog("AcoustID fingerprints generated for ", str(calculated) + " of " + str(total) + " files.")
+               logger.error(f'Fingerprint could not be calculated: {fullfilename}')
+   logger.info(f'AcoustID fingerprints generated for {calculated} of {total} files.')
 
 def main() -> None:
    """Entry point: walk a FLAC directory tree and generate AcoustID fingerprints.
@@ -74,9 +74,8 @@ def main() -> None:
             flac_directories.append(root)
             break
    for directory in flac_directories:
-      timelog('Starting AcoustID fingerprint generation in ', directory)
+      logger.info(f'Starting AcoustID fingerprint generation in {directory}')
       calculate_fp(directory)
-   print("")
 
 if __name__ == '__main__':
    main()
