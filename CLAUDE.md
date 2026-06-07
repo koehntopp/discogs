@@ -2,34 +2,40 @@
 
 ## Project Overview
 
-A collection of Python scripts to manage a local FLAC music library using Discogs metadata. The core philosophy: all tags are set by the user via a Discogs tagger (e.g. Yate), and no script is allowed to overwrite user-set tags arbitrarily. The Discogs Release ID anchors the metadata and ensures exact version identification.
+A collection of Python scripts to manage a local FLAC music library using Discogs metadata, with a FastAPI/HTMX web UI. The core philosophy: all tags are set by the user via a Discogs tagger (e.g. Yate), and no script is allowed to overwrite user-set tags arbitrarily. The Discogs Release ID anchors the metadata and ensures exact version identification.
 
 ## Project Structure
 
 ```
 discogs/
+├── webui.py            # FastAPI/HTMX web interface
 ├── nzbfix.py           # Pipeline orchestration (runs all steps)
 ├── fixtags.py          # Discogs metadata enrichment & tag normalization
 ├── bliss.py            # File/folder organization + MP3 sync copies
-├── album_list.py       # Real-time album inventory (watchdog + CSV + chart)
+├── album_list.py       # Album inventory scan (CSV + DR chart)
 ├── update_lyrics.py    # Fetch & embed LRC/TXT lyrics from lrclib.net
 ├── calculate_dr.py     # Dynamic Range (DR) calculation per track/album
 ├── calculate_fp.py     # AcoustID acoustic fingerprint generation
+├── convert_opus.py     # FLAC → Opus transcoding
 ├── 51check.py          # Detect 5.1 surround or mono versions
 ├── lyricscloud.py      # Experimental word cloud from lyrics
+├── log.py              # Shared structlog setup (imported by all scripts)
 ├── config.py           # API keys and directory paths (not committed)
 ├── config_demo.py      # Config template
-├── pyproject.toml      # Project config (Ruff linter/formatter settings)
-└── requirements.txt    # Python dependencies
+├── Dockerfile          # Multi-stage build (TagLib 2.x + rsgain from source)
+├── docker-compose.yml          # Local / Docker Desktop deployment
+├── docker-compose-synology.yml # Synology NAS deployment
+└── pyproject.toml      # Project config (Ruff linter/formatter settings)
 ```
 
 ## Configuration
 
-Copy `config_demo.py` to `config.py` and fill in:
-- `api_key` — Discogs API token from https://www.discogs.com/settings/developers
-- `flacdir` — staging directory where newly tagged FLACs are dropped
-- `flacroot` — organized library root (e.g. `/Volumes/FLAC/`)
-- `mp3root` — MP3 mirror for mobile/car (e.g. `/Volumes/MP3/`)
+Copy `config_demo.py` to `config/config.py` and fill in:
+- `discogs_api_key` — Discogs API token from https://www.discogs.com/settings/developers
+- `flacroot` — organized library root (container path, e.g. `/flac/`)
+- `mp3root` — MP3 mirror for mobile/car
+- `nzbdir` — staging directory for newly tagged FLACs
+- `log_file`, `log_rotation`, `log_retention` — logging config
 
 **`config.py` must not be committed** — it contains credentials.
 
@@ -42,6 +48,15 @@ uv run <script>.py [args]
 
 Scripts declare their own dependencies via PEP 723 headers (`# /// script`), so `uv run` installs them automatically.
 
+## Docker
+
+```bash
+docker compose up --build        # local
+docker compose -f docker-compose-synology.yml up   # Synology
+```
+
+The Dockerfile builds TagLib 2.x and rsgain from source (Ubuntu 22.04 only ships TagLib 1.x). TagLib headers and libs are installed to `/opt/taglib`; `CPLUS_INCLUDE_PATH`, `LIBRARY_PATH`, and `LD_LIBRARY_PATH` are set so pytaglib compiles against them on first `uv run`.
+
 ## Code Style (Ruff)
 
 - Single quotes
@@ -50,7 +65,30 @@ Scripts declare their own dependencies via PEP 723 headers (`# /// script`), so 
 - Run formatter: `ruff format .`
 - Run linter: `ruff check .`
 
+## Logging
+
+All scripts import from `log.py`:
+
+```python
+from log import logger          # structlog logger
+from log import logger, success # also import success() for green entries
+```
+
+- `logger.info()` / `logger.warning()` / `logger.error()` — standard levels
+- `success(msg)` — logs at custom SUCCESS level (25), renders green in the web UI
+- When stderr is a TTY: pretty `ConsoleRenderer` output to stderr
+- When running as a subprocess (piped): JSON to stdout, captured and re-logged by webui
+- File logging: JSON to `config_dir/log_file` (configured in config.py)
+- Log level: set `LOG_LEVEL` env var (default: INFO)
+
 ## Script Details
+
+### `webui.py`
+- FastAPI + HTMX web interface on port 8000 (default)
+- Album table with search, sort, DR colouring, tagger links, Discogs/MusicBrainz icons
+- Buttons: Refresh (album scan), Lyrics, Bliss (organise), Sync (rclone), Log, Settings
+- Album list reloads automatically after a successful refresh
+- Live log modal with auto-scroll; log text is selectable
 
 ### `fixtags.py <directory>`
 - Finds all FLACs with a `DISCOGS_RELEASE_ID` tag
@@ -67,14 +105,14 @@ Scripts declare their own dependencies via PEP 723 headers (`# /// script`), so 
 - Skips files that already have current MP3 copies
 
 ### `album_list.py [directory]`
-- Watches directory for FLAC changes with watchdog (2s debounce)
-- Rebuilds `albums.csv` with album metadata on each change
+- Scans directory for FLAC files and writes `albums.csv`
 - Generates `albums_dr.png` DR distribution chart (matplotlib)
-- Runs as a long-lived process
+- Called by webui on demand; not a long-lived process
 
 ### `update_lyrics.py <directory>`
 - Queries lrclib.net for synced (LRC) or plain (TXT) lyrics
 - Writes to `LYRICS` FLAC tag
+- Newly found lyrics logged at SUCCESS level (green)
 - Skips files without a Discogs tag
 
 ### `calculate_dr.py <directory>`
@@ -87,6 +125,9 @@ Scripts declare their own dependencies via PEP 723 headers (`# /// script`), so 
 
 ### `nzbfix.py`
 - Orchestration: runs `dot_clean`, `calculate_dr.py`, `rsgain`, `calculate_fp.py`, `fixtags.py`, `update_lyrics.py` in sequence
+
+### `convert_opus.py <directory>`
+- Transcodes FLAC files to Opus format via ffmpeg
 
 ## Key FLAC Tags
 
@@ -107,24 +148,16 @@ Scripts declare their own dependencies via PEP 723 headers (`# /// script`), so 
 
 ## External Tool Dependencies
 
-These must be installed separately:
-- **ffmpeg** — MP3 encoding in bliss.py
-- **rsgain** — ReplayGain tag calculation (https://github.com/complexlogic/rsgain)
-- **dot_clean** — Remove macOS metadata files (macOS built-in)
-
-## Typical Workflow
-
-1. Tag FLAC files with Discogs Release ID using Yate or similar tagger
-2. Optionally add MusicBrainz ID, cover art, `SUBTITLE`, `DESCRIPTION`
-3. Drop files into `flacdir` (staging)
-4. Run `nzbfix.py` (or individual scripts) to enrich and organize
-5. `album_list.py` monitors the library and maintains the CSV inventory
+These must be installed separately (included in Docker image):
+- **ffmpeg** — MP3/Opus encoding
+- **rsgain** — ReplayGain tag calculation (built from source in Docker)
+- **rclone** — Remote sync (FLAC library backup)
+- **dot_clean** — Remove macOS metadata files (macOS built-in, not in Docker)
 
 ## Common Patterns in Code
 
-- `timelog(txt1, txt2, color)` — timestamped colored log output (Rich)
+- `from log import logger, success` — shared structlog setup
 - `flactag(song, tag)` — safe tag extraction with empty-string default
 - `clean(text)` — filename sanitization (umlauts, special chars)
 - `hasSubDirs(dir)` — checks if a directory has subdirectories
-- All scripts use `alive-progress` or `tqdm` for progress display
 - API calls include 1s sleep to respect rate limits
