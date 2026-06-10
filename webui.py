@@ -6,12 +6,17 @@
 #   "rich",
 #   "aiofiles",
 #   "mutagen",
+#   "pillow",
 #   "python-multipart",
 #   "structlog",
 # ]
 # ///
 
 from __future__ import annotations
+
+import os as _os, sys as _sys
+if _os.environ.get('PREINSTALL_ONLY'):
+	_sys.exit(0)
 
 import re
 import subprocess
@@ -74,8 +79,57 @@ app.mount('/favicon', StaticFiles(directory=str(SCRIPTS_DIR / 'favicon')), name=
 
 _sync: dict = {'proc': None}
 _refresh_done: dict = {'pending': False}
+_album_cache: pd.DataFrame | None = None
+_current_proc: subprocess.Popen | None = None
 
-COLUMNS = ['Album Artist', 'Album', 'DR', 'Original Date', 'Release Date', 'Catalog', 'Version']
+
+def _set_proc(proc: subprocess.Popen) -> subprocess.Popen:
+	"""Register proc as the current killable process and return it."""
+	global _current_proc
+	_current_proc = proc
+	return proc
+
+
+def _clear_proc() -> None:
+	global _current_proc
+	_current_proc = None
+
+
+def _cache_load() -> pd.DataFrame:
+	"""Return the in-memory album cache, loading from CSV if needed."""
+	global _album_cache
+	if _album_cache is None:
+		csv = _config_dir() / 'albums.csv'
+		if csv.exists():
+			try:
+				_album_cache = pd.read_csv(csv, dtype=str).fillna('')
+			except Exception as e:
+				logger.error(f'cache load: {e}')
+				_album_cache = pd.DataFrame()
+		else:
+			_album_cache = pd.DataFrame()
+	return _album_cache
+
+
+def _cache_invalidate() -> None:
+	global _album_cache
+	_album_cache = None
+
+
+def _cache_update(new_rows: list[dict], drop_dirs: set[str]) -> None:
+	"""Replace rows matching drop_dirs with new_rows, then write through to CSV."""
+	global _album_cache
+	df = _cache_load()
+	if 'Directory' in df.columns:
+		df = df[~df['Directory'].isin(drop_dirs)]
+	df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+	_album_cache = df
+	try:
+		df.to_csv(_config_dir() / 'albums.csv', index=False)
+	except Exception as e:
+		logger.error(f'cache write: {e}')
+
+COLUMNS = ['Album Artist', 'Album', 'DR', 'Original Date', 'Release Date', 'Catalog', 'Cover Art', 'Version']
 
 
 def dr_class(dr: str) -> str:
@@ -89,13 +143,8 @@ def dr_class(dr: str) -> str:
 
 
 def load_albums(search: str = '', sort: str = 'Album Artist', order: str = 'asc') -> list[dict]:
-	csv = _config_dir() / 'albums.csv'
-	if not csv.exists():
-		return []
-	try:
-		df = pd.read_csv(csv, dtype=str).fillna('')
-	except Exception as e:
-		logger.error(f'load_albums: {e}')
+	df = _cache_load()
+	if df.empty:
 		return []
 	if search:
 		mask = df.apply(lambda row: row.str.contains(search, case=False).any(), axis=1)
@@ -119,8 +168,8 @@ def _tagger_url(row: dict) -> str:
 	return f'{scheme}{local_path}'
 
 
-def _album_link(row: dict) -> str:
-	album = escape(row.get('Album', ''))
+def _album_link(row: dict, title: str = '') -> str:
+	album = escape(title or row.get('Album', ''))
 	url = _tagger_url(row)
 	if url:
 		return f'<a href="{escape(url)}" title="Open in tagger">{album}</a>'
@@ -142,8 +191,27 @@ def _artist_id(artist: str) -> str:
 	return f'artist-{abs(hash(artist))}'
 
 
+def _cover_art_cell(row: dict) -> str:
+	dims = row.get('Cover Art', '')
+	artist = row.get('Album Artist', '')
+	title = row.get('Original Title', '') or row.get('Album', '')
+	if not dims:
+		return ''
+	if artist or title:
+		from urllib.parse import urlencode
+		url = 'https://www.albumartexchange.com/covers?' + urlencode({'fltr': 'ALL', 'sort': 'TITLE', 'q': f'{artist} {title}'.strip()})
+		icon = (
+			f'<a href="{url}" target="_blank" rel="noopener" title="Search Album Art Exchange" style="margin-left:4px;">'
+			f'<img src="/favicon/albumartexchange.png" width="12" height="12" style="vertical-align:middle;opacity:0.7;">'
+			f'</a>'
+		)
+		return f'{escape(dims)}{icon}'
+	return escape(dims)
+
+
 def render_row(row: dict, artist_id: str) -> str:
 	dr = escape(row.get('DR', ''))
+	album_title = row.get('Original Filename', '').strip() or row.get('Original Title', '').strip() or row.get('Album', '')
 	artist_dir = escape(str(Path(row.get('Directory', '')).parent))
 	btn = (
 		f'<button class="reprocess-btn" title="Re-run fixtags + bliss for all {escape(row.get("Album Artist",""))} albums" '
@@ -162,17 +230,27 @@ def render_row(row: dict, artist_id: str) -> str:
 		f'https://musicbrainz.org/release/{escape(mb_id)}' if mb_id else '',
 		'/favicon/musicbrainz.png', 'MusicBrainz',
 	)
+	from urllib.parse import urlencode
+	dr_artist = escape(row.get('Album Artist', ''))
+	dr_album  = escape(album_title)
+	dr_url    = 'https://dr.loudness-war.info/?' + urlencode({'artist': row.get('Album Artist', ''), 'album': album_title})
+	dr_btn    = (
+		f'<a href="{dr_url}" target="_blank" rel="noopener" title="Look up DR on loudness-war.info" '
+		f'style="color:#888;font-size:11px;text-decoration:none;margin-left:4px;">'
+		f'<i class="fa-solid fa-wave-square"></i></a>'
+	) if dr else ''
 	return (
 		f'<tr>'
 		f'<td class="reprocess">{btn}</td>'
-		f'<td>{escape(row.get("Album Artist",""))}</td>'
-		f'<td class="album">{_album_link(row)}</td>'
-		f'<td class="dr {dr_class(row.get("DR",""))}">{dr}</td>'
+		f'<td class="artist">{escape(row.get("Album Artist",""))}</td>'
+		f'<td class="album">{_album_link(row, album_title)}</td>'
+		f'<td class="dr {dr_class(row.get("DR",""))}">{dr}{dr_btn}</td>'
 		f'<td>{escape(row.get("Original Date",""))}</td>'
 		f'<td>{escape(row.get("Release Date",""))}</td>'
 		f'{discogs_cell}{mb_cell}'
 		f'<td>{escape(row.get("Catalog",""))}</td>'
-		f'<td>{escape(row.get("Version",""))}</td>'
+		f'<td class="cover-art">{_cover_art_cell(row)}</td>'
+		f'<td class="version">{escape(row.get("Version",""))}</td>'
 		f'</tr>'
 	)
 
@@ -253,7 +331,7 @@ INDEX_HTML = '''<!DOCTYPE html>
     .toolbar {
       display: flex; align-items: center; gap: 10px;
       padding: 8px 12px; background: #fff; border-bottom: 1px solid #ddd;
-      position: sticky; top: 0; z-index: 10;
+      position: sticky; top: 0; z-index: 30;
     }
     .toolbar h1 { margin: 0; font-size: 15px; font-weight: 600; }
     .toolbar input[type=search] {
@@ -262,7 +340,7 @@ INDEX_HTML = '''<!DOCTYPE html>
     }
     table { border-collapse: collapse; width: 100%; font-size: 15px; }
     thead th {
-      position: sticky; top: 0; background: #f0f0f0;
+      position: sticky; top: 0; background: #f0f0f0; z-index: 20;
       border-bottom: 2px solid #ccc; padding: 5px 8px;
       text-align: left; white-space: nowrap; cursor: pointer; user-select: none;
     }
@@ -273,8 +351,10 @@ INDEX_HTML = '''<!DOCTYPE html>
     tbody tr:nth-child(even) { background: #fafafa; }
     tbody tr:hover { background: #eef4ff; }
     td { padding: 4px 8px; border-bottom: 1px solid #eee; white-space: nowrap; }
-    td.album { white-space: normal; max-width: 400px; }
-    td.dr { font-weight: 600; text-align: center; }
+    td.artist { width: 600px; min-width: 300px; max-width: 600px; white-space: normal; }
+    td.album { white-space: normal; width: 600px; min-width: 300px; }
+    td.version { white-space: normal; min-width: 100px; }
+    td.dr { font-weight: 600; }
     .dr-hi  { color: #1a7f1a; }
     .dr-mid { color: #996600; }
     .dr-lo  { color: #cc2200; }
@@ -337,6 +417,7 @@ INDEX_HTML = '''<!DOCTYPE html>
     td.album a { color: inherit; text-decoration: none; }
     td.album a:hover { text-decoration: underline; }
     td.reprocess { width: 24px; padding: 2px 4px; text-align: center; }
+    td.cover-art { color: #888; font-size: 11px; white-space: nowrap; }
     td.icon-link { width: 20px; padding: 2px 4px; text-align: center; }
     td.icon-link img { display: block; margin: auto; opacity: 0.8; }
     td.icon-link a:hover img { opacity: 1; }
@@ -449,35 +530,41 @@ async def albums(
 
 
 
-@app.get('/refresh/start', response_class=HTMLResponse)
-async def refresh_start():
+def _start_album_scan(label: str = 'refresh') -> None:
+	"""Launch album_list.py in a background thread; sets _refresh_done on completion."""
 	import threading, shutil
 	try:
 		from config import flacroot
 	except Exception as e:
-		logger.error(f'refresh: cannot import config: {e}')
-		return await log_modal()
+		logger.error(f'{label}: cannot import config: {e}')
+		return
 	uv = shutil.which('uv')
-	logger.info(f'refresh: uv={uv}, flacroot={flacroot}, config_dir={_config_dir()}')
 	if not Path(flacroot).exists():
-		logger.error(f'refresh: flacroot does not exist: {flacroot}')
+		logger.error(f'{label}: flacroot does not exist: {flacroot}')
+		return
 	script = SCRIPTS_DIR / 'album_list.py'
-	logger.info(f'refresh: running {script}')
-	proc = subprocess.Popen(
+	logger.info(f'{label}: running library scan')
+	proc = _set_proc(subprocess.Popen(
 		['uv', 'run', str(script), str(flacroot)],
 		stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
-		cwd=str(SCRIPTS_DIR),
-	)
+		cwd=str(SCRIPTS_DIR), env={**os.environ, 'DISCOGS_CHILD': '1'},
+	))
 	def _reader():
 		for line in proc.stdout:
-			_relay_child_line('refresh', line)
+			_relay_child_line(label, line)
 		proc.wait()
 		if proc.returncode == 0:
-			logger.info('refresh: library scan complete')
+			logger.info(f'{label}: library scan complete')
+			_cache_invalidate()
 			_refresh_done['pending'] = True
 		else:
-			logger.error(f'refresh: scan failed (exit {proc.returncode})')
+			logger.error(f'{label}: scan failed (exit {proc.returncode})')
 	threading.Thread(target=_reader, daemon=True).start()
+
+
+@app.get('/refresh/start', response_class=HTMLResponse)
+async def refresh_start():
+	_start_album_scan('refresh')
 	return await log_modal()
 
 
@@ -498,12 +585,13 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 
 	ALBUM_TAGS = [
 		'ALBUMARTIST', 'ALBUM', 'ALBUM DYNAMIC RANGE', 'ORIGINAL_TITLE',
-		'ORIGINALDATE', 'RELEASEDATE', 'CATALOGNUMBER',
+		'ORIGINAL FILENAME', 'ORIGINALDATE', 'RELEASEDATE', 'CATALOGNUMBER',
 		'DISCOGS_RELEASE_ID', 'MUSICBRAINZ_ALBUMID', 'SUBTITLE',
 	]
 	DISPLAY = {
 		'ALBUMARTIST': 'Album Artist', 'ALBUM': 'Album',
 		'ALBUM DYNAMIC RANGE': 'DR', 'ORIGINAL_TITLE': 'Original Title',
+		'ORIGINAL FILENAME': 'Original Filename',
 		'ORIGINALDATE': 'Original Date', 'RELEASEDATE': 'Release Date',
 		'CATALOGNUMBER': 'Catalog', 'DISCOGS_RELEASE_ID': 'Discogs',
 		'MUSICBRAINZ_ALBUMID': 'MusicBrainz', 'SUBTITLE': 'Version',
@@ -513,12 +601,26 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 		first_flac = next((f for f in os.listdir(album_dir) if f.endswith('.flac')), None)
 		if not first_flac:
 			return None
+		flac_path = str(Path(album_dir) / first_flac)
 		try:
-			audio = FLAC(str(Path(album_dir) / first_flac))
-			raw = {k.upper(): v for k, v in audio.tags}
-		except Exception:
+			audio = FLAC(flac_path)
+			raw = {k.upper(): v for k, v in audio.tags.items()}
+		except Exception as e:
+			logger.warning(f'read_album_dir tag read failed for {album_dir}: {e}')
 			return None
 		row = {DISPLAY[t]: (raw.get(t, [''])[0] if isinstance(raw.get(t), list) else raw.get(t, '') or '') for t in ALBUM_TAGS}
+		try:
+			import io
+			from PIL import Image
+			if audio.pictures:
+				img = Image.open(io.BytesIO(audio.pictures[0].data))
+				row['Cover Art'] = f'{img.width}x{img.height}'
+			else:
+				logger.info(f'read_album_dir: no pictures in {flac_path}')
+				row['Cover Art'] = ''
+		except Exception as e:
+			logger.warning(f'cover art read failed for {album_dir}: {e}')
+			row['Cover Art'] = ''
 		row['Directory'] = album_dir
 		return row
 
@@ -540,21 +642,28 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 	import asyncio
 
 	def run_scripts():
+		child_env = {**os.environ, 'DISCOGS_CHILD': '1'}
 		# Run fixtags on each album subdir
 		if Path(artist_dir).is_dir():
 			for entry in sorted(Path(artist_dir).iterdir()):
 				if entry.is_dir() and any(f.suffix == '.flac' for f in entry.iterdir()):
-					subprocess.run(
+					proc = _set_proc(subprocess.Popen(
 						['uv', 'run', str(SCRIPTS_DIR / 'fixtags.py'), str(entry)],
-						stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-						cwd=str(SCRIPTS_DIR),
-					)
+						stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+						text=True, cwd=str(SCRIPTS_DIR), env=child_env,
+					))
+					for line in proc.stdout:
+						_relay_child_line('fixtags', line)
+					proc.wait()
 		# Run bliss on artist dir
-		subprocess.run(
+		proc = _set_proc(subprocess.Popen(
 			['uv', 'run', str(SCRIPTS_DIR / 'bliss.py'), artist_dir],
-			stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-			cwd=str(SCRIPTS_DIR),
-		)
+			stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+			text=True, cwd=str(SCRIPTS_DIR), env=child_env,
+		))
+		for line in proc.stdout:
+			_relay_child_line('bliss', line)
+		proc.wait()
 
 	await asyncio.to_thread(run_scripts)
 
@@ -573,11 +682,19 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 				if row:
 					rows.append(row)
 
+	if rows:
+		new_dirs = {r['Directory'] for r in rows}
+		old_dirs = {str(e) for e in Path(artist_dir).iterdir() if e.is_dir()} if Path(artist_dir).is_dir() else set()
+		_cache_update(rows, new_dirs | old_dirs)
+
 	if not rows:
 		return HTMLResponse(f'<tbody id="{artist_id}"></tbody>')
 
 	artist = rows[0].get('Album Artist', '')
-	return HTMLResponse(render_artist_tbody(artist, rows))
+	# Use the original artist_id so the HTMX swap target always matches, even
+	# if bliss renamed the artist directory and the artist name changed.
+	trs = ''.join(render_row(r, artist_id) for r in rows)
+	return HTMLResponse(f'<tbody id="{artist_id}">{trs}</tbody>')
 
 
 @app.get('/lyrics', response_class=HTMLResponse)
@@ -585,11 +702,11 @@ async def lyrics_run():
 	import threading
 	from config import flacroot
 	logger.info('lyrics: starting update')
-	proc = subprocess.Popen(
+	proc = _set_proc(subprocess.Popen(
 		['uv', 'run', str(SCRIPTS_DIR / 'update_lyrics.py'), str(flacroot)],
 		stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
-		cwd=str(SCRIPTS_DIR),
-	)
+		cwd=str(SCRIPTS_DIR), env={**os.environ, 'DISCOGS_CHILD': '1'},
+	))
 	def _reader():
 		for line in proc.stdout:
 			_relay_child_line('lyrics', line)
@@ -606,17 +723,18 @@ async def lyrics_run():
 async def bliss_run():
 	import threading
 	logger.info('bliss: starting default organisation pass')
-	proc = subprocess.Popen(
+	proc = _set_proc(subprocess.Popen(
 		['uv', 'run', str(SCRIPTS_DIR / 'bliss.py')],
 		stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
-		cwd=str(SCRIPTS_DIR),
-	)
+		cwd=str(SCRIPTS_DIR), env={**os.environ, 'DISCOGS_CHILD': '1'},
+	))
 	def _reader():
 		for line in proc.stdout:
 			_relay_child_line('bliss', line)
 		proc.wait()
 		if proc.returncode == 0:
-			logger.info('bliss: done')
+			logger.info('bliss: done — triggering library rescan')
+			_start_album_scan('bliss')
 		else:
 			logger.error(f'bliss: failed (exit {proc.returncode})')
 	threading.Thread(target=_reader, daemon=True).start()
@@ -627,14 +745,16 @@ async def bliss_run():
 async def sync_start():
 	global _sync
 	cfg = config_read()
-	flacroot  = cfg.get('flacroot', '')
+	source    = cfg.get('rclone_source', '')
 	remote    = cfg.get('flacroot_remote', '')
 	flags     = cfg.get('rclone_flags', 'sync')
-	transfers = cfg.get('rclone_transfers', '8')
+	transfers = cfg.get('rclone_transfers', '16')
+	checkers  = cfg.get('rclone_checkers', '32')
+	buffer    = cfg.get('rclone_buffer_size', '128M')
 	stats     = cfg.get('rclone_stats', '5s')
 
-	if not flacroot or not remote:
-		logger.error('rclone sync: flacroot or flacroot_remote not set in config')
+	if not source or not remote:
+		logger.error('rclone sync: rclone_source or flacroot_remote not set in config')
 	else:
 		if _sync.get('proc') and _sync['proc'].poll() is None:
 			_sync['proc'].terminate()
@@ -646,15 +766,18 @@ async def sync_start():
 		rclone_conf = _config_dir() / 'rclone.conf'
 		conf_flag = ['--config', str(rclone_conf)] if rclone_conf.exists() else []
 		cmd = ['rclone'] + conf_flag + clean_flags + [
-			'--exclude', '"**/@eaDir/**"',
+			'--exclude', '@eaDir/**',
 			'--log-file', str(rclone_log),
-			'--log-level', 'NOTICE',
-			'--stats-log-level', 'NOTICE',
+			'--log-level', 'INFO',
+			'--stats-log-level', 'ERROR',
 			'--stats-one-line', '--stats', stats,
 			'--transfers', transfers,
-			flacroot, remote,
+			'--checkers', checkers,
+			'--size-only',
+			'--buffer-size', buffer,
+			source, remote,
 		]
-		proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+		proc = _set_proc(subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
 		_sync = {'proc': proc}
 		logger.info(f"rclone sync started: {' '.join(cmd)}")
 		def _reader():
@@ -717,15 +840,18 @@ CONFIG_LABELS = {
 	'rsgain_clip_mode': ('rsgain Clip Mode (n/p/a)',       'text'),
 	'rsgain_max_peak':  ('rsgain Max Peak (dBTP)',         'text'),
 	'rsgain_true_peak': ('rsgain True Peak (True/False)',  'text'),
-	'rsgain_opus_mode': ('rsgain Opus Mode (d/r/s/t/a)',   'text'),
 	'rsgain_skip':      ('rsgain Skip Existing (True/False)', 'text'),
 	'log_file':         ('Log File',                          'text'),
 	'log_rotation':     ('Log Rotation',                      'text'),
 	'log_retention':    ('Log Retention',                     'text'),
-	'flacroot_remote':   ('FLAC Remote (rclone destination)', 'text'),
+	'rclone_source':     ('rclone Source',                    'text'),
+	'flacroot_remote':   ('rclone Destination',               'text'),
 	'rclone_flags':      ('rclone Flags',                     'text'),
-	'rclone_transfers':  ('rclone Transfers',                  'text'),
-	'rclone_stats':      ('rclone Stats Interval',             'text'),
+	'rclone_transfers':  ('rclone Transfers',                 'text'),
+	'rclone_checkers':   ('rclone Checkers',                  'text'),
+	'rclone_buffer_size':('rclone Buffer Size',               'text'),
+	'rclone_stats':      ('rclone Stats Interval',            'text'),
+	'cover_max_size':    ('Cover Art Max Size (px)',           'text'),
 }
 
 
@@ -752,30 +878,37 @@ def config_read() -> dict[str, str]:
 
 
 # Keys whose values are stored unquoted in config.py
-_UNQUOTED = {'rsgain_loudness', 'rsgain_max_peak', 'rsgain_true_peak', 'rsgain_skip', 'rclone_transfers'}
+_UNQUOTED = {'rsgain_loudness', 'rsgain_max_peak', 'rsgain_true_peak', 'rsgain_skip', 'rclone_transfers', 'rclone_checkers', 'cover_max_size'}
 
 
 def config_write(updates: dict[str, str]) -> None:
-	"""Write updated values back to config.py, preserving comments and structure."""
+	"""Write updated values back to config.py, preserving comments and structure.
+	Keys already present are updated in-place; new keys are appended at the end."""
 	lines = _config_path().read_text().splitlines()
+	written = set()
 	out = []
 	for line in lines:
-		# match quoted
 		m = re.match(r'^(\w+)\s*=\s*[\'"](.*)[\'"]\s*$', line.strip())
 		if not m:
-			# match unquoted
 			m = re.match(r'^(\w+)\s*=\s*(\S+)', line.strip())
 		if m and m.group(1) in updates:
 			key = m.group(1)
 			val = updates[key]
+			written.add(key)
 			if key in _UNQUOTED:
 				out.append(f'{key} = {val}')
 				continue
-			# preserve original quote style
 			quote = "'" if line.strip()[len(key):].lstrip(' =')[0] == "'" else '"'
-			out.append(f"{key} = {quote}{updates[key]}{quote}")
+			out.append(f"{key} = {quote}{val}{quote}")
 		else:
 			out.append(line)
+	# Append any keys that were not found in the existing file
+	for key, val in updates.items():
+		if key not in written:
+			if key in _UNQUOTED:
+				out.append(f'{key} = {val}')
+			else:
+				out.append(f"{key} = '{val}'")
 	_config_path().write_text('\n'.join(out) + '\n')
 
 
@@ -792,14 +925,14 @@ def render_settings_modal(values: dict[str, str], saved: bool = False) -> str:
 	banner = '<p class="saved-ok">Saved.</p>' if saved else ''
 	return f'''
 <div id="modal-backdrop" onclick="closeModal()"></div>
-<div id="modal">
+<div id="modal" style="max-height:90vh;display:flex;flex-direction:column;">
   <div id="modal-header">
     <span>{SETTINGS_TITLE}</span>
     <button onclick="closeModal()" title="Close">&times;</button>
   </div>
-  <form hx-post="/settings/save" hx-target="#modal-wrap" hx-swap="innerHTML">
+  <form hx-post="/settings/save" hx-target="#modal-wrap" hx-swap="innerHTML" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
     {banner}
-    <div id="modal-fields">{fields}</div>
+    <div id="modal-fields" style="overflow-y:auto;flex:1;">{fields}</div>
     <div id="modal-footer">
       <button type="submit">Save</button>
       <button type="button" onclick="closeModal()">Cancel</button>
@@ -861,6 +994,10 @@ async def log_modal():
       <label style="font-size:12px;font-weight:normal;display:flex;align-items:center;gap:4px;">
         <input type="checkbox" id="log-autorefresh" checked> Live
       </label>
+      <button hx-post="/kill" hx-swap="none" title="Kill running process"
+        style="border:none;background:none;font-size:16px;cursor:pointer;color:#c44;padding:0 2px;line-height:1;">
+        <i class="fa-regular fa-circle-xmark"></i>
+      </button>
       <button onclick="closeModal()" title="Close">&times;</button>
     </div>
   </div>
@@ -876,6 +1013,19 @@ async def log_modal():
 <script>
   (function(){ var el=document.getElementById('log-content'); el.scrollTop=el.scrollHeight; })();
 </script>''')
+
+
+@app.post('/kill', response_class=HTMLResponse)
+async def kill_proc():
+	global _current_proc
+	proc = _current_proc
+	if proc and proc.poll() is None:
+		proc.terminate()
+		logger.warning('Process killed by user')
+		_current_proc = None
+	else:
+		logger.info('No active process to kill')
+	return HTMLResponse('')
 
 
 @app.get('/log/content', response_class=HTMLResponse)

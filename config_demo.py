@@ -17,17 +17,22 @@ flacroot_local = '/volume1/FLAC/'
 nzbdir      = '/nzb/'           # mapped from e.g. /volume1/nzb/complete
 
 # rclone sync to remote
-flacroot_remote  = 'REMOTE:/path/'
+rclone_source    = 'FLAC:/flac'         # rclone remote for source
+flacroot_remote  = 'REMOTE:/path/'      # rclone remote for destination
 rclone_flags     = 'sync'
-rclone_transfers = 8
+rclone_transfers = 16
+rclone_checkers  = 32
+rclone_buffer_size = '128M'
 rclone_stats     = '5s'
+
+# Cover art
+cover_max_size = 1500               # resize embedded cover art to this max dimension (px)
 
 # rsgain ReplayGain settings
 rsgain_loudness    = -14
 rsgain_clip_mode   = 'a'
 rsgain_max_peak    = -1.0
 rsgain_true_peak   = True
-rsgain_opus_mode   = 'd'
 rsgain_skip        = True
 
 # Logging

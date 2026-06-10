@@ -147,7 +147,7 @@ def movefiles(flacroot: str, full: bool = False) -> None:
          if unicodedata.normalize('NFD', fullfilename.lower()) != unicodedata.normalize('NFD', tobefullname.lower()):
             if salbumtitle != currentalbum:
                currentalbum = salbumtitle
-               logger.info(f'Moving album {salbumtitle}')
+               success(f'Moving album {salbumtitle}')
             if not os.path.exists(tobepathname):
                os.makedirs(tobepathname)
             shutil.move(fullfilename, tobefullname)
@@ -191,33 +191,45 @@ def ingestfiles(ingest_dir: str) -> None:
    logger.info('Done. Ingest complete.')
 
 def removedirs(rootdir: str) -> None:
-   """Recursively remove empty directories (no FLAC or MP3 files) under rootdir.
+   """Recursively remove directories containing no FLAC or MP3 files under rootdir.
 
-   Iterates until no more empty leaf directories remain.  A directory is considered
-   empty if it contains no subdirectories and no *.flac or *.mp3 files.
+   Walks bottom-up so children are handled before parents; a parent with only
+   non-music files becomes removable once its music-free children are gone.
+   Non-music files (e.g. .nfo) are deleted before the directory is removed.
 
    Args:
        rootdir: Root directory to clean up.
    """
    logger.info(f'Removing empty dirs in {rootdir}')
-   is_dirty = True
-   
-   while is_dirty:
-      is_dirty = False
-      for root, dirs, _ in os.walk(rootdir, topdown=True):
-         for dirname in dirs:
-            dir_path = Path(root) / dirname
-
-            # Check if directory has no subdirs and no music files
-            if (not hasSubDirs(str(dir_path)) and
-               not list(dir_path.rglob("*.flac")) and
-               not list(dir_path.rglob("*.mp3"))):
-               try:
-                  shutil.rmtree(dir_path)
-                  is_dirty = True
-                  logger.warning(f'Removing directory {dir_path}')
-               except OSError as err:
-                  logger.error(f'Error removing directory {dir_path}: {err}')
+   for root, dirs, files in os.walk(rootdir, topdown=False):
+      dir_path = Path(root)
+      if dir_path == Path(rootdir):
+         continue  # never remove the root itself
+      if list(dir_path.rglob('*.flac')) or list(dir_path.rglob('*.mp3')):
+         continue
+      # Skip directories the SMB server is already cleaning up
+      if any(f.name.startswith('.smbdelete') for f in dir_path.rglob('*') if f.is_file()):
+         logger.info(f'Skipping SMB-pending directory {dir_path}')
+         continue
+      # No music anywhere under this dir — delete files then the directory
+      all_deleted = True
+      for f in sorted(dir_path.rglob('*'), reverse=True):
+         if f.is_file():
+            try:
+               f.unlink()
+               logger.warning(f'Removed non-music file {f}')
+            except OSError as err:
+               logger.error(f'Could not remove file {f}: {err}')
+               all_deleted = False
+      if all_deleted:
+         try:
+            dir_path.rmdir()
+            logger.warning(f'Removed directory {dir_path}')
+         except OSError as err:
+            if err.errno == 16:  # EBUSY — SMB pending, will clean up on its own
+               logger.info(f'Directory pending SMB cleanup {dir_path}')
+            else:
+               logger.error(f'Could not remove directory {dir_path}: {err}')
 
    logger.info('Done.')
 

@@ -9,3 +9,11 @@ __pycache__/
 flac_metadata.duckdb
 *.csv
 *.html
+*.tar
+*.tar.gz
+*.tar.xz
+*.log
+*.png
+config.py
+discogs.code-workspace
+uv.lock

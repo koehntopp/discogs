@@ -4,6 +4,8 @@
 #   "pytaglib",
 #   "pandas",
 #   "matplotlib",
+#   "mutagen",
+#   "pillow",
 # ]
 # ///
 
@@ -17,11 +19,14 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import pandas as pd
+import io
 import taglib
+from mutagen.flac import FLAC
+from PIL import Image
 
 ALBUM_TAGS = [
 	'ALBUMARTIST', 'ALBUM', 'ALBUM DYNAMIC RANGE', 'ORIGINAL_TITLE',
-	'ORIGINALDATE', 'RELEASEDATE', 'CATALOGNUMBER',
+	'ORIGINAL FILENAME', 'ORIGINALDATE', 'RELEASEDATE', 'CATALOGNUMBER',
 	'DISCOGS_RELEASE_ID', 'MUSICBRAINZ_ALBUMID', 'SUBTITLE',
 ]
 
@@ -30,15 +35,29 @@ DISPLAY_NAMES = {
 	'ALBUM':              'Album',
 	'ALBUM DYNAMIC RANGE':'DR',
 	'ORIGINAL_TITLE':     'Original Title',
+	'ORIGINAL FILENAME':  'Original Filename',
 	'ORIGINALDATE':       'Original Date',
 	'RELEASEDATE':        'Release Date',
 	'CATALOGNUMBER':      'Catalog',
 	'DISCOGS_RELEASE_ID': 'Discogs',
 	'MUSICBRAINZ_ALBUMID':'MusicBrainz',
 	'SUBTITLE':           'Version',
+	'COVER_ART':          'Cover Art',
 }
 
 SCRIPTS_DIR = Path(__file__).parent
+
+
+def cover_art_dimensions(flac_path: str) -> str:
+	"""Return 'WxH' of the first embedded picture, or empty string if none."""
+	try:
+		audio = FLAC(flac_path)
+		if audio.pictures:
+			img = Image.open(io.BytesIO(audio.pictures[0].data))
+			return f'{img.width}x{img.height}'
+	except Exception:
+		pass
+	return ''
 
 
 def read_album(directory: str) -> dict | None:
@@ -46,12 +65,14 @@ def read_album(directory: str) -> dict | None:
 	first_flac = next((f for f in os.listdir(directory) if f.endswith('.flac')), None)
 	if not first_flac:
 		return None
+	flac_path = str(PurePosixPath(directory) / first_flac)
 	try:
-		with taglib.File(str(PurePosixPath(directory) / first_flac)) as f:
+		with taglib.File(flac_path) as f:
 			tags = f.tags
 	except Exception:
 		return None
 	result = {tag: (tags.get(tag, [''])[0] or '') for tag in ALBUM_TAGS}
+	result['COVER_ART'] = cover_art_dimensions(flac_path)
 	result['_DIRECTORY_PATH'] = directory
 	return result
 
@@ -66,7 +87,7 @@ def find_flac_dirs(root: str) -> list[str]:
 
 
 def save_csv(df: pd.DataFrame, out: Path) -> None:
-	existing = [t for t in ALBUM_TAGS if t in df.columns]
+	existing = [t for t in ALBUM_TAGS + ['COVER_ART'] if t in df.columns]
 	out_df = df[existing].rename(columns=DISPLAY_NAMES)
 	if '_DIRECTORY_PATH' in df.columns:
 		out_df['Directory'] = df['_DIRECTORY_PATH'].values

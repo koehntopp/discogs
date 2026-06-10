@@ -95,7 +95,11 @@ def _fetch_track_lyrics(flac_path: str, album_name: str) -> tuple[str, str, str,
         Tuple of (flac_path, title, lyrics_text, lyrics_type, is_dirty) where
         is_dirty is True when new lyrics were fetched and should be written back.
     """
-    tags = taglib.File(flac_path)
+    try:
+        tags = taglib.File(flac_path)
+    except OSError as e:
+        logger.warning(f'Skipping unreadable file {flac_path}: {e}')
+        return flac_path, '', '', 'none', False
     title = flactag(tags, 'TITLE')
     existing = flactag(tags, 'LYRICS').strip() if 'LYRICS' in tags.tags else ''
 
@@ -135,7 +139,12 @@ def walkdirs(fixdir: str) -> int:
         return 0
         
     # Check for Discogs ID
-    tags = taglib.File(os.path.join(fixdir, first_flac))
+    first_flac_path = os.path.join(fixdir, first_flac)
+    try:
+        tags = taglib.File(first_flac_path)
+    except OSError as e:
+        logger.warning(f'Skipping unreadable file {first_flac_path}: {e}')
+        return 0
     try:
         discogs_id = int(flactag(tags, 'DISCOGS_RELEASE_ID'))
         album_name = flactag(tags, 'ORIGINAL_TITLE').strip()
@@ -148,7 +157,12 @@ def walkdirs(fixdir: str) -> int:
     flac_paths = [str(PurePosixPath(p)) for p in Path(fixdir).rglob('*.flac')]
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [executor.submit(_fetch_track_lyrics, p, album_name) for p in flac_paths]
-        fetch_results = [f.result() for f in futures]
+        fetch_results = []
+        for f in futures:
+            try:
+                fetch_results.append(f.result())
+            except Exception as e:
+                logger.warning(f'Lyrics fetch failed: {e}')
 
     # Apply results sequentially (file writes are not thread-safe)
     for flac_path, title, lyrics, lyric_type, is_dirty in fetch_results:
@@ -167,9 +181,12 @@ def walkdirs(fixdir: str) -> int:
             stats['no_total'] += 1
 
         if is_dirty:
-            tags = taglib.File(flac_path)
-            tags.tags['LYRICS'] = [lyrics]
-            tags.save()
+            try:
+                tags = taglib.File(flac_path)
+                tags.tags['LYRICS'] = [lyrics]
+                tags.save()
+            except OSError as e:
+                logger.warning(f'Could not save lyrics for {flac_path}: {e}')
 
     return stats['lrc_new'] + stats['txt_new']
 

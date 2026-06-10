@@ -27,7 +27,7 @@ def main() -> None:
 
    from config import (
       rsgain_loudness, rsgain_clip_mode, rsgain_max_peak,
-      rsgain_true_peak, rsgain_opus_mode, rsgain_skip,
+      rsgain_true_peak, rsgain_skip,
    )
 
    # Generate a temporary rsgain preset from config values
@@ -37,7 +37,6 @@ def main() -> None:
       f'ClipMode={rsgain_clip_mode}\n'
       f'MaxPeakLevel={rsgain_max_peak}\n'
       f'TruePeak={"true" if rsgain_true_peak else "false"}\n'
-      f'OpusMode={rsgain_opus_mode}\n'
       'Album=true\n'
       'TagMode=i\n'
    )

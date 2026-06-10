@@ -34,10 +34,15 @@ _is_tty = sys.stderr.isatty()
 
 if _is_tty:
 	# Interactive terminal: pretty coloured output to stderr
+	_level_styles = {
+		**structlog.dev.ConsoleRenderer.get_default_level_styles(),
+		'info':    structlog.dev.RESET_ALL,
+		'success': '\033[32m',  # green
+	}
 	_console_handler = logging.StreamHandler(sys.stderr)
 	_console_handler.setFormatter(
 		structlog.stdlib.ProcessorFormatter(
-			processor=structlog.dev.ConsoleRenderer(),
+			processor=structlog.dev.ConsoleRenderer(level_styles=_level_styles),
 			foreign_pre_chain=_shared_processors,
 		)
 	)
@@ -55,25 +60,28 @@ _root = logging.getLogger()
 _root.addHandler(_console_handler)
 _root.setLevel(logging.INFO)
 
-try:
-	from config import log_file, log_rotation, log_retention
+if not os.environ.get('DISCOGS_CHILD'):
+	# Skip file logging in child processes spawned by webui — the parent captures
+	# their stdout and re-logs, so writing to the file here would double every line.
 	try:
-		from config import config_dir
-	except ImportError:
-		config_dir = '.'
-	from pathlib import Path
-	_log_path = Path(os.environ.get('CONFIG_DIR') or config_dir) / log_file
-	_log_path.parent.mkdir(parents=True, exist_ok=True)
-	_file_handler = logging.FileHandler(str(_log_path), encoding='utf-8')
-	_file_handler.setFormatter(
-		structlog.stdlib.ProcessorFormatter(
-			processor=structlog.processors.JSONRenderer(),
-			foreign_pre_chain=_shared_processors,
+		from config import log_file, log_rotation, log_retention
+		try:
+			from config import config_dir
+		except ImportError:
+			config_dir = '.'
+		from pathlib import Path
+		_log_path = Path(os.environ.get('CONFIG_DIR') or config_dir) / log_file
+		_log_path.parent.mkdir(parents=True, exist_ok=True)
+		_file_handler = logging.FileHandler(str(_log_path), encoding='utf-8')
+		_file_handler.setFormatter(
+			structlog.stdlib.ProcessorFormatter(
+				processor=structlog.processors.JSONRenderer(),
+				foreign_pre_chain=_shared_processors,
+			)
 		)
-	)
-	_root.addHandler(_file_handler)
-except Exception:
-	pass  # log to console only if config is missing or broken
+		_root.addHandler(_file_handler)
+	except Exception:
+		pass  # log to console only if config is missing or broken
 
 
 logger = structlog.get_logger()

@@ -72,6 +72,10 @@ ENV LIBRARY_PATH=/opt/taglib/lib
 ENV LD_LIBRARY_PATH=/opt/taglib/lib
 ENV PKG_CONFIG_PATH=/opt/taglib/lib/pkgconfig
 ENV CONFIG_DIR=/config
+
+# Pre-install webui.py dependencies at build time so container startup is instant.
+# uv installs all PEP 723 deps, then PREINSTALL_ONLY causes immediate exit.
+RUN PREINSTALL_ONLY=1 uv run webui.py
 VOLUME /config
 
 EXPOSE 8000
