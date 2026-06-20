@@ -48,7 +48,7 @@ services:
     build: .
     container_name: discogs
     ports:
-      - "8000:8000"
+      - "8765:8000"
     volumes:
       - ./config:/config        # config.py, logs, albums.csv
       - /path/to/your/flac:/flac
@@ -68,7 +68,7 @@ docker compose up --build
 
 The first build takes a few minutes — it compiles TagLib 2.x and rsgain from source. Subsequent starts are instant.
 
-Open **http://localhost:8000** in your browser.
+Open **http://localhost:8765** in your browser.
 
 ---
 
