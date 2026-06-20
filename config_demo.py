@@ -36,6 +36,8 @@ rsgain_true_peak   = True
 rsgain_skip        = True
 
 # Logging
+# syslog_host = '192.168.1.1'  # uncomment to enable Synology log server
+# syslog_port = 514
 log_file      = 'discogs.log'
 log_rotation  = '10 MB'
 log_retention = '30 days'

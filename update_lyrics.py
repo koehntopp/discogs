@@ -7,227 +7,190 @@
 # ///
 
 from log import logger, success
-# import system libraries
 import sys
 import os
 import re
-from pathlib import Path, PurePosixPath, PurePath
-import requests
-from concurrent.futures import ThreadPoolExecutor
-
 import time
-
-# https://github.com/supermihi/pytaglib
+from pathlib import Path, PurePosixPath
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import requests
 import taglib
 
-LRC_PATTERN = re.compile(r'\[\d\d\D\d\d\D\d\d\]')
+LRC_TIMESTAMP = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]')       # valid: [MM:SS.xx]
+LRC_BAD_TS    = re.compile(r'\[\d{3,}:\d{2}:\d{2}\.\d{2}\]') # invalid: [HH:MM:SS.xx]
+LRC_HEADER    = re.compile(r'^\[(ar|ti|al|by|length|offset):', re.MULTILINE | re.IGNORECASE)
+MAX_WORKERS = 32
 
-# Initialize counters
-stats = {'flac_files': 0, 'lrc_total': 0, 'no_total': 0, 'lrc_new': 0, 'txt_total': 0, 'txt_new': 0, 'error': 0}
 
-# extract a single FLAC tag
+def _is_lrc(text: str) -> bool:
+	return bool(LRC_TIMESTAMP.search(text))
+
+
+def _is_invalid_lrc(text: str) -> bool:
+	"""Detect malformed LRC with 3-part timestamps like [100:40:39.00]."""
+	return bool(LRC_BAD_TS.search(text))
+
+
+def _has_lrc_headers(text: str) -> bool:
+	return bool(LRC_HEADER.search(text))
+
+
 def flactag(song: taglib.File, tag: str) -> str:
-    """Extract a single tag value from a FLAC file's metadata.
-
-    Args:
-        song: TagLib file object with loaded tags.
-        tag: Tag key to retrieve.
-
-    Returns:
-        First value for the tag, or empty string if not found.
-    """
-    try:
-        return song.tags.get(tag, [""])[0]
-    except (KeyError, IndexError):
-        logger.warning(f'Tag Error: {tag} -- {song.tags.get("ALBUMARTIST", ["?"])[0]} - {song.tags.get("ALBUM", ["?"])[0]}')
-        return ""
+	try:
+		return song.tags.get(tag, [''])[0]
+	except (KeyError, IndexError):
+		return ''
 
 
-def get_lrclyrics(flactags: taglib.File, albumtitle: str) -> tuple[str, str]:
-   """Query the lrclib.net API to retrieve lyrics for a single track.
-   
-   Args:
-       flactags: TagLib file object containing song metadata
-       albumtitle: Album title string
-       
-   Returns:
-       Tuple of (lyrics_text, lyrics_type) where lyrics_type is 'lrc', 'plain' or 'none'
-   """
-   params = {
-       'artist_name': flactags.tags['ARTIST'],
-       'track_name': flactags.tags['TITLE'], 
-       'album_name': albumtitle,
-       'duration': str(round(flactags.length))
-   }
-   
-   pattern = r'\[(\d{2}:\d{2}\.\d{2})\d{1}\]'
-   
-   try:
-       response = requests.get(
-           'https://lrclib.net/api/get',
-           params=params,
-           headers={'User-Agent': 'Mozilla/5.0'}
-       )
-       data = response.json()
-       
-       if data['syncedLyrics']:
-           syncedLyrics = re.sub(pattern, r'[\1]', data['syncedLyrics'])
-           return syncedLyrics, 'lrc'
-       elif data['plainLyrics']:
-           return data['plainLyrics'], 'plain'
-           
-   except Exception:
-       pass
+def _fetch_one(flac_path: str, album_name: str) -> tuple[str, str, str, str, str, str]:
+	"""Read tags, skip if LRC already present, otherwise fetch from lrclib.net.
 
-   return '', 'none'
+	Returns (flac_path, artist, title, lyrics, lyric_type, action) where
+	action is 'new', 'upgrade', 'keep', or 'none'.
+	"""
+	try:
+		tags = taglib.File(flac_path)
+	except OSError as e:
+		logger.warning(f'Skipping unreadable file {flac_path}: {e}')
+		return flac_path, '', '', '', 'none', 'none'
 
-def _fetch_track_lyrics(flac_path: str, album_name: str) -> tuple[str, str, str, str, bool]:
-    """Fetch lyrics for a single track (runs in thread pool — no file writes).
+	artist   = flactag(tags, 'ARTIST')
+	title    = flactag(tags, 'TITLE')
+	existing = flactag(tags, 'LYRICS').strip()
 
-    Opens its own taglib.File instance so it is safe to call concurrently.
-    Skips the network call when the file already contains LRC-format lyrics.
+	# Existing lyrics are malformed — clear them and re-fetch
+	had_invalid_lrc = bool(existing and _is_invalid_lrc(existing))
+	if had_invalid_lrc:
+		logger.warning(f'Invalid LRC timestamps in file, clearing: {title} ({artist})')
+		existing = ''
 
-    Args:
-        flac_path: Absolute path to the FLAC file.
-        album_name: Album title passed to the lrclib.net API.
+	existing_is_lrc      = _is_lrc(existing)
+	existing_has_headers = existing_is_lrc and _has_lrc_headers(existing)
 
-    Returns:
-        Tuple of (flac_path, title, lyrics_text, lyrics_type, is_dirty) where
-        is_dirty is True when new lyrics were fetched and should be written back.
-    """
-    try:
-        tags = taglib.File(flac_path)
-    except OSError as e:
-        logger.warning(f'Skipping unreadable file {flac_path}: {e}')
-        return flac_path, '', '', 'none', False
-    title = flactag(tags, 'TITLE')
-    existing = flactag(tags, 'LYRICS').strip() if 'LYRICS' in tags.tags else ''
+	# Already have LRC with headers — nothing to improve
+	if existing_has_headers:
+		return flac_path, artist, title, existing, 'lrc', 'keep'
 
-    if existing and LRC_PATTERN.match(existing):
-        return flac_path, title, existing, 'lrc', False
+	params = {
+		'artist_name': artist,
+		'track_name':  title,
+		'album_name':  album_name,
+		'duration':    str(round(tags.length)),
+	}
+	try:
+		data = requests.get(
+			'https://lrclib.net/api/get',
+			params=params,
+			headers={'User-Agent': 'Mozilla/5.0'},
+			timeout=10,
+		).json()
+		if data.get('syncedLyrics'):
+			lrc = re.sub(r'\[(\d{2}:\d{2}\.\d{2})\d\]', r'[\1]', data['syncedLyrics'])
+			if _is_invalid_lrc(lrc):
+				logger.warning(f'Invalid LRC timestamps from lrclib, skipping: {title} ({artist})')
+			else:
+				fetched_has_headers = _has_lrc_headers(lrc)
+				if existing_is_lrc and not existing_has_headers and fetched_has_headers:
+					return flac_path, artist, title, lrc, 'lrc', 'upgrade'
+				if not existing_is_lrc:
+					return flac_path, artist, title, lrc, 'lrc', 'new'
+				return flac_path, artist, title, existing, 'lrc', 'keep'
+		if data.get('plainLyrics') and not existing:
+			return flac_path, artist, title, data['plainLyrics'], 'txt', 'new'
+	except Exception:
+		pass
 
-    lrc, lrctype = get_lrclyrics(tags, album_name)
-    if lrctype == 'lrc':
-        return flac_path, title, lrc, 'lrc', True
-    if lrctype == 'plain' and not existing:
-        return flac_path, title, lrc, 'txt', True
-    return flac_path, title, existing, ('txt' if existing else 'none'), False
-
-def walkdirs(fixdir: str) -> int:
-    """Process all FLAC files in an album directory, fetching lyrics where missing.
-
-    Reads the DISCOGS_RELEASE_ID and ORIGINAL_TITLE tags from the first FLAC file to
-    identify the album, then fetches lyrics for all tracks concurrently (up to 8
-    simultaneous lrclib.net requests) via _fetch_track_lyrics().  Results are applied
-    sequentially in the main thread. Skips the directory if no FLAC files are found or
-    DISCOGS_RELEASE_ID is absent. Updates global stats counters for reporting.
-
-    Args:
-        fixdir: Path to the album directory to process.
+	if had_invalid_lrc:
+		return flac_path, artist, title, '', 'none', 'clear'
+	return flac_path, artist, title, existing, ('lrc' if existing_is_lrc else 'txt' if existing else 'none'), 'keep'
 
 
-    Returns:
-        Number of files that had new lyrics written (lrc_new + txt_new for this call).
-    """
-    global stats
-    stats['txt_new'] = 0
-    stats['lrc_new'] = 0    
-       
-    # Get first FLAC file
-    first_flac = next((filename for filename in os.listdir(fixdir) if filename.endswith(".flac")), None)
-    if not first_flac:
-        return 0
-        
-    # Check for Discogs ID
-    first_flac_path = os.path.join(fixdir, first_flac)
-    try:
-        tags = taglib.File(first_flac_path)
-    except OSError as e:
-        logger.warning(f'Skipping unreadable file {first_flac_path}: {e}')
-        return 0
-    try:
-        discogs_id = int(flactag(tags, 'DISCOGS_RELEASE_ID'))
-        album_name = flactag(tags, 'ORIGINAL_TITLE').strip()
-        artist = flactag(tags, 'ARTIST')
-    except ValueError:
-        stats['error'] += 1
-        return 0
+def _collect_tracks(flacdir: str) -> list[tuple[str, str]]:
+	"""Return (flac_path, album_name) for every FLAC that has a DISCOGS_RELEASE_ID."""
+	tracks = []
+	for root, _, files in os.walk(flacdir):
+		flacs = sorted(f for f in files if f.endswith('.flac'))
+		if not flacs:
+			continue
+		first = os.path.join(root, flacs[0])
+		try:
+			tags = taglib.File(first)
+		except OSError:
+			continue
+		try:
+			int(flactag(tags, 'DISCOGS_RELEASE_ID'))
+		except ValueError:
+			continue
+		album_name = flactag(tags, 'ORIGINAL_TITLE').strip() or flactag(tags, 'ALBUM')
+		for f in flacs:
+			tracks.append((os.path.join(root, f), album_name))
+	return tracks
 
-    # Collect FLAC paths, then fetch lyrics concurrently (HTTP only, no writes)
-    flac_paths = [str(PurePosixPath(p)) for p in Path(fixdir).rglob('*.flac')]
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = [executor.submit(_fetch_track_lyrics, p, album_name) for p in flac_paths]
-        fetch_results = []
-        for f in futures:
-            try:
-                fetch_results.append(f.result())
-            except Exception as e:
-                logger.warning(f'Lyrics fetch failed: {e}')
-
-    # Apply results sequentially (file writes are not thread-safe)
-    for flac_path, title, lyrics, lyric_type, is_dirty in fetch_results:
-        stats['flac_files'] += 1
-        if lyric_type == 'lrc':
-            stats['lrc_total'] += 1
-            if is_dirty:
-                stats['lrc_new'] += 1
-                success(f'LRC lyrics added for {title} ({artist})')
-        elif lyric_type == 'txt':
-            stats['txt_total'] += 1
-            if is_dirty:
-                stats['txt_new'] += 1
-                success(f'TXT lyrics added for {title} ({artist})')
-        else:
-            stats['no_total'] += 1
-
-        if is_dirty:
-            try:
-                tags = taglib.File(flac_path)
-                tags.tags['LYRICS'] = [lyrics]
-                tags.save()
-            except OSError as e:
-                logger.warning(f'Could not save lyrics for {flac_path}: {e}')
-
-    return stats['lrc_new'] + stats['txt_new']
 
 def main() -> None:
-    """Entry point: walk a FLAC directory tree and update lyrics for all albums.
+	if len(sys.argv) != 2:
+		from config import nzbdir as flacdir
+	else:
+		flacdir = sys.argv[1]
 
-    Reads the root directory from config.flacdir or a single positional command-line
-    argument. Processes each album directory in sequence
-    and prints summary totals on completion.
-    """
-    if len(sys.argv) != 2:
-        from config import nzbdir as flacdir
-    else:
-        flacdir = sys.argv[1]
+	logger.info(f'Scanning tracks in {flacdir}')
+	tracks = _collect_tracks(flacdir)
+	total = len(tracks)
+	logger.info(f'Fetching lyrics for {total} tracks with up to {MAX_WORKERS} parallel requests')
 
-    flac_directories = []
-    updated = 0
+	stats = {'lrc': 0, 'txt': 0, 'none': 0, 'new': 0}
+	done = 0
+	last_report = time.monotonic()
 
-    # Find all directories containing FLAC files
-    for root, dirs, files in os.walk(flacdir):
-        for file in files:
-            if file.endswith(".flac"):
-                flac_directories.append(root)
-                break
+	with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+		futures = {executor.submit(_fetch_one, path, album): path for path, album in tracks}
+		for future in as_completed(futures):
+			try:
+				flac_path, artist, title, lyrics, lyric_type, action = future.result()
+			except Exception as e:
+				logger.warning(f'Fetch error: {e}')
+				done += 1
+				continue
 
-    total = len(flac_directories)
-    logger.info(f"Starting lyrics update in {flacdir} ({total} albums)")
-    last_report = time.monotonic()
-    for i, directory in enumerate(flac_directories, 1):
-        updated += walkdirs(directory)
-        if time.monotonic() - last_report >= 10:
-            logger.info(
-                f"Progress: {i}/{total} albums — "
-                f"LRC: {stats['lrc_total']} TXT: {stats['txt_total']} "
-                f"None: {stats['no_total']} New: {updated}"
-            )
-            last_report = time.monotonic()
-    logger.info(
-        f"Done — LRC: {stats['lrc_total']} TXT: {stats['txt_total']} "
-        f"None: {stats['no_total']} New: {updated}"
-    )
+			done += 1
+			if lyric_type == 'lrc':
+				stats['lrc'] += 1
+			elif lyric_type == 'txt':
+				stats['txt'] += 1
+			else:
+				stats['none'] += 1
+
+			if action in ('new', 'upgrade', 'clear'):
+				stats['new'] += 1
+				try:
+					t = taglib.File(flac_path)
+					if action == 'clear':
+						t.tags.pop('LYRICS', None)
+						t.save()
+						logger.warning(f'Invalid LRC cleared (no replacement found): {title} ({artist})')
+					else:
+						t.tags['LYRICS'] = [lyrics]
+						t.save()
+						if action == 'upgrade':
+							success(f'LRC upgraded with metadata for {title} ({artist})')
+						else:
+							success(f'{"LRC" if lyric_type == "lrc" else "TXT"} lyrics added for {title} ({artist})')
+				except OSError as e:
+					logger.warning(f'Could not save lyrics for {flac_path}: {e}')
+
+			if time.monotonic() - last_report >= 10:
+				logger.info(
+					f'Progress: {done}/{total} tracks — '
+					f'LRC: {stats["lrc"]} TXT: {stats["txt"]} '
+					f'None: {stats["none"]} New: {stats["new"]}'
+				)
+				last_report = time.monotonic()
+
+	logger.info(
+		f'Done — LRC: {stats["lrc"]} TXT: {stats["txt"]} '
+		f'None: {stats["none"]} New: {stats["new"]}'
+	)
+
 
 if __name__ == '__main__':
-    main()
+	main()

@@ -84,6 +84,28 @@ if not os.environ.get('DISCOGS_CHILD'):
 		pass  # log to console only if config is missing or broken
 
 
+
+if not os.environ.get('DISCOGS_CHILD'):
+	try:
+		from config import syslog_host, syslog_port
+		from logging.handlers import SysLogHandler
+
+		class _SafeSysLogHandler(SysLogHandler):
+			def emit(self, record):
+				try:
+					super().emit(record)
+				except Exception:
+					pass
+
+		_syslog_handler = _SafeSysLogHandler(address=(syslog_host, int(syslog_port)))
+		_syslog_handler.setFormatter(logging.Formatter('discogs %(levelname)s %(message)s'))
+		_root.addHandler(_syslog_handler)
+	except ImportError:
+		pass
+	except Exception:
+		pass
+
+
 logger = structlog.get_logger()
 
 

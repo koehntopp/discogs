@@ -9,6 +9,7 @@
 #   "pillow",
 #   "python-multipart",
 #   "structlog",
+#   "requests",
 # ]
 # ///
 
@@ -54,7 +55,7 @@ from log import logger, success
 import pandas as pd
 import uvicorn
 from fastapi import FastAPI, Form, Query, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 SCRIPTS_DIR = Path(__file__).parent
@@ -150,7 +151,13 @@ def load_albums(search: str = '', sort: str = 'Album Artist', order: str = 'asc'
 		mask = df.apply(lambda row: row.str.contains(search, case=False).any(), axis=1)
 		df = df[mask]
 	if sort in df.columns:
-		df = df.sort_values(sort, ascending=(order == 'asc'))
+		asc = order == 'asc'
+		by = [sort]
+		ascending = [asc]
+		if sort == 'Album Artist':
+			by += ['Original Date', 'Release Date']
+			ascending += [True, True]
+		df = df.sort_values(by=by, ascending=ascending)
 	return df.to_dict(orient='records')
 
 
@@ -209,7 +216,7 @@ def _cover_art_cell(row: dict) -> str:
 	return escape(dims)
 
 
-def render_row(row: dict, artist_id: str) -> str:
+def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
 	dr = escape(row.get('DR', ''))
 	album_title = row.get('Original Filename', '').strip() or row.get('Original Title', '').strip() or row.get('Album', '')
 	artist_dir = escape(str(Path(row.get('Directory', '')).parent))
@@ -233,14 +240,14 @@ def render_row(row: dict, artist_id: str) -> str:
 	from urllib.parse import urlencode
 	dr_artist = escape(row.get('Album Artist', ''))
 	dr_album  = escape(album_title)
-	dr_url    = 'https://dr.loudness-war.info/?' + urlencode({'artist': row.get('Album Artist', ''), 'album': album_title})
+	dr_url    = 'https://dr.loudness-war.info/album/list/1/dr/desc?' + urlencode({'artist': row.get('Album Artist', ''), 'album': album_title})
 	dr_btn    = (
 		f'<a href="{dr_url}" target="_blank" rel="noopener" title="Look up DR on loudness-war.info" '
 		f'style="color:#888;font-size:11px;text-decoration:none;margin-left:4px;">'
 		f'<i class="fa-solid fa-wave-square"></i></a>'
 	) if dr else ''
 	return (
-		f'<tr>'
+		f'<tr class="{"even" if row_index % 2 else "odd"}">'
 		f'<td class="reprocess">{btn}</td>'
 		f'<td class="artist">{escape(row.get("Album Artist",""))}</td>'
 		f'<td class="album">{_album_link(row, album_title)}</td>'
@@ -255,9 +262,9 @@ def render_row(row: dict, artist_id: str) -> str:
 	)
 
 
-def render_artist_tbody(artist: str, rows: list[dict]) -> str:
+def render_artist_tbody(artist: str, rows: list[dict], start_index: int = 0) -> str:
 	aid = _artist_id(artist)
-	trs = ''.join(render_row(r, aid) for r in rows)
+	trs = ''.join(render_row(r, aid, start_index + i) for i, r in enumerate(rows))
 	return f'<tbody id="{aid}">{trs}</tbody>'
 
 
@@ -293,8 +300,11 @@ def render_table(rows: list[dict], sort: str, order: str, search: str) -> str:
 	# Group rows by artist, preserving current sort order
 	from itertools import groupby
 	tbodies = ''
+	row_counter = 0
 	for artist, group in groupby(rows, key=lambda r: r.get('Album Artist', '')):
-		tbodies += render_artist_tbody(artist, list(group))
+		group_rows = list(group)
+		tbodies += render_artist_tbody(artist, group_rows, row_counter)
+		row_counter += len(group_rows)
 
 	total = len(rows)
 	if total == 0:
@@ -348,8 +358,9 @@ INDEX_HTML = '''<!DOCTYPE html>
     thead th.icon-sort { text-align: center; }
     thead th.sorted-asc::after  { content: " ↑"; }
     thead th.sorted-desc::after { content: " ↓"; }
-    tbody tr:nth-child(even) { background: #fafafa; }
-    tbody tr:hover { background: #eef4ff; }
+    tbody tr.odd  { background: #ffffff; }
+    tbody tr.even { background: #eef0f5; }
+    tbody tr:hover { background: #dde8ff; }
     td { padding: 4px 8px; border-bottom: 1px solid #eee; white-space: nowrap; }
     td.artist { width: 600px; min-width: 300px; max-width: 600px; white-space: normal; }
     td.album { white-space: normal; width: 600px; min-width: 300px; }
@@ -370,6 +381,14 @@ INDEX_HTML = '''<!DOCTYPE html>
       background: #eee; cursor: pointer; font-size: 13px; color: #555;
     }
     #lyrics-btn:hover, #bliss-btn:hover, #sync-btn:hover { background: #e0e0e0; }
+    .toolbar-sep { width: 1px; height: 20px; background: #ccc; margin: 0 4px; flex-shrink: 0; }
+    #link-buttons { display: flex; gap: 4px; align-items: center; }
+    .link-url-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 5px 7px; border: 1px solid #ccc; border-radius: 4px;
+      background: #eee; cursor: pointer; text-decoration: none;
+    }
+    .link-url-btn:hover { background: #e0e0e0; }
     #log-btn {
       margin-left: auto;
     }
@@ -468,6 +487,9 @@ INDEX_HTML = '''<!DOCTYPE html>
       hx-get="/sync" hx-target="#modal-wrap" hx-swap="innerHTML">
       <i class="fa-solid fa-cloud-arrow-up"></i>
     </button>
+    <div class="toolbar-sep"></div>
+    <div id="link-buttons"
+      hx-get="/link-buttons" hx-trigger="load" hx-swap="innerHTML"></div>
     <span id="count"></span>
     <button id="log-btn"
       hx-get="/log" hx-target="#modal-wrap" hx-swap="innerHTML">
@@ -773,7 +795,6 @@ async def sync_start():
 			'--stats-one-line', '--stats', stats,
 			'--transfers', transfers,
 			'--checkers', checkers,
-			'--size-only',
 			'--buffer-size', buffer,
 			source, remote,
 		]
@@ -844,6 +865,8 @@ CONFIG_LABELS = {
 	'log_file':         ('Log File',                          'text'),
 	'log_rotation':     ('Log Rotation',                      'text'),
 	'log_retention':    ('Log Retention',                     'text'),
+	'syslog_host':      ('Syslog Host (Synology)',            'text'),
+	'syslog_port':      ('Syslog Port',                       'text'),
 	'rclone_source':     ('rclone Source',                    'text'),
 	'flacroot_remote':   ('rclone Destination',               'text'),
 	'rclone_flags':      ('rclone Flags',                     'text'),
@@ -852,6 +875,11 @@ CONFIG_LABELS = {
 	'rclone_buffer_size':('rclone Buffer Size',               'text'),
 	'rclone_stats':      ('rclone Stats Interval',            'text'),
 	'cover_max_size':    ('Cover Art Max Size (px)',           'text'),
+	'link_url_1':        ('Link Button #1 URL',                'text'),
+	'link_url_2':        ('Link Button #2 URL',                'text'),
+	'link_url_3':        ('Link Button #3 URL',                'text'),
+	'link_url_4':        ('Link Button #4 URL',                'text'),
+	'link_url_5':        ('Link Button #5 URL',                'text'),
 }
 
 
@@ -870,15 +898,15 @@ def config_read() -> dict[str, str]:
 		if m:
 			result[m.group(1)] = m.group(2)
 			continue
-		# unquoted value (bool, int, float) — strip any accidental quotes
-		m = re.match(r'^(\w+)\s*=\s*(\S+)', line)
+		# unquoted value (bool, int, float, or empty) — strip any accidental quotes
+		m = re.match(r'^(\w+)\s*=\s*(\S*)', line)
 		if m:
 			result[m.group(1)] = m.group(2).strip("'\"")
 	return result
 
 
 # Keys whose values are stored unquoted in config.py
-_UNQUOTED = {'rsgain_loudness', 'rsgain_max_peak', 'rsgain_true_peak', 'rsgain_skip', 'rclone_transfers', 'rclone_checkers', 'cover_max_size'}
+_UNQUOTED = {'rsgain_loudness', 'rsgain_max_peak', 'rsgain_true_peak', 'rsgain_skip', 'rclone_transfers', 'rclone_checkers', 'cover_max_size', 'syslog_port'}
 
 
 def config_write(updates: dict[str, str]) -> None:
@@ -890,7 +918,7 @@ def config_write(updates: dict[str, str]) -> None:
 	for line in lines:
 		m = re.match(r'^(\w+)\s*=\s*[\'"](.*)[\'"]\s*$', line.strip())
 		if not m:
-			m = re.match(r'^(\w+)\s*=\s*(\S+)', line.strip())
+			m = re.match(r'^(\w+)\s*=\s*(\S*)', line.strip())
 		if m and m.group(1) in updates:
 			key = m.group(1)
 			val = updates[key]
@@ -1096,10 +1124,92 @@ async def settings_get():
 
 @app.post('/settings/save', response_class=HTMLResponse)
 async def settings_save(request: Request):
+	import threading
 	form = await request.form()
 	updates = {k: v for k, v in form.items() if k in CONFIG_LABELS}
 	config_write(updates)
-	return HTMLResponse(render_settings_modal(config_read(), saved=True))
+	# Re-fetch favicons for any link URLs in background
+	def _refetch():
+		for i in range(1, 6):
+			url = updates.get(f'link_url_{i}', '').strip()
+			if url:
+				_cache_link_favicon(i, url)
+	threading.Thread(target=_refetch, daemon=True).start()
+	modal = render_settings_modal(config_read(), saved=True)
+	oob = f'<div id="link-buttons" hx-swap-oob="true">{_render_link_buttons()}</div>'
+	return HTMLResponse(modal + oob)
+
+
+def _cache_link_favicon(n: int, url: str) -> None:
+	"""Fetch favicon for link button n from url and save to config dir."""
+	from urllib.parse import urlparse
+	import requests as _req
+	parsed = urlparse(url)
+	for path in ('/favicon.ico', '/favicon.png', '/favicon-32x32.png', '/favicon-16x16.png'):
+		favicon_url = f'{parsed.scheme}://{parsed.netloc}{path}'
+		try:
+			r = _req.get(favicon_url, timeout=5)
+			logger.info(f'Favicon {n}: {favicon_url} → {r.status_code} ({len(r.content)} bytes)')
+			data = r.content
+			is_image = (
+				data[:4] == b'\x89PNG' or
+				data[:2] == b'\xff\xd8' or
+				data[:4] in (b'GIF8', b'RIFF') or
+				data[:4] == b'\x00\x00\x01\x00' or  # ICO
+				b'<svg' in data[:64]
+			)
+			if r.status_code == 200 and is_image:
+				dest = _config_dir() / f'link_favicon_{n}.ico'
+				dest.write_bytes(data)
+				return
+		except Exception as e:
+			logger.warning(f'Could not fetch favicon for link {n} at {favicon_url}: {e}')
+	logger.warning(f'No favicon found for link {n} ({url})')
+
+
+def _render_link_buttons() -> str:
+	from urllib.parse import urlparse
+	cfg = config_read()
+	buttons = []
+	for i in range(1, 6):
+		url = cfg.get(f'link_url_{i}', '').strip()
+		if not url:
+			continue
+		cached = _config_dir() / f'link_favicon_{i}.ico'
+		if not cached.exists():
+			_cache_link_favicon(i, url)
+		favicon_src = f'/link-favicon/{i}' if cached.exists() else ''
+		img = f'<img src="{favicon_src}" width="16" height="16" alt="" />' if favicon_src else '🔗'
+		buttons.append(
+			f'<a href="{escape(url)}" target="_blank" rel="noopener" class="link-url-btn" title="{escape(url)}">'
+			f'{img}'
+			f'</a>'
+		)
+	return ''.join(buttons)
+
+
+@app.get('/link-favicon/{n}')
+async def link_favicon(n: int):
+	path = _config_dir() / f'link_favicon_{n}.ico'
+	if not path.exists():
+		return Response(status_code=404)
+	data = path.read_bytes()
+	if data[:4] == b'\x89PNG':
+		media_type = 'image/png'
+	elif data[:4] == b'<svg' or b'<svg' in data[:64]:
+		media_type = 'image/svg+xml'
+	elif data[:6] in (b'GIF87a', b'GIF89a'):
+		media_type = 'image/gif'
+	elif data[:2] == b'\xff\xd8':
+		media_type = 'image/jpeg'
+	else:
+		media_type = 'image/x-icon'
+	return Response(content=data, media_type=media_type)
+
+
+@app.get('/link-buttons', response_class=HTMLResponse)
+async def link_buttons():
+	return HTMLResponse(_render_link_buttons())
 
 
 if __name__ == '__main__':
@@ -1119,6 +1229,10 @@ if __name__ == '__main__':
 		logger.info(f"config.config_dir={getattr(config, 'config_dir', '(missing)')}")
 	except Exception as e:
 		logger.error(f"Failed to import config.py: {e}")
+
+	cfg = config_read()
+	link_urls = {k: v for k, v in cfg.items() if k.startswith('link_url_') and v}
+	logger.info(f"Link buttons configured: {link_urls or 'none'}")
 
 	csv = cfg_dir / 'albums.csv'
 	logger.info(f"albums.csv path: {csv} — exists: {csv.exists()}")
