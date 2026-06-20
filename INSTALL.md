@@ -162,7 +162,11 @@ volumes:
   - /path/to/your/mp3:/mp3       # add this
 ```
 
-Pass `--mp3` to bliss.py (or click Bliss in the UI) to create/update MP3 copies via ffmpeg.
+MP3 copies are created by running bliss.py with `--mp3` directly — this is not exposed in the web UI:
+
+```bash
+docker exec discogs uv run bliss.py --mp3
+```
 
 ---
 
