@@ -11,12 +11,14 @@ If you have multiple versions of the same album (original, remaster, SACD, Qobuz
 ## Features
 
 - **Web UI** — FastAPI + HTMX interface: browse your library, trigger scans, fetch lyrics, organise files, sync to remote
+- **Configurable link buttons** — up to 5 toolbar buttons linking to any URL (favicons auto-cached)
 - **Tag enrichment** — pulls release date, original release date, and format info from the Discogs API
 - **File organisation** — moves FLACs into `Artist/Album/track_title.flac`, creates MP3 mirrors via ffmpeg
-- **Dynamic Range scoring** — per-track and per-album DR values written as FLAC tags
-- **Lyrics** — fetches synced (LRC) or plain lyrics from lrclib.net
+- **Dynamic Range scoring** — per-track and per-album DR values written as FLAC tags; DR column links to loudness-war.info
+- **Lyrics** — parallel fetching (32 workers) from lrclib.net; LRC upgrade and invalid-LRC detection
 - **AcoustID fingerprinting** — generates and stores acoustic fingerprints
 - **rclone sync** — mirrors the FLAC library to a remote destination
+- **Syslog forwarding** — optional structured log forwarding to a Synology log server
 - **Docker support** — runs on Docker Desktop (Mac) or Synology NAS
 
 ## Quick Start
@@ -29,18 +31,39 @@ cp config_demo.py config/config.py   # fill in your paths and API key
 uv run webui.py
 ```
 
-Open http://localhost:8765
+Open http://localhost:8000
 
-### Docker
+### Docker (local)
+
+Create `docker-compose.yml` (gitignored — may contain credentials):
+
+```yaml
+services:
+  discogs:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config:/config
+      - /path/to/flac:/flac
+    environment:
+      - CONFIG_DIR=/config
+      - PORT=8000
+      - RCLONE_CONFIG=/config/rclone.conf
+```
 
 ```bash
-cp config_demo.py config/config.py   # fill in container-internal paths (see config_demo.py)
 docker compose up --build
 ```
 
-Open http://localhost:8765
+### Synology NAS
 
-For Synology, use `docker-compose-synology.yml` instead.
+```bash
+./build_synology.sh          # builds discogs-synology-amd64.tar
+# Upload via Container Manager → Image → Add → Import from file
+```
+
+Then use `docker-compose-synology.yml` as a reference for container settings.
 
 ## Configuration
 
@@ -52,8 +75,13 @@ Copy `config_demo.py` to `config/config.py` and set:
 | `flacroot` | Root of your organised FLAC library (container-internal path) |
 | `mp3root` | MP3 mirror root |
 | `nzbdir` | Staging directory for newly tagged FLACs |
-| `flacroot_remote` | rclone destination for sync |
+| `flacroot_local` | Path as seen by the browser (for tagger deep links) |
+| `flacroot_remote` | rclone destination remote (e.g. `ROCK:/mnt/flac`) |
+| `rclone_source` | rclone source remote (e.g. `FLAC:/flac`) |
+| `syslog_host` / `syslog_port` | Optional Synology log server |
 | `log_file` | Log filename (written to `config_dir`) |
+
+All config values are also editable via the Settings modal in the web UI.
 
 `config.py` is gitignored — it contains credentials.
 
@@ -81,10 +109,11 @@ Copy `config_demo.py` to `config/config.py` and set:
 | `fixtags.py` | Discogs API tag enrichment |
 | `bliss.py` | File organisation + MP3 sync |
 | `album_list.py` | Album inventory scan → CSV + DR chart |
-| `update_lyrics.py` | Fetch lyrics from lrclib.net |
+| `update_lyrics.py` | Parallel lyrics fetch from lrclib.net (32 workers) |
 | `calculate_dr.py` | Dynamic Range calculation |
 | `calculate_fp.py` | AcoustID fingerprint generation |
 | `convert_opus.py` | FLAC → Opus transcoding |
+| `build_synology.sh` | Build Docker image tar for Synology upload |
 
 All scripts use [uv](https://github.com/astral-sh/uv) and declare their own dependencies via PEP 723 headers — no manual `pip install` needed:
 
@@ -104,6 +133,7 @@ Structured logging via [structlog](https://github.com/hynek/structlog):
 - Pretty coloured output when running in a terminal
 - JSON to stdout when running as a subprocess (captured and re-logged cleanly by the web UI)
 - JSON log file at `config_dir/log_file`
+- Optional syslog forwarding: set `syslog_host` and `syslog_port` in config.py
 - Set `LOG_LEVEL` env var to control verbosity (default: `INFO`)
 
 ## Libraries and Tools

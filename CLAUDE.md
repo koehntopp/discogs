@@ -1,5 +1,9 @@
 # CLAUDE.md — Discogs Music Library Manager
 
+## After Every Commit
+
+After every commit, update CLAUDE.md and README.md to reflect current project state, then commit the docs update as a separate follow-up commit. Keep both files accurate and in sync with the code.
+
 ## Project Overview
 
 A collection of Python scripts to manage a local FLAC music library using Discogs metadata, with a FastAPI/HTMX web UI. The core philosophy: all tags are set by the user via a Discogs tagger (e.g. Yate), and no script is allowed to overwrite user-set tags arbitrarily. The Discogs Release ID anchors the metadata and ensures exact version identification.
@@ -8,25 +12,33 @@ A collection of Python scripts to manage a local FLAC music library using Discog
 
 ```
 discogs/
-├── webui.py            # FastAPI/HTMX web interface
-├── nzbfix.py           # Pipeline orchestration (runs all steps)
-├── fixtags.py          # Discogs metadata enrichment & tag normalization
-├── bliss.py            # File/folder organization + MP3 sync copies
-├── album_list.py       # Album inventory scan (CSV + DR chart)
-├── update_lyrics.py    # Fetch & embed LRC/TXT lyrics from lrclib.net
-├── calculate_dr.py     # Dynamic Range (DR) calculation per track/album
-├── calculate_fp.py     # AcoustID acoustic fingerprint generation
-├── convert_opus.py     # FLAC → Opus transcoding
-├── 51check.py          # Detect 5.1 surround or mono versions
-├── lyricscloud.py      # Experimental word cloud from lyrics
-├── log.py              # Shared structlog setup (imported by all scripts)
-├── config.py           # API keys and directory paths (not committed)
-├── config_demo.py      # Config template
-├── Dockerfile          # Multi-stage build (TagLib 2.x + rsgain from source)
-├── docker-compose.yml          # Local / Docker Desktop deployment
+├── webui.py                    # FastAPI/HTMX web interface
+├── nzbfix.py                   # Pipeline orchestration (runs all steps)
+├── fixtags.py                  # Discogs metadata enrichment & tag normalization
+├── bliss.py                    # File/folder organization + MP3 sync copies
+├── album_list.py               # Album inventory scan (CSV + DR chart)
+├── update_lyrics.py            # Fetch & embed LRC/TXT lyrics from lrclib.net (parallel, 32 workers)
+├── calculate_dr.py             # Dynamic Range (DR) calculation per track/album
+├── calculate_fp.py             # AcoustID acoustic fingerprint generation
+├── convert_opus.py             # FLAC → Opus transcoding
+├── 51check.py                  # Detect 5.1 surround or mono versions
+├── lyricscloud.py              # Experimental word cloud from lyrics
+├── log.py                      # Shared structlog setup (imported by all scripts)
+├── config_demo.py              # Config template (copy to config/config.py)
+├── Dockerfile                  # Multi-stage build (TagLib 2.x + rsgain from source)
 ├── docker-compose-synology.yml # Synology NAS deployment
-└── pyproject.toml      # Project config (Ruff linter/formatter settings)
+├── build_synology.sh           # Build + export Docker image for Synology
+├── templates/index.html        # Jinja2 template for web UI
+├── templates/albums.html       # Album table partial
+├── favicon/                    # Cached favicons for toolbar link buttons
+└── rsgain.ini                  # rsgain configuration
 ```
+
+**Not committed (gitignored):**
+- `config.py` / `config/config.py` — credentials and paths
+- `docker-compose.yml` — local deployment (may contain credentials)
+- `deploy-linux.sh` — deployment script with internal IPs
+- `*.tar`, `*.log`, `rclone.log`, `albums.csv`
 
 ## Configuration
 
@@ -35,6 +47,11 @@ Copy `config_demo.py` to `config/config.py` and fill in:
 - `flacroot` — organized library root (container path, e.g. `/flac/`)
 - `mp3root` — MP3 mirror for mobile/car
 - `nzbdir` — staging directory for newly tagged FLACs
+- `flacroot_local` — path as seen by the browser (for tagger links)
+- `flacroot_remote` — rclone destination remote (e.g. `ROCK:/mnt/flac`)
+- `rclone_source` — rclone source remote (e.g. `FLAC:/flac`)
+- `rclone_checkers`, `rclone_buffer_size`, `rclone_transfers` — rclone tuning
+- `syslog_host`, `syslog_port` — optional Synology log server
 - `log_file`, `log_rotation`, `log_retention` — logging config
 
 **`config.py` must not be committed** — it contains credentials.
@@ -51,8 +68,9 @@ Scripts declare their own dependencies via PEP 723 headers (`# /// script`), so 
 ## Docker
 
 ```bash
-docker compose up --build        # local
-docker compose -f docker-compose-synology.yml up   # Synology
+docker compose up --build                              # local (docker-compose.yml, gitignored)
+docker compose -f docker-compose-synology.yml up       # Synology
+./build_synology.sh [amd64|arm64]                      # build tar for manual Synology upload
 ```
 
 The Dockerfile builds TagLib 2.x and rsgain from source (Ubuntu 22.04 only ships TagLib 1.x). TagLib headers and libs are installed to `/opt/taglib`; `CPLUS_INCLUDE_PATH`, `LIBRARY_PATH`, and `LD_LIBRARY_PATH` are set so pytaglib compiles against them on first `uv run`.
@@ -79,16 +97,22 @@ from log import logger, success # also import success() for green entries
 - When stderr is a TTY: pretty `ConsoleRenderer` output to stderr
 - When running as a subprocess (piped): JSON to stdout, captured and re-logged by webui
 - File logging: JSON to `config_dir/log_file` (configured in config.py)
+- Optional syslog: set `syslog_host` and `syslog_port` in config.py (e.g. Synology log server)
 - Log level: set `LOG_LEVEL` env var (default: INFO)
 
 ## Script Details
 
 ### `webui.py`
-- FastAPI + HTMX web interface on port 8000 (default)
-- Album table with search, sort, DR colouring, tagger links, Discogs/MusicBrainz icons
-- Buttons: Refresh (album scan), Lyrics, Bliss (organise), Sync (rclone), Log, Settings
-- Album list reloads automatically after a successful refresh
-- Live log modal with auto-scroll; log text is selectable
+- FastAPI + HTMX web interface on port 8000 (default, override with `PORT` env var)
+- Album table with search, sort, DR colouring, tagger links, Discogs/MusicBrainz/CoverArtArchive icons
+- Toolbar buttons: Refresh, Lyrics, Bliss, Sync (rclone), Log, Settings, + 5 configurable link buttons
+- Configurable link buttons (Settings → Link button #1–5): any URL, favicon auto-cached to `config_dir/link_favicon_N.ico`
+- Kill button in log modal: terminates the active subprocess
+- Album table: sorted by Album Artist, then Original Date, then Release Date; row striping by global index
+- DR column links to dr.loudness-war.info search; Cover Art column links to albumartexchange.com
+- Settings modal: all config.py values editable in UI; save rewrites config.py in place
+- After bliss run: triggers automatic album rescan
+- `_current_proc` / `_set_proc()` / `_clear_proc()` globals manage killable subprocesses
 
 ### `fixtags.py <directory>`
 - Finds all FLACs with a `DISCOGS_RELEASE_ID` tag
@@ -110,9 +134,10 @@ from log import logger, success # also import success() for green entries
 - Called by webui on demand; not a long-lived process
 
 ### `update_lyrics.py <directory>`
-- Queries lrclib.net for synced (LRC) or plain (TXT) lyrics
-- Writes to `LYRICS` FLAC tag
-- Newly found lyrics logged at SUCCESS level (green)
+- Queries lrclib.net for synced (LRC) or plain (TXT) lyrics using 32 parallel workers
+- Detects and clears malformed LRC (3-part timestamps like `[100:40:39.00]`)
+- Upgrades existing LRC to version with metadata headers if lrclib provides them
+- Writes to `LYRICS` FLAC tag; newly found/upgraded lyrics logged at SUCCESS (green)
 - Skips files without a Discogs tag
 
 ### `calculate_dr.py <directory>`
@@ -151,7 +176,7 @@ from log import logger, success # also import success() for green entries
 These must be installed separately (included in Docker image):
 - **ffmpeg** — MP3/Opus encoding
 - **rsgain** — ReplayGain tag calculation (built from source in Docker)
-- **rclone** — Remote sync (FLAC library backup)
+- **rclone** — Remote sync (FLAC library backup); config at `$RCLONE_CONFIG` or `config_dir/rclone.conf`
 - **dot_clean** — Remove macOS metadata files (macOS built-in, not in Docker)
 
 ## Common Patterns in Code
@@ -161,3 +186,4 @@ These must be installed separately (included in Docker image):
 - `clean(text)` — filename sanitization (umlauts, special chars)
 - `hasSubDirs(dir)` — checks if a directory has subdirectories
 - API calls include 1s sleep to respect rate limits
+- `config_read` / `config_write` in webui.py use regex `r'^(\w+)\s*=\s*(\S*)'` (note `\S*` not `\S+`) to match empty values
