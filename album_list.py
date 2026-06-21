@@ -60,21 +60,31 @@ def cover_art_dimensions(flac_path: str) -> str:
 	return ''
 
 
-def read_album(directory: str) -> dict | None:
-	"""Read album tags from the first FLAC file in directory. Returns None if no FLACs."""
-	first_flac = next((f for f in os.listdir(directory) if f.endswith('.flac')), None)
-	if not first_flac:
+def read_album(directory: str, lyrics_dir: Path | None = None) -> dict | None:
+	"""Read album tags from the first FLAC; write per-track lyrics to lyrics_dir if given."""
+	flacs = sorted(f for f in os.listdir(directory) if f.endswith('.flac'))
+	if not flacs:
 		return None
-	flac_path = str(PurePosixPath(directory) / first_flac)
-	try:
-		with taglib.File(flac_path) as f:
-			tags = f.tags
-	except Exception:
-		return None
-	result = {tag: (tags.get(tag, [''])[0] or '') for tag in ALBUM_TAGS}
-	result['COVER_ART'] = cover_art_dimensions(flac_path)
-	result['_DIRECTORY_PATH'] = directory
-	return result
+	album_result = None
+	for i, fname in enumerate(flacs):
+		flac_path = str(PurePosixPath(directory) / fname)
+		try:
+			with taglib.File(flac_path) as f:
+				tags = f.tags
+		except Exception:
+			continue
+		if i == 0:
+			album_result = {tag: (tags.get(tag, [''])[0] or '') for tag in ALBUM_TAGS}
+			album_result['COVER_ART'] = cover_art_dimensions(flac_path)
+			album_result['_DIRECTORY_PATH'] = directory
+		if lyrics_dir is not None:
+			discogs_id = (tags.get('DISCOGS_RELEASE_ID') or [''])[0].strip()
+			lyrics = (tags.get('LYRICS') or [''])[0].strip()
+			if discogs_id and lyrics:
+				track = (tags.get('TRACKNUMBER') or ['0'])[0].split('/')[0].zfill(2)
+				ext = 'lrc' if lyrics.startswith('[') else 'txt'
+				(lyrics_dir / f'{discogs_id}_{track}.{ext}').write_text(lyrics, encoding='utf-8')
+	return album_result
 
 
 def find_flac_dirs(root: str) -> list[str]:
@@ -114,33 +124,6 @@ def save_chart(df: pd.DataFrame, out: Path) -> None:
 	plt.close()
 
 
-def export_lyrics(flac_dirs: list[str], lyrics_dir: Path) -> None:
-	"""Write lyrics from every FLAC track to lyrics_dir/<discogs_id>_<track>.txt/lrc."""
-	lyrics_dir.mkdir(parents=True, exist_ok=True)
-	written = skipped = 0
-	for directory in flac_dirs:
-		for fname in sorted(f for f in os.listdir(directory) if f.endswith('.flac')):
-			flac_path = os.path.join(directory, fname)
-			try:
-				with taglib.File(flac_path) as f:
-					tags = f.tags
-			except Exception:
-				continue
-			discogs_id = (tags.get('DISCOGS_RELEASE_ID') or [''])[0].strip()
-			if not discogs_id:
-				continue
-			lyrics = (tags.get('LYRICS') or [''])[0].strip()
-			if not lyrics:
-				skipped += 1
-				continue
-			track = (tags.get('TRACKNUMBER') or ['0'])[0].split('/')[0].zfill(2)
-			ext = 'lrc' if '\n[' in lyrics or lyrics.startswith('[') else 'txt'
-			out = lyrics_dir / f'{discogs_id}_{track}.{ext}'
-			out.write_text(lyrics, encoding='utf-8')
-			written += 1
-	logger.info(f'Lyrics export: {written} written, {skipped} tracks without lyrics')
-
-
 def main() -> None:
 	root = sys.argv[1] if len(sys.argv) == 2 else str(__import__('config').flacroot)
 
@@ -148,10 +131,15 @@ def main() -> None:
 	flac_dirs = find_flac_dirs(root)
 	logger.info(f"Found {len(flac_dirs)} album directories")
 
+	data_dir = Path(os.environ.get('CONFIG_DIR') or getattr(__import__('config'), 'config_dir', '.'))
+	data_dir.mkdir(parents=True, exist_ok=True)
+	lyrics_dir = data_dir / 'lyrics'
+	lyrics_dir.mkdir(parents=True, exist_ok=True)
+
 	workers = min(32, (os.cpu_count() or 4) * 4)
 	albums = []
 	with ThreadPoolExecutor(max_workers=workers) as pool:
-		futures = {pool.submit(read_album, d): d for d in flac_dirs}
+		futures = {pool.submit(read_album, d, lyrics_dir): d for d in flac_dirs}
 		done = 0
 		for fut in as_completed(futures):
 			done += 1
@@ -161,15 +149,10 @@ def main() -> None:
 			if done % 50 == 0 or done == len(flac_dirs):
 				logger.info(f"{done}/{len(flac_dirs)} scanned, {len(albums)} albums")
 
-	import os as _os
-	data_dir = Path(_os.environ.get('CONFIG_DIR') or getattr(__import__('config'), 'config_dir', '.'))
-	data_dir.mkdir(parents=True, exist_ok=True)
 	df = pd.DataFrame(albums)
 	save_csv(df, data_dir / 'albums.csv')
 	save_chart(df, data_dir / 'albums_dr.png')
 	logger.info(f"Done: {len(albums)} albums written to {data_dir / 'albums.csv'}")
-
-	export_lyrics(flac_dirs, data_dir / 'lyrics')
 
 
 if __name__ == '__main__':
