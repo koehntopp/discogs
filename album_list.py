@@ -114,6 +114,33 @@ def save_chart(df: pd.DataFrame, out: Path) -> None:
 	plt.close()
 
 
+def export_lyrics(flac_dirs: list[str], lyrics_dir: Path) -> None:
+	"""Write lyrics from every FLAC track to lyrics_dir/<discogs_id>_<track>.txt/lrc."""
+	lyrics_dir.mkdir(parents=True, exist_ok=True)
+	written = skipped = 0
+	for directory in flac_dirs:
+		for fname in sorted(f for f in os.listdir(directory) if f.endswith('.flac')):
+			flac_path = os.path.join(directory, fname)
+			try:
+				with taglib.File(flac_path) as f:
+					tags = f.tags
+			except Exception:
+				continue
+			discogs_id = (tags.get('DISCOGS_RELEASE_ID') or [''])[0].strip()
+			if not discogs_id:
+				continue
+			lyrics = (tags.get('LYRICS') or [''])[0].strip()
+			if not lyrics:
+				skipped += 1
+				continue
+			track = (tags.get('TRACKNUMBER') or ['0'])[0].split('/')[0].zfill(2)
+			ext = 'lrc' if '\n[' in lyrics or lyrics.startswith('[') else 'txt'
+			out = lyrics_dir / f'{discogs_id}_{track}.{ext}'
+			out.write_text(lyrics, encoding='utf-8')
+			written += 1
+	logger.info(f'Lyrics export: {written} written, {skipped} tracks without lyrics')
+
+
 def main() -> None:
 	root = sys.argv[1] if len(sys.argv) == 2 else str(__import__('config').flacroot)
 
@@ -141,6 +168,8 @@ def main() -> None:
 	save_csv(df, data_dir / 'albums.csv')
 	save_chart(df, data_dir / 'albums_dr.png')
 	logger.info(f"Done: {len(albums)} albums written to {data_dir / 'albums.csv'}")
+
+	export_lyrics(flac_dirs, data_dir / 'lyrics')
 
 
 if __name__ == '__main__':
