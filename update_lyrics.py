@@ -16,9 +16,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 import taglib
 
-LRC_TIMESTAMP = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]')       # valid: [MM:SS.xx]
+LRC_TIMESTAMP = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]')        # valid: [MM:SS.xx]
 LRC_BAD_TS    = re.compile(r'\[\d{3,}:\d{2}:\d{2}\.\d{2}\]') # invalid: [HH:MM:SS.xx]
-LRC_HEADER    = re.compile(r'^\[(ar|ti|al|by|length|offset):', re.MULTILINE | re.IGNORECASE)
+LRC_HEADER_LINE = re.compile(r'^\[(ar|ti|al|by|length|offset):[^\]]*\]\s*$', re.IGNORECASE)
 MAX_WORKERS = 32
 
 
@@ -27,12 +27,29 @@ def _is_lrc(text: str) -> bool:
 
 
 def _is_invalid_lrc(text: str) -> bool:
-	"""Detect malformed LRC with 3-part timestamps like [100:40:39.00]."""
 	return bool(LRC_BAD_TS.search(text))
 
 
-def _has_lrc_headers(text: str) -> bool:
-	return bool(LRC_HEADER.search(text))
+def _make_headers(artist: str, title: str, album: str, length_secs: float) -> str:
+	mins, secs = divmod(int(length_secs), 60)
+	return (
+		f'[ar:{artist}]\n'
+		f'[ti:{title}]\n'
+		f'[al:{album}]\n'
+		f'[length:{mins:02d}:{secs:02d}]\n'
+	)
+
+
+def _strip_headers(lrc: str) -> str:
+	"""Remove existing metadata header lines, keep timestamp lines."""
+	return '\n'.join(
+		line for line in lrc.splitlines()
+		if not LRC_HEADER_LINE.match(line)
+	).strip()
+
+
+def _apply_headers(lrc: str, artist: str, title: str, album: str, length_secs: float) -> str:
+	return _make_headers(artist, title, album, length_secs) + _strip_headers(lrc)
 
 
 def flactag(song: taglib.File, tag: str) -> str:
@@ -43,10 +60,10 @@ def flactag(song: taglib.File, tag: str) -> str:
 
 
 def _fetch_one(flac_path: str, album_name: str) -> tuple[str, str, str, str, str, str]:
-	"""Read tags, skip if LRC already present, otherwise fetch from lrclib.net.
+	"""Read tags, fetch/upgrade lyrics, apply LRC metadata headers from FLAC tags.
 
 	Returns (flac_path, artist, title, lyrics, lyric_type, action) where
-	action is 'new', 'upgrade', 'keep', or 'none'.
+	action is 'new', 'header', 'upgrade', 'clear', 'keep', or 'none'.
 	"""
 	try:
 		tags = taglib.File(flac_path)
@@ -56,26 +73,29 @@ def _fetch_one(flac_path: str, album_name: str) -> tuple[str, str, str, str, str
 
 	artist   = flactag(tags, 'ARTIST')
 	title    = flactag(tags, 'TITLE')
+	length   = tags.length
 	existing = flactag(tags, 'LYRICS').strip()
 
-	# Existing lyrics are malformed — clear them and re-fetch
 	had_invalid_lrc = bool(existing and _is_invalid_lrc(existing))
 	if had_invalid_lrc:
 		logger.warning(f'Invalid LRC timestamps in file, clearing: {title} ({artist})')
 		existing = ''
 
-	existing_is_lrc      = _is_lrc(existing)
-	existing_has_headers = existing_is_lrc and _has_lrc_headers(existing)
+	existing_is_lrc = _is_lrc(existing)
 
-	# Already have LRC with headers — nothing to improve
-	if existing_has_headers:
+	# For existing LRC: rebuild headers from FLAC tags and check if anything changed
+	if existing_is_lrc:
+		with_headers = _apply_headers(existing, artist, title, album_name, length)
+		if with_headers != existing:
+			return flac_path, artist, title, with_headers, 'lrc', 'header'
 		return flac_path, artist, title, existing, 'lrc', 'keep'
 
+	# No LRC yet — fetch from lrclib
 	params = {
 		'artist_name': artist,
 		'track_name':  title,
 		'album_name':  album_name,
-		'duration':    str(round(tags.length)),
+		'duration':    str(round(length)),
 	}
 	try:
 		data = requests.get(
@@ -89,12 +109,8 @@ def _fetch_one(flac_path: str, album_name: str) -> tuple[str, str, str, str, str
 			if _is_invalid_lrc(lrc):
 				logger.warning(f'Invalid LRC timestamps from lrclib, skipping: {title} ({artist})')
 			else:
-				fetched_has_headers = _has_lrc_headers(lrc)
-				if existing_is_lrc and not existing_has_headers and fetched_has_headers:
-					return flac_path, artist, title, lrc, 'lrc', 'upgrade'
-				if not existing_is_lrc:
-					return flac_path, artist, title, lrc, 'lrc', 'new'
-				return flac_path, artist, title, existing, 'lrc', 'keep'
+				lrc = _apply_headers(lrc, artist, title, album_name, length)
+				return flac_path, artist, title, lrc, 'lrc', 'new'
 		if data.get('plainLyrics') and not existing:
 			return flac_path, artist, title, data['plainLyrics'], 'txt', 'new'
 	except Exception:
@@ -102,7 +118,7 @@ def _fetch_one(flac_path: str, album_name: str) -> tuple[str, str, str, str, str
 
 	if had_invalid_lrc:
 		return flac_path, artist, title, '', 'none', 'clear'
-	return flac_path, artist, title, existing, ('lrc' if existing_is_lrc else 'txt' if existing else 'none'), 'keep'
+	return flac_path, artist, title, existing, ('txt' if existing else 'none'), 'keep'
 
 
 def _collect_tracks(flacdir: str) -> list[tuple[str, str]]:
@@ -160,7 +176,7 @@ def main() -> None:
 			else:
 				stats['none'] += 1
 
-			if action in ('new', 'upgrade', 'clear'):
+			if action in ('new', 'header', 'clear'):
 				stats['new'] += 1
 				try:
 					t = taglib.File(flac_path)
@@ -171,10 +187,10 @@ def main() -> None:
 					else:
 						t.tags['LYRICS'] = [lyrics]
 						t.save()
-						if action == 'upgrade':
-							success(f'LRC upgraded with metadata for {title} ({artist})')
+						if action == 'header':
+							logger.info(f'LRC headers updated: {title} ({artist})')
 						else:
-							success(f'{"LRC" if lyric_type == "lrc" else "TXT"} lyrics added for {title} ({artist})')
+							success(f'{"LRC" if lyric_type == "lrc" else "TXT"} lyrics added: {title} ({artist})')
 				except OSError as e:
 					logger.warning(f'Could not save lyrics for {flac_path}: {e}')
 
@@ -182,13 +198,13 @@ def main() -> None:
 				logger.info(
 					f'Progress: {done}/{total} tracks — '
 					f'LRC: {stats["lrc"]} TXT: {stats["txt"]} '
-					f'None: {stats["none"]} New: {stats["new"]}'
+					f'None: {stats["none"]} New/updated: {stats["new"]}'
 				)
 				last_report = time.monotonic()
 
 	logger.info(
 		f'Done — LRC: {stats["lrc"]} TXT: {stats["txt"]} '
-		f'None: {stats["none"]} New: {stats["new"]}'
+		f'None: {stats["none"]} New/updated: {stats["new"]}'
 	)
 
 
