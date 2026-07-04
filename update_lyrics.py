@@ -97,24 +97,56 @@ def _fetch_one(flac_path: str, album_name: str) -> tuple[str, str, str, str, str
 		'album_name':  album_name,
 		'duration':    str(round(length)),
 	}
-	try:
-		data = requests.get(
-			'https://lrclib.net/api/get',
-			params=params,
-			headers={'User-Agent': 'Mozilla/5.0'},
-			timeout=10,
-		).json()
-		if data.get('syncedLyrics'):
-			lrc = re.sub(r'\[(\d{2}:\d{2}\.\d{2})\d\]', r'[\1]', data['syncedLyrics'])
-			if _is_invalid_lrc(lrc):
-				logger.warning(f'Invalid LRC timestamps from lrclib, skipping: {title} ({artist})')
+	data = {}
+	max_retries = 3
+	backoff = 2.0
+	for attempt in range(max_retries + 1):
+		try:
+			response = requests.get(
+				'https://lrclib.net/api/get',
+				params=params,
+				headers={'User-Agent': 'Mozilla/5.0'},
+				timeout=10,
+			)
+			if response.status_code == 200:
+				if attempt > 0:
+					logger.info(f"Successfully fetched lyrics for '{title}' after {attempt} retry/retries")
+				data = response.json()
+				break
+			elif response.status_code == 404:
+				# Normal case: lyrics not found
+				break
+			elif response.status_code == 429:
+				if attempt < max_retries:
+					sleep_time = backoff * (2 ** attempt)
+					logger.info(f"Rate limited (429) fetching lyrics for '{title}', retrying in {sleep_time}s (attempt {attempt + 1}/{max_retries})")
+					time.sleep(sleep_time)
+				else:
+					logger.warning(f"Rate limited (429) fetching lyrics for '{title}', retries exhausted")
 			else:
-				lrc = _apply_headers(lrc, artist, title, album_name, length)
-				return flac_path, artist, title, lrc, 'lrc', 'new'
-		if data.get('plainLyrics') and not existing:
-			return flac_path, artist, title, data['plainLyrics'], 'txt', 'new'
-	except Exception:
-		pass
+				if attempt < max_retries:
+					sleep_time = backoff * (2 ** attempt)
+					logger.info(f"Server error ({response.status_code}) fetching lyrics for '{title}', retrying in {sleep_time}s (attempt {attempt + 1}/{max_retries})")
+					time.sleep(sleep_time)
+				else:
+					logger.warning(f"Server error ({response.status_code}) fetching lyrics for '{title}', retries exhausted")
+		except Exception as e:
+			if attempt < max_retries:
+				sleep_time = backoff * (2 ** attempt)
+				logger.info(f"Request error ({type(e).__name__}) fetching lyrics for '{title}', retrying in {sleep_time}s (attempt {attempt + 1}/{max_retries})")
+				time.sleep(sleep_time)
+			else:
+				logger.warning(f"Request error ({type(e).__name__}) fetching lyrics for '{title}', retries exhausted")
+
+	if data.get('syncedLyrics'):
+		lrc = re.sub(r'\[(\d{2}:\d{2}\.\d{2})\d\]', r'[\1]', data['syncedLyrics'])
+		if _is_invalid_lrc(lrc):
+			logger.warning(f'Invalid LRC timestamps from lrclib, skipping: {title} ({artist})')
+		else:
+			lrc = _apply_headers(lrc, artist, title, album_name, length)
+			return flac_path, artist, title, lrc, 'lrc', 'new'
+	if data.get('plainLyrics') and not existing:
+		return flac_path, artist, title, data['plainLyrics'], 'txt', 'new'
 
 	if had_invalid_lrc:
 		return flac_path, artist, title, '', 'none', 'clear'
