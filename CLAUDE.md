@@ -21,7 +21,6 @@ discogs/
 ├── calculate_dr.py             # Dynamic Range (DR) calculation per track/album
 ├── calculate_fp.py             # AcoustID acoustic fingerprint generation
 ├── convert_opus.py             # FLAC → Opus transcoding
-├── 51check.py                  # Detect 5.1 surround or mono versions
 ├── lyricscloud.py              # Experimental word cloud from lyrics
 ├── log.py                      # Shared structlog setup (imported by all scripts)
 ├── config_demo.py              # Config template (copy to config/config.py)

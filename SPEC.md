@@ -16,7 +16,7 @@ when no argument is supplied.
 |------------|--------|----------------------------------------------------------|
 | `api_key`  | `str`  | Discogs personal access token (required by fixtags.py)   |
 | `flacdir`  | `str`  | Default root of the FLAC library tree                    |
-| `flacroot` | `str`  | Root used by 51check.py (may differ from `flacdir`)      |
+| `flacroot` | `str`  | Root of the organized FLAC library tree (used by bliss)  |
 
 ### FLAC tag names
 
@@ -296,29 +296,6 @@ uv run nzbfix.py [FLAC_DIR]
 **Tags written:** all tags written by the above scripts (see individual entries).
 
 **External tools:** `dot_clean` (macOS), `rsgain`, `ffmpeg`, `fpcalc`.
-
----
-
-### `51check.py` — Channel count checker
-
-**Purpose:** Report albums in the library that are not standard stereo (i.e. 5.1 or mono).
-
-**Usage:**
-
-```
-uv run 51check.py
-```
-
-No command-line arguments; reads `flacroot` from `config.py`.
-
-**Behaviour:**
-
-Walks `flacroot` recursively.  For each new album (detected by title change), logs a
-warning if the channel count is 6 (5.1 surround) or 1 (mono).  Prints total album count on completion.
-
-**Tags read:** `ALBUM` (via music-tag), channel count (via mutagen FLAC stream info)
-
-**Tags written:** none
 
 ---
 
