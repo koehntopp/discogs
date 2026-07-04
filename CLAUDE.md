@@ -135,6 +135,7 @@ from log import logger, success # also import success() for green entries
 
 ### `update_lyrics.py <directory>`
 - Queries lrclib.net for synced (LRC) or plain (TXT) lyrics using 32 parallel workers
+- Includes built-in exponential backoff retries for rate-limiting (HTTP 429) and request/server errors
 - Detects and clears malformed LRC (3-part timestamps like `[100:40:39.00]`)
 - Upgrades existing LRC to version with metadata headers if lrclib provides them
 - Writes to `LYRICS` FLAC tag; newly found/upgraded lyrics logged at SUCCESS (green)
