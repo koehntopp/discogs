@@ -73,12 +73,12 @@ def get_target_path_and_filename(flac_file: str, root_dir: str) -> tuple[str, st
        contains 'artist', 'album', and 'track' keys with sanitised string values.
    """
    metadata = taglib.File(flac_file)
-   track_title = clean(str(metadata.tags['TITLE'][0]))
-   album_title = clean(str(metadata.tags['ALBUM'][0]))
-   artist = clean(str(metadata.tags['ALBUMARTIST'][0]))
+   track_title = clean(str(metadata.tags.get('TITLE', ['Unknown Title'])[0]))
+   album_title = clean(str(metadata.tags.get('ALBUM', ['Unknown Album'])[0]))
+   artist = clean(str(metadata.tags.get('ALBUMARTIST', metadata.tags.get('ARTIST', ['Unknown Artist']))[0]))
    
-   filename = (str(metadata.tags['DISCNUMBER'][0]).zfill(2) + '_' + 
-               str(metadata.tags['TRACKNUMBER'][0]).zfill(2) + '_' + 
+   filename = (str(metadata.tags.get('DISCNUMBER', ['01'])[0]).zfill(2) + '_' + 
+               str(metadata.tags.get('TRACKNUMBER', ['00'])[0]).zfill(2) + '_' + 
                track_title + '.flac')
    path = os.path.join(root_dir, artist, album_title) + '/'
    
