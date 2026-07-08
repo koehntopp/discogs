@@ -67,6 +67,10 @@ def calculate_dr(albumpath: str) -> None:
             logger.info(f'DR {str(dr_song).zfill(2)} → {str(DR).zfill(2)}  {dr_tags.tags["TITLE"][0]}')
             dr_tags.tags["DYNAMIC RANGE"] = [str(DR).zfill(2)]
             dr_tags.save()
+            try:
+               os.utime(fullfilename, None)
+            except Exception as e:
+               logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
             dr_song = DR
             dra_dirty = True
       if dr_song > 0:
@@ -85,6 +89,10 @@ def calculate_dr(albumpath: str) -> None:
             dr_tags = taglib.File(fullfilename)
             dr_tags.tags["ALBUM DYNAMIC RANGE"] = [str(dr_album).zfill(2)]
             dr_tags.save()
+            try:
+               os.utime(fullfilename, None)
+            except Exception as e:
+               logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
          logger.info(f'Album DR updated to {dr_album} for {dr_tags.tags["ALBUM"][0]}')
       else:
          logger.info(f'Album DR {dr_album} unchanged for {dr_tags.tags["ALBUM"][0]}')

@@ -215,10 +215,18 @@ def main() -> None:
 					if action == 'clear':
 						t.tags.pop('LYRICS', None)
 						t.save()
+						try:
+							os.utime(flac_path, None)
+						except Exception as e:
+							logger.warning(f'Could not touch file mtime for {flac_path}: {e}')
 						logger.warning(f'Invalid LRC cleared (no replacement found): {title} ({artist})')
 					else:
 						t.tags['LYRICS'] = [lyrics]
 						t.save()
+						try:
+							os.utime(flac_path, None)
+						except Exception as e:
+							logger.warning(f'Could not touch file mtime for {flac_path}: {e}')
 						if action == 'header':
 							logger.info(f'LRC headers updated: {title} ({artist})')
 						else:

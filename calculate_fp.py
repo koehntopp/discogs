@@ -51,6 +51,10 @@ def calculate_fp(albumpath: str) -> None:
                duration, fingerprint = acoustid.fingerprint_file(fullfilename, maxlength=10000, force_fpcalc=False)
                dr_tags.tags['ACOUSTID FINGERPRINT'] = [fingerprint]
                dr_tags.save()
+               try:
+                  os.utime(fullfilename, None)
+               except Exception as e:
+                  logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
                calculated += 1
             except acoustid.FingerprintGenerationError:
                logger.error(f'Fingerprint could not be calculated: {fullfilename}')

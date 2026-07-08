@@ -218,6 +218,10 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
             tags.tags.update(new_tags)
             try:
                tags.save()
+               try:
+                  os.utime(fullfilename, None)
+               except Exception as e:
+                  logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
                flac_files += 1
             except OSError as e:
                logger.warning(f'Could not save tags for {fullfilename}: {e}')
