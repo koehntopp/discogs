@@ -788,6 +788,7 @@ async def sync_start():
 		rclone_conf = _config_dir() / 'rclone.conf'
 		conf_flag = ['--config', str(rclone_conf)] if rclone_conf.exists() else []
 		cmd = ['rclone'] + conf_flag + clean_flags + [
+			'--checksum',
 			'--exclude', '@eaDir/**',
 			'--log-file', str(rclone_log),
 			'--log-level', 'INFO',
