@@ -796,6 +796,7 @@ async def sync_start():
 		]
 
 		sync_cmd = ['rclone'] + conf_flag + clean_flags + [
+			'--checksum',
 			'--exclude', '@eaDir/**',
 			'--log-file', str(rclone_log),
 			'--log-level', 'INFO',
