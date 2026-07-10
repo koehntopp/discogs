@@ -109,8 +109,6 @@ def _fetch_one(flac_path: str, album_name: str) -> tuple[str, str, str, str, str
 				timeout=10,
 			)
 			if response.status_code == 200:
-				if attempt > 0:
-					logger.info(f"Successfully fetched lyrics for '{title}' after {attempt} retry/retries")
 				data = response.json()
 				break
 			elif response.status_code == 404:
