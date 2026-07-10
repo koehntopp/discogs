@@ -19,7 +19,7 @@ import taglib
 LRC_TIMESTAMP = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]')        # valid: [MM:SS.xx]
 LRC_BAD_TS    = re.compile(r'\[\d{3,}:\d{2}:\d{2}\.\d{2}\]') # invalid: [HH:MM:SS.xx]
 LRC_HEADER_LINE = re.compile(r'^\[(ar|ti|al|by|length|offset):[^\]]*\]\s*$', re.IGNORECASE)
-MAX_WORKERS = 32
+MAX_WORKERS = 8
 
 
 def _is_lrc(text: str) -> bool:
@@ -59,7 +59,7 @@ def flactag(song: taglib.File, tag: str) -> str:
 		return ''
 
 
-def _fetch_one(flac_path: str, album_name: str) -> tuple[str, str, str, str, str, str]:
+def _fetch_one(flac_path: str, album_name: str, session: requests.Session) -> tuple[str, str, str, str, str, str]:
 	"""Read tags, fetch/upgrade lyrics, apply LRC metadata headers from FLAC tags.
 
 	Returns (flac_path, artist, title, lyrics, lyric_type, action) where
@@ -98,11 +98,11 @@ def _fetch_one(flac_path: str, album_name: str) -> tuple[str, str, str, str, str
 		'duration':    str(round(length)),
 	}
 	data = {}
-	max_retries = 3
+	max_retries = 5
 	backoff = 2.0
 	for attempt in range(max_retries + 1):
 		try:
-			response = requests.get(
+			response = session.get(
 				'https://lrclib.net/api/get',
 				params=params,
 				headers={'User-Agent': 'Mozilla/5.0'},
@@ -185,8 +185,12 @@ def main() -> None:
 	done = 0
 	last_report = time.monotonic()
 
+	session = requests.Session()
+	adapter = requests.adapters.HTTPAdapter(pool_connections=MAX_WORKERS, pool_maxsize=MAX_WORKERS)
+	session.mount('https://', adapter)
+
 	with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-		futures = {executor.submit(_fetch_one, path, album): path for path, album in tracks}
+		futures = {executor.submit(_fetch_one, path, album, session): path for path, album in tracks}
 		for future in as_completed(futures):
 			try:
 				flac_path, artist, title, lyrics, lyric_type, action = future.result()
