@@ -117,21 +117,18 @@ def _fetch_one(flac_path: str, album_name: str) -> tuple[str, str, str, str, str
 			elif response.status_code == 429:
 				if attempt < max_retries:
 					sleep_time = backoff * (2 ** attempt)
-					logger.info(f"Rate limited (429) fetching lyrics for '{title}', retrying in {sleep_time}s (attempt {attempt + 1}/{max_retries})")
 					time.sleep(sleep_time)
 				else:
 					logger.warning(f"Rate limited (429) fetching lyrics for '{title}', retries exhausted")
 			else:
 				if attempt < max_retries:
 					sleep_time = backoff * (2 ** attempt)
-					logger.info(f"Server error ({response.status_code}) fetching lyrics for '{title}', retrying in {sleep_time}s (attempt {attempt + 1}/{max_retries})")
 					time.sleep(sleep_time)
 				else:
 					logger.warning(f"Server error ({response.status_code}) fetching lyrics for '{title}', retries exhausted")
 		except Exception as e:
 			if attempt < max_retries:
 				sleep_time = backoff * (2 ** attempt)
-				logger.info(f"Request error ({type(e).__name__}) fetching lyrics for '{title}', retrying in {sleep_time}s (attempt {attempt + 1}/{max_retries})")
 				time.sleep(sleep_time)
 			else:
 				logger.warning(f"Request error ({type(e).__name__}) fetching lyrics for '{title}', retries exhausted")
