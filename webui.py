@@ -800,7 +800,7 @@ async def sync_start():
 			'--exclude', '@eaDir/**',
 			'--log-file', str(rclone_log),
 			'--log-level', 'INFO',
-			'--stats-log-level', 'ERROR',
+			'--stats-log-level', 'NOTICE',
 			'--stats-one-line', '--stats', stats,
 			'--transfers', transfers,
 			'--checkers', checkers,
