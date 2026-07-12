@@ -223,7 +223,8 @@ def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
 	btn = (
 		f'<button class="reprocess-btn" title="Re-run fixtags + bliss for all {escape(row.get("Album Artist",""))} albums" '
 		f'hx-get="/reprocess" hx-vals=\'{{"artist_dir":"{artist_dir}","artist_id":"{artist_id}"}}\' '
-		f'hx-target="#{artist_id}" hx-swap="outerHTML">'
+		f'hx-target="#{artist_id}" hx-swap="outerHTML" '
+		f'onclick="document.getElementById(\'log-btn\')?.click()">'
 		f'<i class="fa-solid fa-arrows-rotate"></i>'
 		f'</button>'
 	)
