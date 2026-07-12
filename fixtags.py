@@ -59,7 +59,8 @@ import taglib
 # import config file containing Discogs api_key (String with API token from https://www.discogs.com/en/settings/developers?lang_alt=en )
 import io
 from mutagen.flac import FLAC, Picture
-from PIL import Image
+from PIL import Image, ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 from config import discogs_api_key as api_key
 try:
