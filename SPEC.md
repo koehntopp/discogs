@@ -55,9 +55,43 @@ tag names consistently:
 | rsgain             | nzbfix         | local    | —                    |
 | ffmpeg             | bliss          | local    | —                    |
 
+## Architectural Decision Records (ADRs)
+
+Detailed architectural standards and design contracts are maintained in `docs/adr/`:
+- [ADR 0001: General Python Conventions and Architectural Rules](file:///Users/koehntopp/src/discogs/docs/adr/0001-general-python-rules.md)
+- [ADR 0002: FLAC Tag Handling Contracts and Metadata Standards](file:///Users/koehntopp/src/discogs/docs/adr/0002-flac-tag-handling.md)
+- [ADR 0003: Web UI Architecture, Process Lifecycle, and JSON Log Streaming](file:///Users/koehntopp/src/discogs/docs/adr/0003-webui-architecture-and-subprocess-management.md)
+
 ---
 
 ## Scripts
+
+---
+
+### `webui.py` — Web Dashboard & Subprocess Controller
+
+**Purpose:** Provide a FastAPI + HTMX dashboard for library inventory browsing, tagger links, DR color indicators, live log streaming, and batch script execution.
+
+**Usage:**
+
+```bash
+uv run webui.py
+```
+
+| Environment Var | Default | Description |
+|-----------------|---------|-------------|
+| `PORT`          | `8000`  | HTTP port for the FastAPI server |
+| `CONFIG_DIR`    | `.`     | Path to directory containing `config.py` and log files |
+| `DISCOGS_CHILD` | *(unset)* | Set to `1` in child subprocesses to skip duplicate log file writes |
+
+**Behaviour:**
+
+1. Serves the album table UI rendered via Jinja2 templates (`templates/index.html`, `templates/albums.html`).
+2. Triggers batch scripts (`fixtags`, `bliss`, `update_lyrics`, `nzbfix`) asynchronously.
+3. Streams child subprocess `sys.stdout` JSON lines directly into the HTMX log modal.
+4. Manages single active child process state (`_current_proc`); handles emergency termination via `POST /log/kill`.
+5. Automatically fetches and caches favicons for up to 5 custom toolbar link buttons to `config_dir/link_favicon_N.ico`.
+6. Provides an in-place Settings modal to edit `config.py` directly from the web browser.
 
 ---
 

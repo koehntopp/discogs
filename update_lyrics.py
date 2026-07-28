@@ -3,22 +3,31 @@
 #   "structlog",
 #   "pytaglib",
 #   "requests",
+#   "rich",
 # ]
 # ///
 
-from log import logger, success
+from log import logger, _console_handler
+from rich.console import Console
+from rich.progress import (
+	Progress,
+	SpinnerColumn,
+	TextColumn,
+	BarColumn,
+	MofNCompleteColumn,
+	TimeRemainingColumn,
+)
 import sys
 import os
 import re
 import time
-from pathlib import Path, PurePosixPath
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 import taglib
 
 LRC_TIMESTAMP = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]')        # valid: [MM:SS.xx]
 LRC_BAD_TS    = re.compile(r'\[\d{3,}:\d{2}:\d{2}\.\d{2}\]') # invalid: [HH:MM:SS.xx]
-LRC_HEADER_LINE = re.compile(r'^\[(ar|ti|al|by|length|offset):[^\]]*\]\s*$', re.IGNORECASE)
+LRC_HEADER_LINE = re.compile(r'^\[(ar|ti|al|by|length|offset):.*\]\s*$', re.IGNORECASE)
 MAX_WORKERS = 8
 
 
@@ -184,62 +193,91 @@ def main() -> None:
 	stats = {'lrc': 0, 'txt': 0, 'none': 0, 'new': 0}
 	done = 0
 	last_report = time.monotonic()
+	is_tty = sys.stderr.isatty()
 
 	session = requests.Session()
 	adapter = requests.adapters.HTTPAdapter(pool_connections=MAX_WORKERS, pool_maxsize=MAX_WORKERS)
 	session.mount('https://', adapter)
 
-	with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-		futures = {executor.submit(_fetch_one, path, album, session): path for path, album in tracks}
-		for future in as_completed(futures):
-			try:
-				flac_path, artist, title, lyrics, lyric_type, action = future.result()
-			except Exception as e:
-				logger.warning(f'Fetch error: {e}')
-				done += 1
-				continue
+	console = Console(stderr=True)
+	progress = Progress(
+		SpinnerColumn(),
+		TextColumn('[bold blue]Progress:'),
+		BarColumn(),
+		MofNCompleteColumn(),
+		TextColumn('• [cyan]LRC:[/cyan] {task.fields[lrc]}'),
+		TextColumn('[green]TXT:[/green] {task.fields[txt]}'),
+		TextColumn('[bright_black]None:[/bright_black] {task.fields[none]}'),
+		TextColumn('[magenta]New:[/magenta] {task.fields[new]}'),
+		TimeRemainingColumn(),
+		console=console,
+		disable=not is_tty,
+	)
 
-			done += 1
-			if lyric_type == 'lrc':
-				stats['lrc'] += 1
-			elif lyric_type == 'txt':
-				stats['txt'] += 1
-			else:
-				stats['none'] += 1
+	orig_stream = _console_handler.stream
+	with progress:
+		if is_tty:
+			_console_handler.stream = sys.stderr
+		try:
+			task_id = progress.add_task('Fetching', total=total, **stats)
+			with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+				futures = {executor.submit(_fetch_one, path, album, session): path for path, album in tracks}
+				for future in as_completed(futures):
+					try:
+						flac_path, artist, title, lyrics, lyric_type, action = future.result()
+					except Exception as e:
+						logger.error(f'Fetch error: {e}')
+						done += 1
+						progress.update(task_id, advance=1, **stats)
+						continue
 
-			if action in ('new', 'header', 'clear'):
-				stats['new'] += 1
-				try:
-					t = taglib.File(flac_path)
-					if action == 'clear':
-						t.tags.pop('LYRICS', None)
-						t.save()
-						try:
-							os.utime(flac_path, None)
-						except Exception as e:
-							logger.warning(f'Could not touch file mtime for {flac_path}: {e}')
-						logger.warning(f'Invalid LRC cleared (no replacement found): {title} ({artist})')
+					done += 1
+					if lyric_type == 'lrc':
+						stats['lrc'] += 1
+					elif lyric_type == 'txt':
+						stats['txt'] += 1
 					else:
-						t.tags['LYRICS'] = [lyrics]
-						t.save()
-						try:
-							os.utime(flac_path, None)
-						except Exception as e:
-							logger.warning(f'Could not touch file mtime for {flac_path}: {e}')
-						if action == 'header':
-							logger.info(f'LRC headers updated: {title} ({artist})')
-						else:
-							success(f'{"LRC" if lyric_type == "lrc" else "TXT"} lyrics added: {title} ({artist})')
-				except OSError as e:
-					logger.warning(f'Could not save lyrics for {flac_path}: {e}')
+						stats['none'] += 1
 
-			if time.monotonic() - last_report >= 10:
-				logger.info(
-					f'Progress: {done}/{total} tracks — '
-					f'LRC: {stats["lrc"]} TXT: {stats["txt"]} '
-					f'None: {stats["none"]} New/updated: {stats["new"]}'
-				)
-				last_report = time.monotonic()
+					if action in ('new', 'header', 'clear'):
+						stats['new'] += 1
+						try:
+							t = taglib.File(flac_path)
+							if action == 'clear':
+								t.tags.pop('LYRICS', None)
+								t.save()
+								try:
+									os.utime(flac_path, None)
+								except Exception as e:
+									logger.warning(f'Could not touch file mtime for {flac_path}: {e}')
+								logger.warning(f'Invalid LRC cleared (no replacement found): {title} ({artist})')
+							else:
+								t.tags['LYRICS'] = [lyrics]
+								t.save()
+								try:
+									os.utime(flac_path, None)
+								except Exception as e:
+									logger.warning(f'Could not touch file mtime for {flac_path}: {e}')
+								if action == 'header':
+									logger.info(f'LRC headers updated: {title} ({artist})')
+								else:
+									kind = 'LRC' if lyric_type == 'lrc' else 'TXT'
+									logger.info(f'{kind} lyrics added: {title} ({artist})')
+						except OSError as e:
+							logger.error(f'Could not save lyrics for {flac_path}: {e}')
+
+					progress.update(task_id, advance=1, **stats)
+
+					if not is_tty and time.monotonic() - last_report >= 5:
+						logger.info(
+							f'Progress: {done}/{total} tracks — '
+							f'LRC: {stats["lrc"]} TXT: {stats["txt"]} '
+							f'None: {stats["none"]} New/updated: {stats["new"]}'
+						)
+						last_report = time.monotonic()
+		finally:
+			if is_tty:
+				_console_handler.stream = orig_stream
 
 	logger.info(
 		f'Done — LRC: {stats["lrc"]} TXT: {stats["txt"]} '
