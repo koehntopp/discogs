@@ -59,6 +59,8 @@ else:
 _root = logging.getLogger()
 _root.addHandler(_console_handler)
 _root.setLevel(logging.INFO)
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
+logging.getLogger('PIL').setLevel(logging.WARNING)
 
 if not os.environ.get('DISCOGS_CHILD'):
 	# Skip file logging in child processes spawned by webui — the parent captures
