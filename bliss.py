@@ -259,26 +259,25 @@ def checkMP3() -> None:
                    continue  # Skip if no MP3 files found
                
                firstflac = firstmp3.replace(mp3root, flacroot).replace('.mp3', '.flac')
-               mp3time = time.strftime('%Y%m%d', time.localtime(os.path.getmtime(firstmp3)))
-               flactime = "00000000"
+               mp3_mtime = os.path.getmtime(firstmp3)
+               flac_mtime = 0.0
 
                try:
                    if os.path.isfile(firstflac):
-                       # get the timestamp for the flac file
-                       flactime = time.strftime('%Y%m%d', time.localtime(os.path.getmtime(firstflac)))
+                       flac_mtime = os.path.getmtime(firstflac)
                        metadata = taglib.File(firstflac)
                    else:
                        # if we don't have FLAC, read MP3 metadata before deleting
                        metadata = taglib.File(firstmp3)
                        
-                   salbumtitle = clean(str(metadata.tags['ALBUM'][0]))
-                   sartist = clean(str(metadata.tags['ALBUMARTIST'][0]))
+                   salbumtitle = clean(str(metadata.tags.get('ALBUM', ['Unknown Album'])[0]))
+                   sartist = clean(str(metadata.tags.get('ALBUMARTIST', metadata.tags.get('ARTIST', ['Unknown Artist']))[0]))
                    
                    if not os.path.isfile(firstflac):
                        logger.warning(f'MP3 but no FLAC - deleting {sartist} - {salbumtitle}')
                        shutil.rmtree(mp3dir)
-                   elif mp3time < flactime:
-                       logger.warning(f'FLAC dir newer - deleting {sartist} - {salbumtitle}')
+                   elif flac_mtime > mp3_mtime:
+                       logger.warning(f'FLAC file newer - deleting {sartist} - {salbumtitle}')
                        shutil.rmtree(mp3dir)
 
                except Exception as e:

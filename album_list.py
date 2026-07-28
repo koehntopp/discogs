@@ -136,7 +136,11 @@ def main() -> None:
 
 	for d in flac_dirs:
 		try:
-			mtime = os.path.getmtime(d)
+			flacs = sorted(f for f in os.listdir(d) if f.endswith('.flac'))
+			if not flacs:
+				continue
+			first_flac = str(PurePosixPath(d) / flacs[0])
+			mtime = os.path.getmtime(first_flac)
 		except OSError:
 			continue
 		entry = cache.get(d)
