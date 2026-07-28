@@ -5,13 +5,13 @@
 #   "pandas",
 #   "matplotlib",
 #   "mutagen",
-#   "pillow",
 # ]
 # ///
 
 from log import logger
 import os
 import sys
+import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path, PurePosixPath
 
@@ -19,10 +19,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import pandas as pd
-import io
 import taglib
 from mutagen.flac import FLAC
-from PIL import Image
 
 ALBUM_TAGS = [
 	'ALBUMARTIST', 'ALBUM', 'ALBUM DYNAMIC RANGE', 'ORIGINAL_TITLE',
@@ -53,37 +51,28 @@ def cover_art_dimensions(flac_path: str) -> str:
 	try:
 		audio = FLAC(flac_path)
 		if audio.pictures:
-			img = Image.open(io.BytesIO(audio.pictures[0].data))
-			return f'{img.width}x{img.height}'
+			pic = audio.pictures[0]
+			return f'{pic.width}x{pic.height}'
 	except Exception:
 		pass
 	return ''
 
 
-def read_album(directory: str, lyrics_dir: Path | None = None) -> dict | None:
-	"""Read album tags from the first FLAC; write per-track lyrics to lyrics_dir if given."""
+def read_album(directory: str) -> dict | None:
+	"""Read album tags from the first FLAC file in the directory."""
 	flacs = sorted(f for f in os.listdir(directory) if f.endswith('.flac'))
 	if not flacs:
 		return None
-	album_result = None
-	for i, fname in enumerate(flacs):
-		flac_path = str(PurePosixPath(directory) / fname)
-		try:
-			with taglib.File(flac_path) as f:
-				tags = f.tags
-		except Exception:
-			continue
-		if i == 0:
-			album_result = {tag: (tags.get(tag, [''])[0] or '') for tag in ALBUM_TAGS}
-			album_result['COVER_ART'] = cover_art_dimensions(flac_path)
-			album_result['_DIRECTORY_PATH'] = directory
-		if lyrics_dir is not None:
-			discogs_id = (tags.get('DISCOGS_RELEASE_ID') or [''])[0].strip()
-			lyrics = (tags.get('LYRICS') or [''])[0].strip()
-			if discogs_id and lyrics:
-				track = (tags.get('TRACKNUMBER') or ['0'])[0].split('/')[0].zfill(2)
-				ext = 'lrc' if lyrics.startswith('[') else 'txt'
-				(lyrics_dir / f'{discogs_id}_{track}.{ext}').write_text(lyrics, encoding='utf-8')
+	flac_path = str(PurePosixPath(directory) / flacs[0])
+	try:
+		with taglib.File(flac_path) as f:
+			tags = f.tags
+	except Exception:
+		return None
+
+	album_result = {tag: (tags.get(tag, [''])[0] or '') for tag in ALBUM_TAGS}
+	album_result['COVER_ART'] = cover_art_dimensions(flac_path)
+	album_result['_DIRECTORY_PATH'] = directory
 	return album_result
 
 
@@ -133,21 +122,54 @@ def main() -> None:
 
 	data_dir = Path(os.environ.get('CONFIG_DIR') or getattr(__import__('config'), 'config_dir', '.'))
 	data_dir.mkdir(parents=True, exist_ok=True)
-	lyrics_dir = data_dir / 'lyrics'
-	lyrics_dir.mkdir(parents=True, exist_ok=True)
+	cache_file = data_dir / 'album_cache.json'
 
-	workers = min(32, (os.cpu_count() or 4) * 4)
-	albums = []
-	with ThreadPoolExecutor(max_workers=workers) as pool:
-		futures = {pool.submit(read_album, d, lyrics_dir): d for d in flac_dirs}
-		done = 0
-		for fut in as_completed(futures):
-			done += 1
-			result = fut.result()
-			if result:
-				albums.append(result)
-			if done % 50 == 0 or done == len(flac_dirs):
-				logger.info(f"{done}/{len(flac_dirs)} scanned, {len(albums)} albums")
+	cache = {}
+	if cache_file.exists():
+		try:
+			cache = json.loads(cache_file.read_text(encoding='utf-8'))
+		except Exception as e:
+			logger.warning(f"Could not load album cache, rebuilding: {e}")
+
+	new_cache = {}
+	to_scan = []
+
+	for d in flac_dirs:
+		try:
+			mtime = os.path.getmtime(d)
+		except OSError:
+			continue
+		entry = cache.get(d)
+		if entry and entry.get('mtime') == mtime and 'data' in entry:
+			new_cache[d] = entry
+		else:
+			to_scan.append((d, mtime))
+
+	cache_hits = len(flac_dirs) - len(to_scan)
+	if cache_hits > 0:
+		logger.info(f"Using cached metadata for {cache_hits}/{len(flac_dirs)} albums")
+
+	albums = [entry['data'] for entry in new_cache.values()]
+
+	if to_scan:
+		workers = min(32, (os.cpu_count() or 4) * 4)
+		with ThreadPoolExecutor(max_workers=workers) as pool:
+			futures = {pool.submit(read_album, d): (d, mtime) for d, mtime in to_scan}
+			done = 0
+			for fut in as_completed(futures):
+				d, mtime = futures[fut]
+				done += 1
+				result = fut.result()
+				if result:
+					albums.append(result)
+					new_cache[d] = {'mtime': mtime, 'data': result}
+				if done % 50 == 0 or done == len(to_scan):
+					logger.info(f"Scanned {done}/{len(to_scan)} modified albums")
+
+	try:
+		cache_file.write_text(json.dumps(new_cache, indent=2), encoding='utf-8')
+	except Exception as e:
+		logger.warning(f"Could not save album cache: {e}")
 
 	df = pd.DataFrame(albums)
 	save_csv(df, data_dir / 'albums.csv')

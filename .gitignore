@@ -24,3 +24,4 @@ koehntopp@*
 *.log
 rclone.log
 lyrics/
+album_cache.json

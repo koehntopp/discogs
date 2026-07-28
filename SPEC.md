@@ -4,6 +4,12 @@ This document describes the command-line interface, configuration, tag contracts
 data flows for every script in this repository.
 
 ---
+## Agent Guidelines & Approval Workflow
+
+- **Mandatory Implementation Plans**: You MUST create an `implementation_plan.md` artifact for any change, regardless of how minor or trivial it seems. Do not skip the planning phase for simple tweaks or quick bug fixes.
+- **No Unapproved Edits**: You are strictly prohibited from modifying any source code files, configurations, or running write/exec commands until the user has explicitly approved the implementation plan.
+- **Discuss First**: Always discuss your proposed design choices with the user and wait for approval before shifting from the planning/research phase to the execution phase.
+
 
 ## Common conventions
 
@@ -61,6 +67,7 @@ Detailed architectural standards and design contracts are maintained in `docs/ad
 - [ADR 0001: General Python Conventions and Architectural Rules](file:///Users/koehntopp/src/discogs/docs/adr/0001-general-python-rules.md)
 - [ADR 0002: FLAC Tag Handling Contracts and Metadata Standards](file:///Users/koehntopp/src/discogs/docs/adr/0002-flac-tag-handling.md)
 - [ADR 0003: Web UI Architecture, Process Lifecycle, and JSON Log Streaming](file:///Users/koehntopp/src/discogs/docs/adr/0003-webui-architecture-and-subprocess-management.md)
+- [ADR 0004: Album List Caching and Direct Lyrics Export Architecture](file:///Users/koehntopp/src/discogs/docs/adr/0004-performance-caching-and-lyrics-export-architecture.md)
 
 ---
 

@@ -21,6 +21,7 @@ import sys
 import os
 import re
 import time
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 import taglib
@@ -68,22 +69,24 @@ def flactag(song: taglib.File, tag: str) -> str:
 		return ''
 
 
-def _fetch_one(flac_path: str, album_name: str, session: requests.Session) -> tuple[str, str, str, str, str, str]:
+def _fetch_one(flac_path: str, album_name: str, session: requests.Session) -> tuple[str, str, str, str, str, str, str, str]:
 	"""Read tags, fetch/upgrade lyrics, apply LRC metadata headers from FLAC tags.
 
-	Returns (flac_path, artist, title, lyrics, lyric_type, action) where
+	Returns (flac_path, artist, title, lyrics, lyric_type, action, discogs_id, track) where
 	action is 'new', 'header', 'upgrade', 'clear', 'keep', or 'none'.
 	"""
 	try:
 		tags = taglib.File(flac_path)
 	except OSError as e:
 		logger.warning(f'Skipping unreadable file {flac_path}: {e}')
-		return flac_path, '', '', '', 'none', 'none'
+		return flac_path, '', '', '', 'none', 'none', '', '00'
 
-	artist   = flactag(tags, 'ARTIST')
-	title    = flactag(tags, 'TITLE')
-	length   = tags.length
-	existing = flactag(tags, 'LYRICS').strip()
+	artist     = flactag(tags, 'ARTIST')
+	title      = flactag(tags, 'TITLE')
+	length     = tags.length
+	existing   = flactag(tags, 'LYRICS').strip()
+	discogs_id = flactag(tags, 'DISCOGS_RELEASE_ID').strip()
+	track      = flactag(tags, 'TRACKNUMBER').split('/')[0].zfill(2)
 
 	had_invalid_lrc = bool(existing and _is_invalid_lrc(existing))
 	if had_invalid_lrc:
@@ -96,8 +99,8 @@ def _fetch_one(flac_path: str, album_name: str, session: requests.Session) -> tu
 	if existing_is_lrc:
 		with_headers = _apply_headers(existing, artist, title, album_name, length)
 		if with_headers != existing:
-			return flac_path, artist, title, with_headers, 'lrc', 'header'
-		return flac_path, artist, title, existing, 'lrc', 'keep'
+			return flac_path, artist, title, with_headers, 'lrc', 'header', discogs_id, track
+		return flac_path, artist, title, existing, 'lrc', 'keep', discogs_id, track
 
 	# No LRC yet — fetch from lrclib
 	params = {
@@ -148,13 +151,13 @@ def _fetch_one(flac_path: str, album_name: str, session: requests.Session) -> tu
 			logger.warning(f'Invalid LRC timestamps from lrclib, skipping: {title} ({artist})')
 		else:
 			lrc = _apply_headers(lrc, artist, title, album_name, length)
-			return flac_path, artist, title, lrc, 'lrc', 'new'
+			return flac_path, artist, title, lrc, 'lrc', 'new', discogs_id, track
 	if data.get('plainLyrics') and not existing:
-		return flac_path, artist, title, data['plainLyrics'], 'txt', 'new'
+		return flac_path, artist, title, data['plainLyrics'], 'txt', 'new', discogs_id, track
 
 	if had_invalid_lrc:
-		return flac_path, artist, title, '', 'none', 'clear'
-	return flac_path, artist, title, existing, ('txt' if existing else 'none'), 'keep'
+		return flac_path, artist, title, '', 'none', 'clear', discogs_id, track
+	return flac_path, artist, title, existing, ('txt' if existing else 'none'), 'keep', discogs_id, track
 
 
 def _collect_tracks(flacdir: str) -> list[tuple[str, str]]:
@@ -195,6 +198,10 @@ def main() -> None:
 	last_report = time.monotonic()
 	is_tty = sys.stderr.isatty()
 
+	data_dir = Path(os.environ.get('CONFIG_DIR') or getattr(__import__('config'), 'config_dir', '.'))
+	lyrics_dir = data_dir / 'lyrics'
+	lyrics_dir.mkdir(parents=True, exist_ok=True)
+
 	session = requests.Session()
 	adapter = requests.adapters.HTTPAdapter(pool_connections=MAX_WORKERS, pool_maxsize=MAX_WORKERS)
 	session.mount('https://', adapter)
@@ -224,7 +231,7 @@ def main() -> None:
 				futures = {executor.submit(_fetch_one, path, album, session): path for path, album in tracks}
 				for future in as_completed(futures):
 					try:
-						flac_path, artist, title, lyrics, lyric_type, action = future.result()
+						flac_path, artist, title, lyrics, lyric_type, action, discogs_id, track = future.result()
 					except Exception as e:
 						logger.error(f'Fetch error: {e}')
 						done += 1
@@ -265,6 +272,19 @@ def main() -> None:
 									logger.info(f'{kind} lyrics added: {title} ({artist})')
 						except OSError as e:
 							logger.error(f'Could not save lyrics for {flac_path}: {e}')
+
+					if discogs_id:
+						lrc_file = lyrics_dir / f'{discogs_id}_{track}.lrc'
+						txt_file = lyrics_dir / f'{discogs_id}_{track}.txt'
+						if action == 'clear' or not lyrics:
+							lrc_file.unlink(missing_ok=True)
+							txt_file.unlink(missing_ok=True)
+						elif lyrics:
+							ext = 'lrc' if lyric_type == 'lrc' or lyrics.startswith('[') else 'txt'
+							target_file = lyrics_dir / f'{discogs_id}_{track}.{ext}'
+							other_file = txt_file if ext == 'lrc' else lrc_file
+							other_file.unlink(missing_ok=True)
+							target_file.write_text(lyrics, encoding='utf-8')
 
 					progress.update(task_id, advance=1, **stats)
 
