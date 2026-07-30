@@ -7,24 +7,26 @@
 # ]
 # ///
 
-from log import logger, _console_handler
+import os
+import re
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+
+import requests
+import taglib
 from rich.console import Console
 from rich.progress import (
+	BarColumn,
+	MofNCompleteColumn,
 	Progress,
 	SpinnerColumn,
 	TextColumn,
-	BarColumn,
-	MofNCompleteColumn,
 	TimeRemainingColumn,
 )
-import sys
-import os
-import re
-import time
-from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import requests
-import taglib
+
+from log import _console_handler, logger
 
 LRC_TIMESTAMP = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]')        # valid: [MM:SS.xx]
 LRC_BAD_TS    = re.compile(r'\[\d{3,}:\d{2}:\d{2}\.\d{2}\]') # invalid: [HH:MM:SS.xx]
@@ -102,11 +104,13 @@ def _fetch_one(flac_path: str, album_name: str, session: requests.Session) -> tu
 			return flac_path, artist, title, with_headers, 'lrc', 'header', discogs_id, track
 		return flac_path, artist, title, existing, 'lrc', 'keep', discogs_id, track
 
+	clean_album = flactag(tags, 'ALBUM_MASTER_TITLE') or album_name.split(' [')[0].strip()
+
 	# No LRC yet — fetch from lrclib
 	params = {
 		'artist_name': artist,
 		'track_name':  title,
-		'album_name':  album_name,
+		'album_name':  clean_album,
 		'duration':    str(round(length)),
 	}
 	data = {}

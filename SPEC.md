@@ -26,30 +26,43 @@ when no argument is supplied.
 
 ### FLAC tag names
 
-Tags are stored uppercase in Vorbis comment fields.  The scripts use the following
+Tags are stored uppercase in Vorbis comment fields. The scripts use the following
 tag names consistently:
 
-| Tag                    | Set by        | Read by                          |
-|------------------------|---------------|----------------------------------|
-| `ALBUMARTIST`          | ripping tool  | album_list, bliss, fixtags       |
-| `ALBUM`                | fixtags       | album_list, bliss, update_lyrics |
-| `ORIGINAL_TITLE`       | fixtags       | update_lyrics                    |
-| `DISCOGS_RELEASE_ID`   | ripping tool  | fixtags, update_lyrics           |
-| `MUSICBRAINZ_ALBUMID`  | ripping tool  | album_list                       |
-| `DATE`                 | fixtags       | album_list                       |
-| `RELEASEDATE`          | fixtags       | album_list                       |
-| `ORIGINALDATE`         | fixtags       | album_list                       |
-| `ORIGINALRELEASEDATE`  | fixtags       | —                                |
-| `CATALOGNUMBER`        | ripping tool  | album_list                       |
-| `SUBTITLE`             | ripping tool  | fixtags (album description)      |
-| `DYNAMIC RANGE`        | calculate_dr  | calculate_dr                     |
-| `ALBUM DYNAMIC RANGE`  | calculate_dr  | fixtags (in ALBUM tag string)    |
-| `ACOUSTID FINGERPRINT` | calculate_fp  | calculate_fp                     |
-| `LYRICS`               | update_lyrics | lyricscloud                      |
-| `TITLE`                | ripping tool  | bliss, update_lyrics             |
-| `TRACKNUMBER`          | ripping tool  | bliss                            |
-| `DISCNUMBER`           | ripping tool  | bliss                            |
-| `ARTIST`               | ripping tool  | update_lyrics                    |
+| Tag                     | Set by        | Read by                          |
+|-------------------------|---------------|----------------------------------|
+| `ALBUMARTIST`           | ripping tool  | album_list, bliss, fixtags       |
+| `ALBUM`                 | fixtags       | album_list, bliss, update_lyrics |
+| `DISCOGS_RELEASE_ID`    | ripping tool  | fixtags, update_lyrics           |
+| `MUSICBRAINZ_ALBUMID`   | ripping tool  | album_list                       |
+| `DATE` / `RELEASEDATE`  | fixtags       | album_list                       |
+| `ORIGINALDATE`          | fixtags       | album_list                       |
+| `ORIGINALRELEASEDATE`   | fixtags       | —                                |
+| `CATALOGNUMBER`         | ripping tool  | album_list                       |
+| `SUBTITLE`              | ripping tool  | fixtags (album description)      |
+| `DYNAMIC_RANGE`         | calculate_dr  | calculate_dr (replaces DYNAMIC RANGE) |
+| `ALBUM_DR`              | calculate_dr  | fixtags (replaces ALBUM DYNAMIC RANGE) |
+| `ACOUSTID_FINGERPRINT`  | calculate_fp  | calculate_fp (replaces ACOUSTID FINGERPRINT) |
+| `LYRICS`                | update_lyrics | lyricscloud                      |
+| `TITLE`                 | ripping tool  | bliss, update_lyrics             |
+| `TRACKNUMBER`           | ripping tool  | bliss                            |
+| `DISCNUMBER`            | ripping tool  | bliss                            |
+| `ARTIST`                | ripping tool  | update_lyrics                    |
+| **Structured Metadata:**|               |                                  |
+| `ALBUM_MASTER_TITLE`    | fixtags       | album_list, bliss, update_lyrics |
+| `ALBUM_MASTER_YEAR`     | fixtags       | —                                |
+| `ALBUM_RELEASE_TITLE`   | fixtags       | —                                |
+| `ALBUM_RELEASE_YEAR`    | fixtags       | —                                |
+| `ALBUM_MAX_RESOLUTION`  | fixtags       | —                                |
+| `ALBUM_EDITION`         | fixtags       | —                                |
+| `ALBUM_FORMAT`          | fixtags       | —                                |
+| `ALBUM_RELEASE_COUNTRY` | fixtags       | —                                |
+| `ALBUM_RELEASE_LABEL`   | fixtags       | —                                |
+| `ALBUM_TITLE_OVERRIDE`  | user          | fixtags (manual override)        |
+| `ALBUM_ARTIST_OVERRIDE` | user          | fixtags (manual override)        |
+
+> [!NOTE]
+> Tags containing spaces (e.g. `DYNAMIC RANGE`, `ALBUM DYNAMIC RANGE`, `ACOUSTID FINGERPRINT`) are deprecated to adhere to the Vorbis Comment standard of `[A-Z0-9_]` character limits. Existing files will be transitioned during script runs.
 
 ### External services
 
@@ -163,14 +176,32 @@ At least one of the two must be provided; otherwise help is printed.
 4. Writes the following tags to every FLAC file in the directory if any value changed:
    - `RELEASEDATE`, `DATE` — year of this specific pressing
    - `ORIGINALDATE`, `ORIGINALRELEASEDATE` — year of the original master release
-   - `ALBUM` — formatted as `"<title> [<year> <desc> <kHz>DR<dr>]"`
-   - `ORIGINAL_TITLE` — canonical Discogs title
+   - `ALBUM_MASTER_TITLE` — canonical master release title from Discogs
+   - `ALBUM_MASTER_YEAR` — original release year
+   - `ALBUM_RELEASE_TITLE` — specific release title
+   - `ALBUM_RELEASE_YEAR` — pressing release year
+   - `ALBUM_EDITION` — edition information (e.g. Deluxe Edition, Remaster)
+   - `ALBUM_RELEASE_COUNTRY` — pressing release country
+   - `ALBUM_RELEASE_LABEL` — pressing record label
+   - `ALBUM_FORMAT` — format of the audio source (default "CD")
+   - `ALBUM_MAX_RESOLUTION` — maximum sample rate of tracks in the folder (e.g., 44.1kHz, 96kHz)
+   - `ALBUM_DR` — album dynamic range score (mirrored from ALBUM DYNAMIC RANGE)
+   - `ALBUM` — formatted display title for players:
+     *   If `ALBUM_EDITION` is absent: `"<title> [<year> <format>]"`
+     *   If `ALBUM_EDITION` is present: `"<title> [<year> <format> (<edition>)]"` (extra space and parentheses are added only if there is an edition).
+     *   *Title*: Taken from `ALBUM_TITLE_OVERRIDE` if present, otherwise `ALBUM_MASTER_TITLE`.
+     *   *Year*: Taken from `ALBUM_RELEASE_YEAR`.
+     *   *Format*: Taken from `ALBUM_FORMAT` (defaults to "CD").
+     *   *Example (no edition):* `Brothers in Arms [2025 Blu-ray]`
+     *   *Example (with edition):* `Brothers in Arms [2025 Blu-ray (40th Anniversary Edition)]`
 
 **Tags read:** `DISCOGS_RELEASE_ID`, `ORIGINAL FILENAME`, `DATE`, `SUBTITLE`,
-`ALBUM DYNAMIC RANGE`
+`ALBUM_DR` (or deprecated `ALBUM DYNAMIC RANGE`), `ALBUM_TITLE_OVERRIDE`, `ALBUM_ARTIST_OVERRIDE`
 
 **Tags written:** `RELEASEDATE`, `DATE`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`,
-`ALBUM`, `ORIGINAL_TITLE`
+`ALBUM`, `ALBUM_MASTER_TITLE`, `ALBUM_MASTER_YEAR`, `ALBUM_RELEASE_TITLE`,
+`ALBUM_RELEASE_YEAR`, `ALBUM_EDITION`, `ALBUM_RELEASE_COUNTRY`, `ALBUM_RELEASE_LABEL`,
+`ALBUM_FORMAT`, `ALBUM_MAX_RESOLUTION`, `ALBUM_DR`
 
 **External service:** Discogs REST API — requires `api_key` in `config.py`.
 

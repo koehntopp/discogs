@@ -23,9 +23,14 @@ We establish the following binding rules and standards for all FLAC tag handling
 * **Standard Tag Inventory**:
   * **User Anchor Tag (Read-Only by scripts)**: `DISCOGS_RELEASE_ID` (anchors album to exact Discogs version).
   * **Ripping/Tagger Metadata (Read-Only by scripts)**: `ALBUMARTIST`, `ARTIST`, `TITLE`, `TRACKNUMBER`, `DISCNUMBER`, `CATALOGNUMBER`, `MUSICBRAINZ_ALBUMID`, `SUBTITLE`.
-  * **Enriched Metadata (Managed by `fixtags.py`)**: `ALBUM`, `DATE`, `RELEASEDATE`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`, `ORIGINAL_TITLE`.
-  * **Calculated Metrics (Managed by `calculate_dr.py` & `calculate_fp.py`)**: `DYNAMIC RANGE`, `ALBUM DYNAMIC RANGE`, `ACOUSTID FINGERPRINT`.
+  * **Enriched Metadata (Managed by `fixtags.py`)**: `ALBUM`, `DATE`, `RELEASEDATE`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`.
+  * **Structured Custom Metadata (Managed by `fixtags.py`)**: `ALBUM_MASTER_TITLE`, `ALBUM_MASTER_YEAR`, `ALBUM_RELEASE_TITLE`, `ALBUM_RELEASE_YEAR`, `ALBUM_MAX_RESOLUTION`, `ALBUM_EDITION`, `ALBUM_FORMAT`, `ALBUM_RELEASE_COUNTRY`, `ALBUM_RELEASE_LABEL`.
+  * **User Overrides (Optional, read by scripts)**: `ALBUM_TITLE_OVERRIDE`, `ALBUM_ARTIST_OVERRIDE`.
+  * **Calculated Metrics (Managed by `calculate_dr.py` & `calculate_fp.py`)**: `DYNAMIC_RANGE` (replaces DYNAMIC RANGE), `ALBUM_DR` (replaces ALBUM DYNAMIC RANGE), `ACOUSTID_FINGERPRINT` (replaces ACOUSTID FINGERPRINT).
   * **Lyrics (Managed by `update_lyrics.py`)**: `LYRICS`.
+
+> [!WARNING]
+> Tag keys containing spaces (such as `DYNAMIC RANGE`) violate the Vorbis Comment specification and must be read with fallback checks, and rewritten using standard compliant keys containing underscores (e.g. `DYNAMIC_RANGE`).
 
 ### 2. User Tag Authority & Non-Destructive Invariant
 * `DISCOGS_RELEASE_ID` is the authoritative anchor for release matching. If missing from an album directory, scripts must skip metadata enrichment for that directory.
@@ -33,10 +38,14 @@ We establish the following binding rules and standards for all FLAC tag handling
 
 ### 3. Album Tag Formatting (`ALBUM`)
 * `fixtags.py` normalizes the `ALBUM` tag string using a structured format:
-  ```text
-  "<title> [<year> <desc> <kHz>DR<dr>]"
-  ```
-  Example: `Vulture Culture [1984 Release 44.1kHz DR12]`
+  * If `ALBUM_EDITION` is absent: `"<title> [<year> <format>]"`
+  * If `ALBUM_EDITION` is present: `"<title> [<year> <format> (<edition>)]"` (extra space and parentheses added only when an edition is specified).
+  * **Title source priority:** `ALBUM_TITLE_OVERRIDE` $\rightarrow$ `ALBUM_MASTER_TITLE`.
+  * **Year source:** `ALBUM_RELEASE_YEAR`.
+  * **Format source:** `ALBUM_FORMAT` (defaults to "CD").
+  * **Edition source:** `ALBUM_EDITION`.
+  * Example (no edition): `Brothers in Arms [2025 Blu-ray]`
+  * Example (with edition): `Brothers in Arms [2025 Blu-ray (40th Anniversary Edition)]`
 * `ALBUM` tag updates must only be written to FLAC files if the computed string actually differs from the existing tag value, avoiding unnecessary disk writes.
 
 ### 4. Lyrics Tag Management (`LYRICS`)

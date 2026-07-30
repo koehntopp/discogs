@@ -15,12 +15,15 @@
 
 from __future__ import annotations
 
-import os as _os, sys as _sys
+import os as _os
+import sys as _sys
+
 if _os.environ.get('PREINSTALL_ONLY'):
 	_sys.exit(0)
 
 import re
 import subprocess
+
 
 def _relay_child_line(prefix: str, line: str) -> None:
 	"""Parse a JSON log line from a child process and re-log just the event."""
@@ -38,25 +41,25 @@ def _relay_child_line(prefix: str, line: str) -> None:
 			getattr(logger, level, logger.info)(f'{prefix}: {event}')
 	except (json.JSONDecodeError, ValueError):
 		logger.info(f'{prefix}: {line}')
-import sys
 import os
+import sys
 import time
+from datetime import datetime
 from html import escape
 from pathlib import Path
-from datetime import datetime
 
 # Allow config.py to live in CONFIG_DIR (e.g. /config in Docker)
 _config_dir = os.environ.get('CONFIG_DIR')
 if _config_dir and _config_dir not in sys.path:
 	sys.path.insert(0, _config_dir)
 
-from log import logger, success
-
 import pandas as pd
 import uvicorn
-from fastapi import FastAPI, Form, Query, Request
-from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse, Response
+from fastapi import FastAPI, Query, Request
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+
+from log import logger, success
 
 SCRIPTS_DIR = Path(__file__).parent
 
@@ -130,7 +133,7 @@ def _cache_update(new_rows: list[dict], drop_dirs: set[str]) -> None:
 	except Exception as e:
 		logger.error(f'cache write: {e}')
 
-COLUMNS = ['Album Artist', 'Album', 'DR', 'Original Date', 'Release Date', 'Catalog', 'Cover Art', 'Version']
+COLUMNS = ['Album Artist', 'Album', 'DR', 'Original Date', 'Release Date', 'Catalog', 'Cover Art', 'Format', 'Edition']
 
 
 def dr_class(dr: str) -> str:
@@ -247,6 +250,10 @@ def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
 		f'style="color:#888;font-size:11px;text-decoration:none;margin-left:4px;">'
 		f'<i class="fa-solid fa-wave-square"></i></a>'
 	) if dr else ''
+	fmt = escape(row.get("Format", ""))
+	ed = escape(row.get("Edition", ""))
+	if not fmt and not ed:
+		fmt = escape(row.get("Version", ""))
 	return (
 		f'<tr class="{"even" if row_index % 2 else "odd"}">'
 		f'<td class="reprocess">{btn}</td>'
@@ -258,7 +265,8 @@ def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
 		f'{discogs_cell}{mb_cell}'
 		f'<td>{escape(row.get("Catalog",""))}</td>'
 		f'<td class="cover-art">{_cover_art_cell(row)}</td>'
-		f'<td class="version">{escape(row.get("Version",""))}</td>'
+		f'<td class="format">{fmt}</td>'
+		f'<td class="edition">{ed}</td>'
 		f'</tr>'
 	)
 
@@ -555,7 +563,8 @@ async def albums(
 
 def _start_album_scan(label: str = 'refresh') -> None:
 	"""Launch album_list.py in a background thread; sets _refresh_done on completion."""
-	import threading, shutil
+	import shutil
+	import threading
 	try:
 		from config import flacroot
 	except Exception as e:
@@ -594,6 +603,7 @@ async def refresh_start():
 @app.get('/reprocess', response_class=HTMLResponse)
 async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 	import os
+
 	from mutagen.flac import FLAC
 
 	def clean(text: str) -> str:
@@ -634,6 +644,7 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 		row = {DISPLAY[t]: (raw.get(t, [''])[0] if isinstance(raw.get(t), list) else raw.get(t, '') or '') for t in ALBUM_TAGS}
 		try:
 			import io
+
 			from PIL import Image
 			if audio.pictures:
 				img = Image.open(io.BytesIO(audio.pictures[0].data))
@@ -723,6 +734,7 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 @app.get('/lyrics', response_class=HTMLResponse)
 async def lyrics_run():
 	import threading
+
 	from config import flacroot
 	logger.info('lyrics: starting update')
 	proc = _set_proc(subprocess.Popen(
@@ -1187,6 +1199,7 @@ async def settings_save(request: Request):
 def _cache_link_favicon(n: int, url: str) -> None:
 	"""Fetch favicon for link button n from url and save to config dir."""
 	from urllib.parse import urlparse
+
 	import requests as _req
 	parsed = urlparse(url)
 	for path in ('/favicon.ico', '/favicon.png', '/favicon-32x32.png', '/favicon-16x16.png'):
@@ -1212,7 +1225,6 @@ def _cache_link_favicon(n: int, url: str) -> None:
 
 
 def _render_link_buttons() -> str:
-	from urllib.parse import urlparse
 	cfg = config_read()
 	buttons = []
 	for i in range(1, 6):
@@ -1257,7 +1269,6 @@ async def link_buttons():
 
 
 if __name__ == '__main__':
-	import socket
 	logger.info(f"Python {sys.version.split()[0]}, cwd={Path.cwd()}")
 	logger.info(f"SCRIPTS_DIR={SCRIPTS_DIR}")
 	logger.info(f"CONFIG_DIR env={os.environ.get('CONFIG_DIR', '(not set)')}")

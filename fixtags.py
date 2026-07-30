@@ -9,16 +9,17 @@
 # ]
 # ///
 
-from log import logger, success
+import argparse
+import os
+
 # import system libraries
 import time
-import sys
-import os
-from pathlib import Path, PurePosixPath, PurePath
-from typing import Optional
-import argparse
-from discogs_client.exceptions import HTTPError
 from json import JSONDecodeError
+from pathlib import Path, PurePosixPath
+
+from discogs_client.exceptions import HTTPError
+
+from log import logger, success
 
 
 def discogs_fetch(fn, *args, retries: int = 3, backoff: float = 60.0):
@@ -49,20 +50,37 @@ def discogs_fetch(fn, *args, retries: int = 3, backoff: float = 60.0):
 			else:
 				raise
 
+KNOWN_FORMATS = {'CD', 'SACD', 'BLU-RAY', 'BLURAY', 'VINYL', 'VINYL RIP', 'LP', 'CASSETTE', 'TAPE', 'WEB', 'DIGITAL'}
+
+def parse_subtitle(subtitle: str) -> tuple[str, str]:
+	"""Parse SUBTITLE into (format, edition)."""
+	if not subtitle:
+		return 'CD', ''
+	upper = subtitle.upper()
+	if upper in KNOWN_FORMATS:
+		return subtitle, ''
+	for fmt in sorted(KNOWN_FORMATS, key=len, reverse=True):
+		if upper.startswith(fmt):
+			edition = subtitle[len(fmt):].strip(' -_,()')
+			return fmt, edition
+	return 'CD', subtitle
+
 # import music libraries
 # https://github.com/joalla/discogs_client
+# import config file containing Discogs api_key (String with API token from https://www.discogs.com/en/settings/developers?lang_alt=en )
+import io
+
 import discogs_client
 
 # https://github.com/supermihi/pytaglib
 import taglib
-
-# import config file containing Discogs api_key (String with API token from https://www.discogs.com/en/settings/developers?lang_alt=en )
-import io
 from mutagen.flac import FLAC, Picture
 from PIL import Image, ImageFile
+
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 from config import discogs_api_key as api_key
+
 try:
 	from config import cover_max_size as _cover_max_size
 except ImportError:
@@ -179,10 +197,14 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
          master = None
          discogs_name = discogs_fetch(lambda: drelease.title.strip())
 
-      album_name = flactag(tags, 'ORIGINAL FILENAME').strip() or discogs_name
-      bitrate = int(tags.sampleRate / 1000)
+      album_name = flactag(tags, 'ALBUM_TITLE_OVERRIDE') or flactag(tags, 'ORIGINAL FILENAME').strip() or discogs_name
+      
+      # Sample rate & resolution
+      max_rate_hz = max((taglib.File(str(p)).sampleRate for p in Path(fixdir).rglob('*.flac') if p.suffix == '.flac'), default=tags.sampleRate)
+      max_res_str = f"{max_rate_hz / 1000:.1f}kHz".replace('.0kHz', 'kHz') if max_rate_hz > 0 else '44.1kHz'
+
       try:
-         album_year_release = int(flactag(tags, 'DATE'))
+         album_year_release = int(flactag(tags, 'ALBUM_RELEASE_YEAR') or flactag(tags, 'DATE'))
       except ValueError:
          album_year_release = drelease.year
       try:
@@ -194,19 +216,41 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
          album_year_release = album_year_master
       if album_year_release != 0 and album_year_master == 0:
          album_year_master = album_year_release
-      album_description = flactag(tags, 'SUBTITLE').strip() or 'CD'
-      dr_rating = flactag(tags, "ALBUM DYNAMIC RANGE").strip() or ''
 
-      album_newtitle = (f"{album_name} [{str(album_year_release)} {album_description} {str(bitrate)}kHz DR{dr_rating}]")
-      # Create new tags dictionary once, as it's the same for all files in the album.
+      subtitle = flactag(tags, 'SUBTITLE').strip()
+      album_format = flactag(tags, 'ALBUM_FORMAT')
+      album_edition = flactag(tags, 'ALBUM_EDITION')
+      if not album_format or not album_edition:
+         fmt_parsed, ed_parsed = parse_subtitle(subtitle)
+         if not album_format:
+            album_format = fmt_parsed
+         if not album_edition:
+            album_edition = ed_parsed
+
+      dr_rating = flactag(tags, 'ALBUM_DR') or flactag(tags, 'ALBUM DYNAMIC RANGE').strip() or ''
+
+      ed_str = f" ({album_edition})" if album_edition else ""
+      yr_str = f" {album_year_release}" if album_year_release else ""
+      fmt_str = f" {album_format}" if album_format else ""
+      album_newtitle = f"{album_name} [{yr_str.strip()}{fmt_str}{ed_str}]"
+
       new_tags = {
          'RELEASEDATE': [str(album_year_release)],
          'DATE': [str(album_year_release)],
          'ORIGINALDATE': [str(album_year_master)],
          'ORIGINALRELEASEDATE': [str(album_year_master)],
+         'ALBUM_MASTER_TITLE': [discogs_name],
+         'ALBUM_MASTER_YEAR': [str(album_year_master)],
+         'ALBUM_RELEASE_YEAR': [str(album_year_release)],
+         'ALBUM_FORMAT': [album_format],
+         'ALBUM_MAX_RESOLUTION': [max_res_str],
          'ALBUM': [album_newtitle],
-         'ORIGINAL_TITLE': [discogs_name]
+         'ORIGINAL_TITLE': [discogs_name],
       }
+      if album_edition:
+         new_tags['ALBUM_EDITION'] = [album_edition]
+      if dr_rating:
+         new_tags['ALBUM_DR'] = [dr_rating]
 
       for p in Path(fixdir).rglob('*.flac'):
          fullfilename = str(PurePosixPath(p))

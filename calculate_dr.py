@@ -7,12 +7,13 @@
 # ]
 # ///
  
-from log import logger
+import os
 
 # import system libraries
 import sys
-import os
-from pathlib import Path, PurePosixPath, PurePath
+from pathlib import Path, PurePosixPath
+
+import soundfile as sf
 
 # https://github.com/supermihi/pytaglib
 import taglib
@@ -20,7 +21,8 @@ import taglib
 # import DRMETER https://codeberg.org/janw/drmeter
 from drmeter.algorithm import dynamic_range
 from drmeter.models import AudioData
-import soundfile as sf
+
+from log import logger
 
 
 # calculate song and album dynamic range and write tags to files
@@ -53,8 +55,9 @@ def calculate_dr(albumpath: str) -> None:
       DR = 0
       dra_dirty = False
       try:
-         # do we have a song DR entry
-         dr_song = int(dr_tags.tags["DYNAMIC RANGE"][0])
+         # do we have a song DR entry (check DYNAMIC_RANGE first, fallback to DYNAMIC RANGE)
+         dr_val = dr_tags.tags.get("DYNAMIC_RANGE") or dr_tags.tags.get("DYNAMIC RANGE")
+         dr_song = int(dr_val[0])
       except (KeyError, IndexError, ValueError):
          # if we don't, calculate it
          with sf.SoundFile(fullfilename) as data:
@@ -64,8 +67,9 @@ def calculate_dr(albumpath: str) -> None:
             except Exception as e:
                logger.error(f'DR calculation failed for {fullfilename}: {e}')
          if DR != dr_song:
-            logger.info(f'DR {str(dr_song).zfill(2)} → {str(DR).zfill(2)}  {dr_tags.tags["TITLE"][0]}')
-            dr_tags.tags["DYNAMIC RANGE"] = [str(DR).zfill(2)]
+            title_str = (dr_tags.tags.get("TITLE") or ["Unknown"])[0]
+            logger.info(f'DR {str(dr_song).zfill(2)} → {str(DR).zfill(2)}  {title_str}')
+            dr_tags.tags["DYNAMIC_RANGE"] = [str(DR).zfill(2)]
             dr_tags.save()
             try:
                os.utime(fullfilename, None)
@@ -81,21 +85,23 @@ def calculate_dr(albumpath: str) -> None:
    if dr_tracks > 0:
       dr_album = str(round(dr_sum / dr_tracks)).zfill(2)
       try:
-         dr_album_old = dr_tags.tags["ALBUM DYNAMIC RANGE"][0]
+         dr_album_old = (dr_tags.tags.get("ALBUM_DR") or dr_tags.tags.get("ALBUM DYNAMIC RANGE", [""]))[0]
       except (KeyError, IndexError):
          dr_album_old = ""
       if dra_dirty or dr_album != dr_album_old:
          for fullfilename in flac_files:
             dr_tags = taglib.File(fullfilename)
-            dr_tags.tags["ALBUM DYNAMIC RANGE"] = [str(dr_album).zfill(2)]
+            dr_tags.tags["ALBUM_DR"] = [str(dr_album).zfill(2)]
             dr_tags.save()
             try:
                os.utime(fullfilename, None)
             except Exception as e:
                logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
-         logger.info(f'Album DR updated to {dr_album} for {dr_tags.tags["ALBUM"][0]}')
+         album_str = (dr_tags.tags.get("ALBUM") or ["Unknown"])[0]
+         logger.info(f'Album DR updated to {dr_album} for {album_str}')
       else:
-         logger.info(f'Album DR {dr_album} unchanged for {dr_tags.tags["ALBUM"][0]}')
+         album_str = (dr_tags.tags.get("ALBUM") or ["Unknown"])[0]
+         logger.info(f'Album DR {dr_album} unchanged for {album_str}')
    else:
       logger.error(f'Could not calculate DR for {albumpath}')
 

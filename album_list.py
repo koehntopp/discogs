@@ -8,14 +8,16 @@
 # ]
 # ///
 
-from log import logger
+import json
 import os
 import sys
-import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path, PurePosixPath
 
 import matplotlib
+
+from log import logger
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -23,15 +25,17 @@ import taglib
 from mutagen.flac import FLAC
 
 ALBUM_TAGS = [
-	'ALBUMARTIST', 'ALBUM', 'ALBUM DYNAMIC RANGE', 'ORIGINAL_TITLE',
-	'ORIGINAL FILENAME', 'ORIGINALDATE', 'RELEASEDATE', 'CATALOGNUMBER',
-	'DISCOGS_RELEASE_ID', 'MUSICBRAINZ_ALBUMID', 'SUBTITLE',
+	'ALBUMARTIST', 'ALBUM', 'ALBUM_DR', 'ALBUM_FORMAT', 'ALBUM_EDITION',
+	'ORIGINAL_TITLE', 'ORIGINAL FILENAME', 'ORIGINALDATE', 'RELEASEDATE',
+	'CATALOGNUMBER', 'DISCOGS_RELEASE_ID', 'MUSICBRAINZ_ALBUMID', 'SUBTITLE',
 ]
 
 DISPLAY_NAMES = {
 	'ALBUMARTIST':        'Album Artist',
 	'ALBUM':              'Album',
-	'ALBUM DYNAMIC RANGE':'DR',
+	'ALBUM_DR':           'DR',
+	'ALBUM_FORMAT':       'Format',
+	'ALBUM_EDITION':      'Edition',
 	'ORIGINAL_TITLE':     'Original Title',
 	'ORIGINAL FILENAME':  'Original Filename',
 	'ORIGINALDATE':       'Original Date',
@@ -71,6 +75,8 @@ def read_album(directory: str) -> dict | None:
 		return None
 
 	album_result = {tag: (tags.get(tag, [''])[0] or '') for tag in ALBUM_TAGS}
+	if not album_result.get('ALBUM_DR'):
+		album_result['ALBUM_DR'] = (tags.get('ALBUM DYNAMIC RANGE', [''])[0] or '')
 	album_result['COVER_ART'] = cover_art_dimensions(flac_path)
 	album_result['_DIRECTORY_PATH'] = directory
 	return album_result
@@ -94,9 +100,10 @@ def save_csv(df: pd.DataFrame, out: Path) -> None:
 
 
 def save_chart(df: pd.DataFrame, out: Path) -> None:
-	if 'ALBUM DYNAMIC RANGE' not in df.columns:
+	dr_col = 'ALBUM_DR' if 'ALBUM_DR' in df.columns else 'ALBUM DYNAMIC RANGE'
+	if dr_col not in df.columns:
 		return
-	dr = df['ALBUM DYNAMIC RANGE'].fillna('').astype(str).str.strip()
+	dr = df[dr_col].fillna('').astype(str).str.strip()
 	dr = dr[dr != '']
 	if dr.empty:
 		return

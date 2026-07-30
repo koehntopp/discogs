@@ -7,20 +7,19 @@
 # ]
 # ///
 
-from log import logger
+import os
+
 # import system libraries
 import sys
-import os
-import glob
-from pathlib import Path, PurePosixPath, PurePath
-import requests
-from urllib.parse import quote, urlencode
+from pathlib import Path, PurePosixPath
+
+# https://github.com/beetbox/pyacoustid/tree/master
+import acoustid
 
 # https://github.com/supermihi/pytaglib
 import taglib
 
-# https://github.com/beetbox/pyacoustid/tree/master
-import acoustid
+from log import logger
 
 
 # calculate acoustic fingerprints and write tags to files
@@ -44,20 +43,22 @@ def calculate_fp(albumpath: str) -> None:
       total += 1
       fingerprint = ""
       try:
-         fingerprint = dr_tags.tags['ACOUSTID FINGERPRINT'][0].strip()
+         fp_tags = dr_tags.tags.get('ACOUSTID_FINGERPRINT') or dr_tags.tags.get('ACOUSTID FINGERPRINT')
+         fingerprint = fp_tags[0].strip() if fp_tags else ""
       except (KeyError, IndexError):
-         if fingerprint == "":
+         fingerprint = ""
+      if fingerprint == "":
+         try:
+            duration, fingerprint = acoustid.fingerprint_file(fullfilename, maxlength=10000, force_fpcalc=False)
+            dr_tags.tags['ACOUSTID_FINGERPRINT'] = [fingerprint]
+            dr_tags.save()
             try:
-               duration, fingerprint = acoustid.fingerprint_file(fullfilename, maxlength=10000, force_fpcalc=False)
-               dr_tags.tags['ACOUSTID FINGERPRINT'] = [fingerprint]
-               dr_tags.save()
-               try:
-                  os.utime(fullfilename, None)
-               except Exception as e:
-                  logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
-               calculated += 1
-            except acoustid.FingerprintGenerationError:
-               logger.error(f'Fingerprint could not be calculated: {fullfilename}')
+               os.utime(fullfilename, None)
+            except Exception as e:
+               logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
+            calculated += 1
+         except acoustid.FingerprintGenerationError:
+            logger.error(f'Fingerprint could not be calculated: {fullfilename}')
    logger.info(f'AcoustID fingerprints generated for {calculated} of {total} files.')
 
 def main() -> None:
