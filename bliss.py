@@ -177,12 +177,23 @@ def movefiles(flacroot: str, full: bool = False) -> None:
 		f'Checking FLAC folders in {flacroot}' + (' (full recursive)' if full else ' (root-only)')
 	)
 	currentalbum = ''
-	pattern_iter = Path(flacroot).rglob('*.flac') if full else Path(flacroot).glob('*.flac')
+	flac_files = [
+		str(PurePosixPath(p))
+		for p in (Path(flacroot).rglob('*.flac') if full else Path(flacroot).glob('*.flac'))
+	]
 
-	for p in pattern_iter:
-		fullfilename = str(PurePosixPath(p))
+	for fullfilename in flac_files:
+		if not os.path.isfile(fullfilename):
+			continue
+
 		try:
 			tags = read_audio_tags(fullfilename)
+			if not tags or not tags.get('TITLE') or not tags.get('ALBUM'):
+				logger.warning(
+					f'Skipping file with missing or unreadable TITLE/ALBUM tags: {fullfilename}'
+				)
+				continue
+
 			stracktitle = clean(tags.get('TITLE', [''])[0])
 			salbumtitle = clean(tags.get('ALBUM', [''])[0])
 			sartist = clean(
@@ -234,12 +245,19 @@ def ingestfiles(ingest_dir: str) -> None:
 		return
 
 	# Find all FLAC files in the ingest directory
-	for p in Path(ingest_dir).rglob('*.flac'):
-		fullfilename = str(PurePosixPath(p))
+	flac_files = [str(PurePosixPath(p)) for p in Path(ingest_dir).rglob('*.flac')]
+
+	for fullfilename in flac_files:
+		if not os.path.isfile(fullfilename):
+			continue
+
 		try:
 			target_path, target_filename, metadata = get_target_path_and_filename(
 				fullfilename, flacroot
 			)
+			if not metadata['track'] or not metadata['album']:
+				logger.warning(f'Skipping ingest for file with unreadable tags: {fullfilename}')
+				continue
 
 			if metadata['album'] != currentalbum:
 				currentalbum = metadata['album']
