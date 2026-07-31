@@ -375,7 +375,7 @@ def main() -> None:
 					executor.shutdown(wait=False, cancel_futures=True)
 					if is_tty:
 						_console_handler.stream = orig_stream
-					sys.exit(130)
+					os._exit(130)
 		finally:
 			if is_tty:
 				_console_handler.stream = orig_stream

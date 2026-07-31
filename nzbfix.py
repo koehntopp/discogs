@@ -82,28 +82,42 @@ def main() -> None:
 
 	skip_flag = ['-S'] if rsgain_skip else []
 
-	call(['dot_clean', nzbdir], stdout=DEVNULL, stderr=DEVNULL)
+	parallel = []
+	try:
+		call(['dot_clean', nzbdir], stdout=DEVNULL, stderr=DEVNULL)
 
-	rsgain_cmd = ['rsgain', 'easy'] + skip_flag + ['-p', preset_file.name, nzbdir]
-	if active_log_level in ('SUCCESS', 'WARNING', 'ERROR'):
-		rsgain_cmd.insert(2, '-q')
-	logger.info(f'rsgain command: {" ".join(rsgain_cmd)}')
-	parallel = [
-		('calculate_dr', Popen([str(SCRIPTS_DIR / 'calculate_dr.py'), nzbdir], env=child_env)),
-		('rsgain', Popen(rsgain_cmd, stdout=DEVNULL, stderr=DEVNULL)),
-		('calculate_fp', Popen([str(SCRIPTS_DIR / 'calculate_fp.py'), nzbdir], env=child_env)),
-	]
-	for name, p in parallel:
-		rc = p.wait()
-		if rc != 0:
-			logger.error(f'Warning: {name} exited with code {rc}')
-		else:
-			success(f'{name} done')
+		rsgain_cmd = ['rsgain', 'easy'] + skip_flag + ['-p', preset_file.name, nzbdir]
+		if active_log_level in ('SUCCESS', 'WARNING', 'ERROR'):
+			rsgain_cmd.insert(2, '-q')
+		logger.info(f'rsgain command: {" ".join(rsgain_cmd)}')
+		parallel = [
+			('calculate_dr', Popen([str(SCRIPTS_DIR / 'calculate_dr.py'), nzbdir], env=child_env)),
+			('rsgain', Popen(rsgain_cmd, stdout=DEVNULL, stderr=DEVNULL)),
+			('calculate_fp', Popen([str(SCRIPTS_DIR / 'calculate_fp.py'), nzbdir], env=child_env)),
+		]
+		for name, p in parallel:
+			rc = p.wait()
+			if rc != 0:
+				logger.error(f'Warning: {name} exited with code {rc}')
+			else:
+				success(f'{name} done')
 
-	os.unlink(preset_file.name)
+		os.unlink(preset_file.name)
 
-	call([str(SCRIPTS_DIR / 'fixtags.py'), nzbdir], env=child_env)
-	call([str(SCRIPTS_DIR / 'update_lyrics.py'), nzbdir], env=child_env)
+		call([str(SCRIPTS_DIR / 'fixtags.py'), nzbdir], env=child_env)
+		call([str(SCRIPTS_DIR / 'update_lyrics.py'), nzbdir], env=child_env)
+	except KeyboardInterrupt:
+		logger.warning('Pipeline interrupted by user (Ctrl+C). Terminating processes...')
+		for name, p in parallel:
+			try:
+				p.kill()
+			except Exception:  # noqa: BLE001
+				pass
+		try:
+			os.unlink(preset_file.name)
+		except Exception:  # noqa: BLE001
+			pass
+		os._exit(130)
 
 
 if __name__ == '__main__':
