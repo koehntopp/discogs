@@ -191,14 +191,18 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 	else:
 		return
 	try:
-		tags = taglib.File(first_flac_path)
+		with taglib.File(first_flac_path) as tags:
+			first_tags = {k: list(v) for k, v in tags.tags.items()}
+			first_sample_rate = tags.sampleRate
 	except OSError as e:
 		logger.warning(f'Skipping unreadable file {first_flac_path}: {e}')
 		return
+
 	discogs = True
 	try:
-		discogs_id = int(flactag(tags, 'DISCOGS_RELEASE_ID'))
-	except ValueError:
+		discogs_id_str = first_tags.get('DISCOGS_RELEASE_ID', [''])[0]
+		discogs_id = int(discogs_id_str)
+	except (ValueError, IndexError):
 		discogs = False
 		return
 	# if we found discogs tags to work with go ahead
@@ -213,23 +217,29 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 			master = None
 			master_title = release_title
 
-		album_name = flactag(tags, 'ALBUM_TITLE_OVERRIDE') or master_title
+		album_override = first_tags.get('ALBUM_TITLE_OVERRIDE', [''])[0]
+		album_name = album_override or master_title
 
 		# Sample rate & resolution
+		def _read_sr(filepath: str) -> int:
+			try:
+				with taglib.File(filepath) as f:
+					return f.sampleRate
+			except Exception:  # noqa: BLE001
+				return 0
+
 		max_rate_hz = max(
-			(
-				taglib.File(str(p)).sampleRate
-				for p in Path(fixdir).rglob('*.flac')
-				if p.suffix == '.flac'
-			),
-			default=tags.sampleRate,
+			(_read_sr(str(p)) for p in Path(fixdir).rglob('*.flac') if p.suffix == '.flac'),
+			default=first_sample_rate,
 		)
 		max_res_str = (
 			f'{max_rate_hz / 1000:.1f}kHz'.replace('.0kHz', 'kHz') if max_rate_hz > 0 else '44.1kHz'
 		)
 
 		try:
-			album_year_release = int(flactag(tags, 'ALBUM_RELEASE_YEAR') or flactag(tags, 'DATE'))
+			album_year_release = int(
+				first_tags.get('ALBUM_RELEASE_YEAR', [''])[0] or first_tags.get('DATE', [''])[0]
+			)
 		except ValueError:
 			album_year_release = drelease.year
 		try:
@@ -246,11 +256,15 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 		if album_year_release != 0 and album_year_master == 0:
 			album_year_master = album_year_release
 
-		subtitle = flactag(tags, 'SUBTITLE').strip()
-		album_format = flactag(tags, 'ALBUM_FORMAT') or subtitle or 'CD'
-		album_edition = flactag(tags, 'ALBUM_EDITION')
+		subtitle = first_tags.get('SUBTITLE', [''])[0].strip()
+		album_format = first_tags.get('ALBUM_FORMAT', [''])[0] or subtitle or 'CD'
+		album_edition = first_tags.get('ALBUM_EDITION', [''])[0]
 
-		dr_rating = flactag(tags, 'ALBUM_DR') or flactag(tags, 'ALBUM DYNAMIC RANGE').strip() or ''
+		dr_rating = (
+			first_tags.get('ALBUM_DR', [''])[0]
+			or first_tags.get('ALBUM DYNAMIC RANGE', [''])[0].strip()
+			or ''
+		)
 
 		ed_str = f' ({album_edition})' if album_edition else ''
 		yr_str = f' {album_year_release}' if album_year_release else ''
@@ -304,28 +318,28 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 		for p in Path(fixdir).rglob('*.flac'):
 			fullfilename = str(PurePosixPath(p))
 			try:
-				tags = taglib.File(fullfilename)
+				with taglib.File(fullfilename) as tags:
+					stale_removed = False
+					for opt_tag in managed_optional:
+						if opt_tag not in new_tags and opt_tag in tags.tags:
+							tags.tags.pop(opt_tag, None)
+							stale_removed = True
+
+					if stale_removed or any(tags.tags.get(k) != v for k, v in new_tags.items()):
+						tags.tags.update(new_tags)
+						try:
+							tags.save()
+							try:
+								os.utime(fullfilename, None)
+							except Exception as e:
+								logger.warning(
+									f'Could not touch file mtime for {fullfilename}: {e}'
+								)
+							flac_files += 1
+						except OSError as e:
+							logger.warning(f'Could not save tags for {fullfilename}: {e}')
 			except OSError as e:
 				logger.warning(f'Skipping unreadable file {fullfilename}: {e}')
-				continue
-
-			stale_removed = False
-			for opt_tag in managed_optional:
-				if opt_tag not in new_tags and opt_tag in tags.tags:
-					tags.tags.pop(opt_tag, None)
-					stale_removed = True
-
-			if stale_removed or any(tags.tags.get(k) != v for k, v in new_tags.items()):
-				tags.tags.update(new_tags)
-				try:
-					tags.save()
-					try:
-						os.utime(fullfilename, None)
-					except Exception as e:
-						logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
-					flac_files += 1
-				except OSError as e:
-					logger.warning(f'Could not save tags for {fullfilename}: {e}')
 
 		if flac_files > 0:
 			success(f'Album name changed to {album_newtitle}')

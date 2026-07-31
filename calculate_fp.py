@@ -40,30 +40,36 @@ def calculate_fp(albumpath: str) -> None:
 	# iterate over FLAC files, calculate title DR (if possible)
 	for p in Path(albumpath).rglob('*.flac'):
 		fullfilename = str(PurePosixPath(p))
-		dr_tags = taglib.File(fullfilename)
 		total += 1
 		fingerprint = ''
 		try:
-			fp_tags = dr_tags.tags.get('ACOUSTID_FINGERPRINT') or dr_tags.tags.get(
-				'ACOUSTID FINGERPRINT'
-			)
-			fingerprint = fp_tags[0].strip() if fp_tags else ''
-		except (KeyError, IndexError):
-			fingerprint = ''
-		if fingerprint == '':
-			try:
-				duration, fingerprint = acoustid.fingerprint_file(
-					fullfilename, maxlength=10000, force_fpcalc=False
-				)
-				dr_tags.tags['ACOUSTID_FINGERPRINT'] = [fingerprint]
-				dr_tags.save()
+			with taglib.File(fullfilename) as dr_tags:
 				try:
-					os.utime(fullfilename, None)
-				except Exception as e:
-					logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
-				calculated += 1
-			except acoustid.FingerprintGenerationError:
-				logger.error(f'Fingerprint could not be calculated: {fullfilename}')
+					fp_tags = dr_tags.tags.get('ACOUSTID_FINGERPRINT') or dr_tags.tags.get(
+						'ACOUSTID FINGERPRINT'
+					)
+					fingerprint = fp_tags[0].strip() if fp_tags else ''
+				except (KeyError, IndexError):
+					fingerprint = ''
+				if fingerprint == '':
+					try:
+						duration, fingerprint = acoustid.fingerprint_file(
+							fullfilename, maxlength=10000, force_fpcalc=False
+						)
+						dr_tags.tags['ACOUSTID_FINGERPRINT'] = [fingerprint]
+						dr_tags.save()
+						try:
+							os.utime(fullfilename, None)
+						except Exception as e:  # noqa: BLE001
+							logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
+						title_str = (dr_tags.tags.get('TITLE') or ['Unknown'])[0]
+						logger.info(f'Calculated AcoustID fingerprint for {title_str}')
+						calculated += 1
+					except Exception as e:  # noqa: BLE001
+						logger.error(f'Fingerprint calculation failed for {fullfilename}: {e}')
+		except OSError as e:
+			logger.warning(f'Could not read FLAC file {fullfilename}: {e}')
+			continue
 	logger.info(f'AcoustID fingerprints generated for {calculated} of {total} files.')
 
 

@@ -35,12 +35,12 @@ def walkdirs(fixdir: str) -> None:
 	global lyricscloud
 	for p in Path(fixdir).rglob('*.flac'):
 		fullfilename = str(PurePosixPath(p))
-		tags = taglib.File(fullfilename)
 		try:
-			lyrics = tags.tags['LYRICS'][0].strip()
-			lyricscloud += lyrics
-			print(fullfilename)
-		except KeyError:
+			with taglib.File(fullfilename) as tags:
+				lyrics = tags.tags['LYRICS'][0].strip()
+				lyricscloud += lyrics
+				print(fullfilename)
+		except (OSError, KeyError, IndexError):
 			pass
 
 

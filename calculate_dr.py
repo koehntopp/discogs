@@ -50,34 +50,40 @@ def calculate_dr(albumpath: str) -> None:
 	for p in Path(albumpath).rglob('*.flac'):
 		fullfilename = str(PurePosixPath(p))
 		flac_files.append(fullfilename)
-		dr_tags = taglib.File(fullfilename)
 		tracks += 1
 		dr_song = 0
 		DR = 0
 		dra_dirty = False
 		try:
-			# do we have a song DR entry (check DYNAMIC_RANGE first, fallback to DYNAMIC RANGE)
-			dr_val = dr_tags.tags.get('DYNAMIC_RANGE') or dr_tags.tags.get('DYNAMIC RANGE') or ['']
-			dr_song = int(dr_val[0])
-		except (KeyError, IndexError, ValueError, TypeError):
-			# if we don't, calculate it
-			with sf.SoundFile(fullfilename) as data:
+			with taglib.File(fullfilename) as dr_tags:
 				try:
-					result = dynamic_range(AudioData.from_soundfile(data))
-					DR = round(result.overall_dr_score)
-				except Exception as e:  # noqa: BLE001
-					logger.error(f'DR calculation failed for {fullfilename}: {e}')
-			if DR != dr_song:
-				title_str = (dr_tags.tags.get('TITLE') or ['Unknown'])[0]
-				logger.info(f'DR {str(dr_song).zfill(2)} → {str(DR).zfill(2)}  {title_str}')
-				dr_tags.tags['DYNAMIC_RANGE'] = [str(DR).zfill(2)]
-				dr_tags.save()
-				try:
-					os.utime(fullfilename, None)
-				except Exception as e:  # noqa: BLE001
-					logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
-				dr_song = DR
-				dra_dirty = True
+					dr_val = (
+						dr_tags.tags.get('DYNAMIC_RANGE')
+						or dr_tags.tags.get('DYNAMIC RANGE')
+						or ['']
+					)
+					dr_song = int(dr_val[0])
+				except (KeyError, IndexError, ValueError, TypeError):
+					with sf.SoundFile(fullfilename) as data:
+						try:
+							result = dynamic_range(AudioData.from_soundfile(data))
+							DR = round(result.overall_dr_score)
+						except Exception as e:  # noqa: BLE001
+							logger.error(f'DR calculation failed for {fullfilename}: {e}')
+					if DR != dr_song:
+						title_str = (dr_tags.tags.get('TITLE') or ['Unknown'])[0]
+						logger.info(f'DR {str(dr_song).zfill(2)} → {str(DR).zfill(2)}  {title_str}')
+						dr_tags.tags['DYNAMIC_RANGE'] = [str(DR).zfill(2)]
+						dr_tags.save()
+						try:
+							os.utime(fullfilename, None)
+						except Exception as e:  # noqa: BLE001
+							logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
+						dr_song = DR
+						dra_dirty = True
+		except OSError as e:
+			logger.warning(f'Could not read FLAC file {fullfilename}: {e}')
+			continue
 		if dr_song > 0:
 			dr_tracks += 1
 			dr_sum += dr_song
@@ -85,23 +91,32 @@ def calculate_dr(albumpath: str) -> None:
 		logger.warning(f'Incomplete DR: {dr_tracks}/{tracks} tracks have DR scores')
 	if dr_tracks > 0:
 		dr_album = str(round(dr_sum / dr_tracks)).zfill(2)
-		try:
-			dr_album_old = (
-				dr_tags.tags.get('ALBUM_DR') or dr_tags.tags.get('ALBUM DYNAMIC RANGE') or ['']
-			)[0]
-		except (KeyError, IndexError, TypeError):
-			dr_album_old = ''
+		dr_album_old = ''
+		if flac_files:
+			try:
+				with taglib.File(flac_files[0]) as dr_tags:
+					dr_album_old = (
+						dr_tags.tags.get('ALBUM_DR')
+						or dr_tags.tags.get('ALBUM DYNAMIC RANGE')
+						or ['']
+					)[0]
+			except (OSError, KeyError, IndexError, TypeError):
+				dr_album_old = ''
 		if dra_dirty or dr_album != dr_album_old:
+			last_album_str = 'Unknown'
 			for fullfilename in flac_files:
-				dr_tags = taglib.File(fullfilename)
-				dr_tags.tags['ALBUM_DR'] = [str(dr_album).zfill(2)]
-				dr_tags.save()
 				try:
-					os.utime(fullfilename, None)
-				except Exception as e:  # noqa: BLE001
-					logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
-			album_str = (dr_tags.tags.get('ALBUM') or ['Unknown'])[0]
-			logger.info(f'Album DR updated to {dr_album} for {album_str}')
+					with taglib.File(fullfilename) as dr_tags:
+						dr_tags.tags['ALBUM_DR'] = [str(dr_album).zfill(2)]
+						dr_tags.save()
+						last_album_str = (dr_tags.tags.get('ALBUM') or ['Unknown'])[0]
+						try:
+							os.utime(fullfilename, None)
+						except Exception as e:  # noqa: BLE001
+							logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
+				except OSError as e:
+					logger.warning(f'Could not update ALBUM_DR for {fullfilename}: {e}')
+			logger.info(f'Album DR updated to {dr_album} for {last_album_str}')
 		else:
 			album_str = (dr_tags.tags.get('ALBUM') or ['Unknown'])[0]
 			logger.info(f'Album DR {dr_album} unchanged for {album_str}')

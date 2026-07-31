@@ -212,12 +212,20 @@ def _collect_tracks(flacdir: str) -> list[tuple[str, str]]:
 			continue
 		first = os.path.join(root, flacs[0])
 		try:
-			tags = taglib.File(first)
-		except OSError:
-			continue
-		try:
-			int(flactag(tags, 'DISCOGS_RELEASE_ID'))
-		except ValueError:
+			with taglib.File(first) as tags:
+				discogs_id_str = flactag(tags, 'DISCOGS_RELEASE_ID')
+				album_name = (
+					flactag(tags, 'ALBUM_TITLE_OVERRIDE').strip()
+					or flactag(tags, 'ORIGINAL FILENAME').strip()
+					or flactag(tags, 'ORIGINAL_FILENAME').strip()
+					or flactag(tags, 'ALBUM_MASTER_TITLE').strip()
+					or flactag(tags, 'ORIGINAL_TITLE').strip()
+					or flactag(tags, 'ALBUM').strip()
+				)
+				if '[' in album_name:
+					album_name = album_name.split('[')[0].strip()
+			int(discogs_id_str)
+		except (OSError, ValueError):
 			continue
 		album_name = (
 			flactag(tags, 'ALBUM_TITLE_OVERRIDE').strip()
@@ -314,33 +322,33 @@ def main() -> None:
 						if action in ('new', 'header', 'clear'):
 							stats['new'] += 1
 							try:
-								t = taglib.File(flac_path)
-								if action == 'clear':
-									t.tags.pop('LYRICS', None)
-									t.save()
-									try:
-										os.utime(flac_path, None)
-									except Exception as e:
+								with taglib.File(flac_path) as t:
+									if action == 'clear':
+										t.tags.pop('LYRICS', None)
+										t.save()
+										try:
+											os.utime(flac_path, None)
+										except Exception as e:
+											logger.warning(
+												f'Could not touch file mtime for {flac_path}: {e}'
+											)
 										logger.warning(
-											f'Could not touch file mtime for {flac_path}: {e}'
+											f'Invalid LRC cleared (no replacement found): {title} ({artist})'
 										)
-									logger.warning(
-										f'Invalid LRC cleared (no replacement found): {title} ({artist})'
-									)
-								else:
-									t.tags['LYRICS'] = [lyrics]
-									t.save()
-									try:
-										os.utime(flac_path, None)
-									except Exception as e:
-										logger.warning(
-											f'Could not touch file mtime for {flac_path}: {e}'
-										)
-									if action == 'header':
-										logger.info(f'LRC headers updated: {title} ({artist})')
 									else:
-										kind = 'LRC' if lyric_type == 'lrc' else 'TXT'
-										logger.info(f'{kind} lyrics added: {title} ({artist})')
+										t.tags['LYRICS'] = [lyrics]
+										t.save()
+										try:
+											os.utime(flac_path, None)
+										except Exception as e:
+											logger.warning(
+												f'Could not touch file mtime for {flac_path}: {e}'
+											)
+										if action == 'header':
+											logger.info(f'LRC headers updated: {title} ({artist})')
+										else:
+											kind = 'LRC' if lyric_type == 'lrc' else 'TXT'
+											logger.info(f'{kind} lyrics added: {title} ({artist})')
 							except OSError as e:
 								logger.error(f'Could not save lyrics for {flac_path}: {e}')
 
