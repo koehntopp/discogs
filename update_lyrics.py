@@ -32,6 +32,7 @@ from log import _console_handler, logger
 LRC_TIMESTAMP = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]')  # valid: [MM:SS.xx]
 LRC_BAD_TS = re.compile(r'\[\d{3,}:\d{2}:\d{2}\.\d{2}\]')  # invalid: [HH:MM:SS.xx]
 LRC_HEADER_LINE = re.compile(r'^\[(ar|ti|al|by|length|offset):.*\]\s*$', re.IGNORECASE)
+USER_AGENT = 'DiscogsMusicManager/1.0 (+https://github.com/koehntopp/discogs)'
 MAX_WORKERS = 8
 
 
@@ -69,54 +70,63 @@ def _fetch_one(
 ) -> tuple[str, str, str, str, str, str, str, str]:
 	"""Read tags, fetch/upgrade lyrics, apply LRC metadata headers from FLAC tags.
 
-	Returns (flac_path, artist, title, lyrics, lyric_type, action, discogs_id, track) where
-	action is 'new', 'header', 'upgrade', 'clear', 'keep', or 'none'.
+	Returns:
+	    (flac_path, artist, title, lyrics_text, lyrics_type, status, discogs_id, track)
 	"""
+	discogs_id = ''
+	track = ''
+	artist = ''
+	title = ''
+
 	try:
-		tags = taglib.File(flac_path)
-	except OSError as e:
-		logger.warning(f'Skipping unreadable file {flac_path}: {e}')
-		return flac_path, '', '', '', 'none', 'none', '', '00'
+		with taglib.File(flac_path) as song:
+			artist = flactag(song, 'ARTIST')
+			title = flactag(song, 'TITLE')
+			discogs_id = flactag(song, 'DISCOGS_RELEASE_ID')
+			track = flactag(song, 'TRACKNUMBER')
+			master_title = flactag(song, 'ALBUM_MASTER_TITLE') or flactag(song, 'ORIGINAL_TITLE')
+			length = float(song.length) if hasattr(song, 'length') else 0.0
+	except Exception as e:  # noqa: BLE001
+		logger.warning(f'Could not read FLAC tags for {flac_path}: {e}')
+		return flac_path, '', '', '', 'none', 'error', '', ''
 
-	artist = (
-		flactag(tags, 'ARTIST')
-		or flactag(tags, 'ALBUM_ARTIST_OVERRIDE')
-		or flactag(tags, 'ALBUMARTIST')
-	)
-	title = flactag(tags, 'TITLE')
-	length = tags.length
-	existing = flactag(tags, 'LYRICS').strip()
-	discogs_id = flactag(tags, 'DISCOGS_RELEASE_ID').strip()
-	track = flactag(tags, 'TRACKNUMBER').split('/')[0].zfill(2)
+	if not artist or not title:
+		logger.info(f'Missing ARTIST or TITLE tag in {flac_path}')
+		return flac_path, artist, title, '', 'none', 'error', discogs_id, track
 
-	had_invalid_lrc = bool(existing and _is_invalid_lrc(existing))
-	if had_invalid_lrc:
-		logger.warning(f'Invalid LRC timestamps in file, clearing: {title} ({artist})')
-		existing = ''
+	# Canonical album title for lrclib lookup (master title > folder name)
+	lookup_album = master_title or album_name
 
-	existing_is_lrc = _is_lrc(existing)
+	lrc_path = Path(flac_path).with_suffix('.lrc')
+	txt_path = Path(flac_path).with_suffix('.txt')
 
-	# For existing LRC: rebuild headers from FLAC tags and check if anything changed
-	if existing_is_lrc:
-		with_headers = _apply_headers(existing, artist, title, album_name, length)
-		if with_headers != existing:
-			return flac_path, artist, title, with_headers, 'lrc', 'header', discogs_id, track
-		return flac_path, artist, title, existing, 'lrc', 'keep', discogs_id, track
+	existing = ''
+	existing_type = 'none'
+	if lrc_path.exists():
+		existing = lrc_path.read_text(encoding='utf-8')
+		existing_type = 'lrc'
+	elif txt_path.exists():
+		existing = txt_path.read_text(encoding='utf-8')
+		existing_type = 'txt'
 
-	clean_album = (
-		flactag(tags, 'ALBUM_MASTER_TITLE').strip()
-		or flactag(tags, 'ORIGINAL_TITLE').strip()
-		or flactag(tags, 'ALBUM_TITLE_OVERRIDE').strip()
-		or flactag(tags, 'ORIGINAL FILENAME').strip()
-		or flactag(tags, 'ORIGINAL_FILENAME').strip()
-		or album_name.split(' [')[0].strip()
-	)
+	# Check for invalid LRC timestamps in existing file
+	had_invalid_lrc = False
+	if existing_type == 'lrc' and _is_invalid_lrc(existing):
+		logger.warning(f'Found invalid LRC timestamp in {lrc_path.name}, attempting refetch')
+		had_invalid_lrc = True
 
-	# No LRC yet — fetch from lrclib
+	# Don't refetch if valid synced LRC already exists
+	if existing_type == 'lrc' and not had_invalid_lrc and _is_lrc(existing):
+		# Re-apply updated headers if missing/stale
+		updated_lrc = _apply_headers(existing, artist, title, album_name, length)
+		if updated_lrc != existing:
+			return flac_path, artist, title, updated_lrc, 'lrc', 'update', discogs_id, track
+		return flac_path, artist, title, existing, 'lrc', 'skip', discogs_id, track
+
 	params = {
 		'artist_name': artist,
 		'track_name': title,
-		'album_name': clean_album,
+		'album_name': lookup_album,
 		'duration': str(round(length)),
 	}
 	data = {}
@@ -124,10 +134,11 @@ def _fetch_one(
 	backoff = 2.0
 	for attempt in range(max_retries + 1):
 		try:
+			time.sleep(0.1)  # Smooth inter-request throttling delay
 			response = session.get(
 				'https://lrclib.net/api/get',
 				params=params,
-				headers={'User-Agent': 'Mozilla/5.0'},
+				headers={'User-Agent': USER_AGENT},
 				timeout=10,
 			)
 			if response.status_code == 200:
@@ -140,8 +151,12 @@ def _fetch_one(
 					continue
 				break
 			elif response.status_code == 429:
-				if attempt < max_retries:
+				retry_after = response.headers.get('Retry-After')
+				if retry_after and retry_after.replace('.', '', 1).isdigit():
+					sleep_time = float(retry_after) + 0.5
+				else:
 					sleep_time = backoff * (2**attempt)
+				if attempt < max_retries:
 					time.sleep(sleep_time)
 				else:
 					logger.warning(
