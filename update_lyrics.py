@@ -80,6 +80,9 @@ def _fetch_one(
 	Returns:
 	    (flac_path, artist, title, lyrics_text, lyrics_type, status, discogs_id, track)
 	"""
+	if not os.path.isfile(flac_path):
+		return flac_path, '', '', '', 'none', 'skip', '', ''
+
 	discogs_id = ''
 	track = ''
 	artist = ''

@@ -70,9 +70,7 @@ import io
 
 import discogs_client
 
-# https://github.com/supermihi/pytaglib
-import taglib
-from mutagen.flac import FLAC, Picture
+from mutagen.flac import Picture
 from PIL import Image, ImageFile
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -327,6 +325,8 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 		]
 		for p in Path(fixdir).rglob('*.flac'):
 			fullfilename = str(PurePosixPath(p))
+			if not os.path.isfile(fullfilename):
+				continue
 			try:
 				audio = FLAC(fullfilename)
 				if not audio.tags:
