@@ -2,7 +2,6 @@
 # /// script
 # dependencies = [
 #   "structlog",
-#   "pytaglib",
 #   "pandas",
 #   "matplotlib",
 #   "mutagen",
@@ -21,7 +20,6 @@ from log import logger
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import pandas as pd
-import taglib
 from mutagen.flac import FLAC
 
 ALBUM_TAGS = [
@@ -79,8 +77,8 @@ def read_album(directory: str) -> dict | None:
 		return None
 	flac_path = str(PurePosixPath(directory) / flacs[0])
 	try:
-		with taglib.File(flac_path) as f:
-			tags = f.tags
+		audio = FLAC(flac_path)
+		tags = {k.upper(): [str(x) for x in v] for k, v in audio.tags.items()} if audio.tags else {}
 	except Exception:
 		return None
 

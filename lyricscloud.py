@@ -5,7 +5,7 @@
 #   "matplotlib",
 #   "numpy",
 #   "pillow",
-#   "pytaglib",
+#   "mutagen",
 # ]
 # ///
 
@@ -15,7 +15,7 @@ from pathlib import Path, PurePosixPath
 
 import matplotlib.pyplot as plt
 import numpy as np
-import taglib
+from mutagen.flac import FLAC
 from PIL import Image
 from wordcloud import STOPWORDS, ImageColorGenerator, WordCloud
 
@@ -36,11 +36,12 @@ def walkdirs(fixdir: str) -> None:
 	for p in Path(fixdir).rglob('*.flac'):
 		fullfilename = str(PurePosixPath(p))
 		try:
-			with taglib.File(fullfilename) as tags:
-				lyrics = tags.tags['LYRICS'][0].strip()
+			audio = FLAC(fullfilename)
+			if audio.tags and 'LYRICS' in audio.tags:
+				lyrics = str(audio.tags['LYRICS'][0]).strip()
 				lyricscloud += lyrics
 				print(fullfilename)
-		except (OSError, KeyError, IndexError):
+		except Exception:  # noqa: BLE001
 			pass
 
 
@@ -57,7 +58,7 @@ def main() -> None:
 	# flacdir = "/Volumes/Frank/00NZB/complete"
 	flacdir = '/Volumes/FLAC/Taylor_Swift'
 	flac_directories = []
-	for root, dirs, files in os.walk(flacdir):
+	for root, _dirs, files in os.walk(flacdir):
 		for file in files:
 			if file.endswith('.flac'):
 				flac_directories.append(root)

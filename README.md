@@ -135,7 +135,6 @@ All Python scripts feature executable shebang lines (`#!/usr/bin/env -S uv run`)
 ## Requirements
 
 - Python ≥ 3.14 (managed automatically by uv)
-- [TagLib 2.x](https://taglib.org/) — built from source in Docker; `brew install taglib --HEAD` on macOS
 - **ffmpeg**, **rsgain**, **rclone** — included in the Docker image; install separately for local use
 
 ## Logging
@@ -150,7 +149,7 @@ Structured logging via [structlog](https://github.com/hynek/structlog):
 ## Libraries and Tools
 
 - [discogs_client](https://github.com/joalla/discogs_client) — Discogs API
-- [pytaglib](https://github.com/supermihi/pytaglib) — FLAC tag read/write via TagLib
+- [mutagen](https://github.com/quodlibet/mutagen) — FLAC audio tag read/write
 - [drmeter](https://codeberg.org/janw/drmeter) — Dynamic Range calculation
 - [pyacoustid](https://github.com/beetbox/pyacoustid) — AcoustID fingerprinting
 - [lrclib.net](https://lrclib.net) — synced lyrics API

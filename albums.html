@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Albums</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable/styles/handsontable.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable/styles/ht-theme-classic.min.css">
+  <style>
+    html,body{height:100%;margin:0}
+    .wrap{padding:0;height:100%;box-sizing:border-box;background:#f5f5f5}
+    .toolbar{display:flex;gap:8px;align-items:center;padding:6px 8px}
+    .tab-btn{padding:6px 14px;border-radius:6px 6px 0 0;border:1px solid #ccc;border-bottom:none;background:#eee;cursor:pointer;font-size:13px}
+    .tab-btn.active{background:#fff;font-weight:bold}
+    .tab-content{display:none}
+    .tab-content.active{display:block}
+    #hot-albums,#hot-artists{width:100%;height:calc(100vh - 76px)}
+    button#reload{padding:6px 12px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="toolbar">
+      <button class="tab-btn active" data-tab="albums">Albums (767)</button>
+      <button class="tab-btn" data-tab="artists">Artists by DR (268)</button>
+      <button id="reload">Reload CSV</button>
+      <span id="status" style="color:#666;font-size:13px;margin-left:4px">Ready</span>
+    </div>
+    <div id="tab-albums" class="tab-content active"><div id="hot-albums"></div></div>
+    <div id="tab-artists" class="tab-content"><div id="hot-artists"></div></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/handsontable/dist/handsontable.full.min.js"></script>
+  <script>
+    function parseCSVRow(row) {
+      const cells = [];
+      let cur = '', inQuotes = false;
+      for (let i = 0; i < row.length; i++) {
+        const ch = row[i];
+        if (ch === '"') {
+          if (inQuotes && row[i+1] === '"') { cur += '"'; i++; }
+          else inQuotes = !inQuotes;
+        } else if (ch === ',' && !inQuotes) { cells.push(cur); cur = ''; }
+        else cur += ch;
+      }
+      cells.push(cur);
+      return cells;
+    }
+
+    async function loadCSV(url) {
+      const res = await fetch(url, {cache: 'no-store'});
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const txt = await res.text();
+      const lines = txt.replace(/\r/g,'').split('\n').filter(Boolean);
+      if (!lines.length) return {headers:[], rows:[]};
+      return { headers: parseCSVRow(lines[0]).map(h => h.trim()), rows: lines.slice(1).map(parseCSVRow) };
+    }
+
+    function defaultWidth(h) {
+      const k = (h||'').toLowerCase();
+      if (k.includes('artist')) return 120;
+      if (k.includes('title')) return 120;
+      if (k === 'dr' || k === 'avg dr') return 50;
+      if (k === 'albums') return 60;
+      if (k.includes('date')) return 50;
+      if (k === 'discogs' || k === 'musicbrainz' || k === 'catalog' || k === 'version') return 70;
+      return 120;
+    }
+
+    let hotAlbums = null, hotArtists = null;
+
+    async function renderAlbums() {
+      const status = document.getElementById('status');
+      try {
+        status.textContent = 'Loading albums.csv...';
+        const {headers, rows} = await loadCSV('albums.csv');
+        if (hotAlbums) { try { hotAlbums.destroy(); } catch(e) {} }
+        hotAlbums = new Handsontable(document.getElementById('hot-albums'), {
+          data: rows, colHeaders: headers, rowHeaders: false,
+          width: '100%', height: 'calc(100vh - 76px)',
+          licenseKey: 'non-commercial-and-evaluation',
+          themeName: 'ht-theme-classic', readOnly: true,
+          filters: true, dropdownMenu: true, columnSorting: true,
+          manualColumnResize: true, colWidths: headers.map(defaultWidth), stretchH: 'all'
+        });
+        status.textContent = 'Loaded ' + rows.length + ' rows';
+      } catch(e) { status.textContent = 'Error: ' + e.message; }
+    }
+
+    function renderArtists() {
+      const headers = ["Album Artist", "Albums", "Avg DR"];
+      const rows = [["Adele", 5, 8.2], ["Air Supply", 2, 11.0], ["Alison Moyet", 1, 15.0], ["Amy Macdonald", 1, 10.0], ["Asia", 2, 11.0], ["BAP", 3, 10.0], ["Bad English", 1, 13.0], ["Band Aid", 2, 9.0], ["Bangles", 2, 12.0], ["Barclay James Harvest", 6, 12.0], ["Barry Manilow", 2, 11.5], ["Bee Gees", 1, 7.0], ["Ben Folds", 2, 8.5], ["Beverley Craven", 1, 13.0], ["Billy Joel", 23, 11.7], ["Billy Ocean", 1, 13.0], ["Bonnie Raitt", 1, 13.0], ["Boston", 2, 10.0], ["Brendan Croker And The 5 O'Clock Shadows", 1, 13.0], ["Brian May", 1, 11.0], ["Brian May + Friends", 1, 10.0], ["Bronski Beat", 1, 12.0], ["Bruce Hornsby And The Range", 2, 12.5], ["Bruce Springsteen", 11, 11.7], ["Bruce Springsteen & The E-Street Band", 1, 14.0], ["Bruce Springsteen , Shane MacGowan", 1, 6.0], ["Bruce Willis", 2, 10.5], ["Bryan Adams", 6, 10.5], ["Bryan Adams , Rod Stewart , Sting", 1, 10.0], ["Bryan Ferry , Roxy Music", 1, 14.0], ["Carly Simon", 1, 14.0], ["Carole King", 5, 11.6], ["Carole King & James Taylor", 1, 11.0], ["Carpenters", 2, 11.5], ["Charlie Dore", 1, 13.0], ["Charlie Puth", 2, 6.5], ["Chet Atkins And Mark Knopfler", 1, 13.0], ["Chicago", 2, 13.5], ["Chris De Burgh", 12, 11.3], ["Chris Rea", 14, 11.9], ["Chris de Burgh", 2, 12.0], ["Christopher Cross", 2, 13.0], ["Christy Moore", 3, 12.3], ["Clannad", 1, 12.0], ["Clarence Clemons", 1, 8.0], ["Climax Blues Band", 1, 7.0], ["Clouseau", 1, 14.0], ["Cock Robin", 1, 12.0], ["Cowboy Junkies", 1, 12.0], ["Crosby, Stills & Nash", 1, 11.0], ["Crosby, Stills, Nash & Young", 1, 12.0], ["Crowded House", 1, 12.0], ["Culture Club", 1, 13.0], ["Cutting Crew", 1, 11.0], ["Cyndi Lauper", 2, 12.5], ["Dan Fogelberg", 2, 11.5], ["Daryl Hall & John Oates", 2, 13.0], ["Dave Edmunds", 1, 12.0], ["David Bowie", 1, 10.0], ["David Lindley", 1, 12.0], ["Debbie Gibson", 2, 13.0], ["Deep Purple", 2, 10.5], ["Del Amitri", 13, 9.5], ["Dennis DeYoung", 3, 9.0], ["Dido", 1, 7.0], ["Die Crackers", 1, 11.0], ["Dion", 1, 12.0], ["Dire Straits", 12, 13.7], ["Don Henley", 3, 12.7], ["Eagles", 11, 11.9], ["Earforce", 1, 8.0], ["Eddi Reader", 1, 12.0], ["Eddie Money", 1, 13.0], ["Edie Brickell & New Bohemians", 1, 13.0], ["Eleanor McEvoy", 10, 9.6], ["Eleanor McEvoy , James Cramer", 1, 7.0], ["Electric Light Orchestra", 18, 10.5], ["Electric Light Orchestra / Olivia Newton-John", 1, 13.0], ["Elton John", 4, 12.2], ["Emerson, Lake & Palmer", 1, 12.0], ["Enya", 4, 11.0], ["Eric Clapton", 2, 13.5], ["Eurythmics", 5, 12.6], ["Fairground Attraction", 1, 13.0], ["Feargal Sharkey", 1, 12.0], ["Fischer-Z", 1, 13.0], ["Fish", 2, 10.0], ["Fleetwood Mac", 8, 12.6], ["Flim & The BB's", 1, 18.0], ["Foreigner", 4, 10.2], ["Frankie Goes To Hollywood", 6, 11.3], ["Freudiana", 1, 10.0], ["Gary Kemp", 1, 6.0], ["Genesis", 8, 13.1], ["George Harrison", 1, 13.0], ["George Martin", 1, 10.0], ["George Michael", 5, 11.8], ["Gillan & Glover", 1, 13.0], ["Glass Tiger", 1, 11.0], ["Heart", 2, 11.5], ["Heart With The Royal Philharmonic Orchestra", 1, 7.0], ["Heinz Rudolf Kunze , Annett Louisan", 1, 5.0], ["Herbert Gr\u00f6nemeyer", 3, 9.7], ["Hothouse Flowers", 3, 12.0], ["Howard Jones", 3, 11.0], ["Huey Lewis & The News", 12, 12.3], ["Huey Lewis , Gwyneth Paltrow", 1, 8.0], ["Iain Matthews", 1, 10.0], ["Jackson Browne", 12, 11.8], ["Jackson Browne , David Lindley", 1, 11.0], ["James Taylor", 3, 12.7], ["Jeff Lynne", 1, 8.0], ["Joe Cocker", 1, 12.0], ["Joe Jackson", 18, 11.1], ["Joe Jackson , Todd Rundgren , Ethel", 1, 11.0], ["Joe Jackson / Graham Maby / Gary Burke", 1, 13.0], ["Joe Jackson Band", 2, 6.5], ["Johann Sebastian Bach , The English Baroque Soloists , Kati Debretzeni , John Eliot Gardiner", 1, 13.0], ["John Cougar Mellencamp", 4, 12.8], ["John Denver", 4, 12.5], ["John Hiatt", 3, 10.7], ["John Hiatt & The Guilty Dogs", 1, 9.0], ["John Lennon", 2, 10.0], ["John Lennon & Yoko Ono", 1, 13.0], ["Jon & Vangelis", 1, 14.0], ["Journey", 2, 13.5], ["Justin Currie", 4, 6.8], ["Kate Bush", 1, 12.0], ["Keith Jarrett", 1, 10.0], ["Kenny Rogers", 2, 13.0], ["Kiefer Sutherland", 1, 7.0], ["Kraftwerk", 2, 10.5], ["Level 42", 1, 13.0], ["Lightning Seeds", 1, 12.0], ["Linda Ronstadt", 1, 10.0], ["Lionel Richie", 1, 15.0], ["Little River Band", 2, 12.0], ["Madonna", 4, 13.5], ["Manfred Mann's Earth Band", 2, 13.0], ["Marc Cohn", 1, 12.0], ["Marillion", 1, 10.0], ["Mark Knopfler", 5, 12.4], ["Mark Knopfler's Guitar Heroes", 1, 8.0], ["Mary Black", 2, 12.0], ["Meat Loaf", 1, 12.0], ["Melissa Etheridge", 2, 9.0], ["Men At Work", 2, 13.0], ["Michael Bolton", 2, 12.0], ["Michael Jackson", 2, 12.0], ["Michael Penn", 1, 15.0], ["Michelle Shocked", 1, 13.0], ["Mike Batt", 1, 12.0], ["Mike Oldfield", 6, 12.3], ["Morrissey", 1, 10.0], ["M\u00fcnchener Freiheit", 2, 11.5], ["Natalie Cole", 2, 12.5], ["Neil Young", 1, 13.0], ["Nik Kershaw", 2, 13.5], ["Norah Jones", 1, 14.0], ["Pat Benatar", 4, 12.5], ["Patty Smyth", 1, 12.0], ["Paul McCartney", 3, 12.7], ["Paul Simon", 1, 14.0], ["Paul Young", 2, 12.5], ["Pet Shop Boys", 1, 13.0], ["Peter Cetera", 1, 14.0], ["Peter Gabriel", 10, 11.9], ["Peter Maffay", 1, 10.0], ["Phil Collins", 10, 11.8], ["Philip Bailey", 1, 15.0], ["Pink Floyd", 7, 11.0], ["Poco", 1, 12.0], ["Prince And The Revolution", 1, 13.0], ["Prosecco Socialist", 1, 9.0], ["Pur", 1, 13.0], ["Queen", 23, 10.7], ["R.E.M.", 2, 10.5], ["REO Speedwagon", 7, 11.7], ["Rainbirds", 1, 13.0], ["Randy Crawford", 1, 13.0], ["Randy Newman", 2, 13.5], ["Ray Wilson", 1, 8.0], ["Red Hot Organization", 1, 7.0], ["Richard Marx", 2, 12.0], ["Rick Springfield", 2, 13.0], ["Rickie Lee Jones", 1, 13.0], ["Roger Hodgson", 1, 14.0], ["Roger Taylor", 1, 9.0], ["Roger Waters", 1, 6.0], ["Roxy Music", 1, 13.0], ["Roy Orbison", 2, 12.0], ["Runrig", 3, 11.7], ["Sade", 5, 12.6], ["Saga", 4, 13.5], ["Sam Brown", 2, 13.5], ["Seal", 1, 7.0], ["Sergei Prokofiev , Sting , The Chamber Orchestra Of Europe , Claudio Abbado", 1, 14.0], ["Shakespear's Sister", 1, 6.0], ["Simon & Garfunkel", 4, 11.8], ["Simple Minds", 2, 7.5], ["Simply Red", 3, 14.0], ["Sin\u00e9ad O'Connor", 1, 14.0], ["Spandau Ballet", 5, 12.0], ["Starship", 1, 12.0], ["Steve Perry", 1, 13.0], ["Steve Winwood", 3, 14.3], ["Stevie Nicks", 3, 11.7], ["Sting", 9, 12.8], ["Sting Featuring The Royal Philharmonic Concert Orchestra Conducted By Steven Mercurio", 1, 13.0], ["Styx", 14, 11.1], ["Styx & REO Speedwagon", 1, 7.0], ["Supertramp", 13, 11.8], ["Survivor", 1, 12.0], ["Susanna Hoffs", 1, 10.0], ["Suzanne Vega", 2, 13.5], ["T'Pau", 1, 11.0], ["Talk Talk", 1, 12.0], ["Talking Heads", 2, 14.0], ["Tanita Tikaram", 2, 13.0], ["Taylor Swift", 11, 6.4], ["Tears For Fears", 3, 12.7], ["The Alan Parsons Project", 17, 12.4], ["The Beatles", 16, 10.4], ["The Beautiful South", 2, 11.0], ["The Cars", 1, 13.0], ["The Chieftains", 1, 11.0], ["The Cranberries", 3, 11.3], ["The Cure", 4, 11.5], ["The Dream Academy", 1, 12.0], ["The Heights", 1, 12.0], ["The Housemartins", 2, 12.0], ["The Human League", 1, 13.0], ["The Killers Featuring Bruce Springsteen", 1, 8.0], ["The Moody Blues", 1, 14.0], ["The Notting Hillbillies", 1, 13.0], ["The Police", 2, 15.0], ["The Smiths", 1, 12.0], ["The Style Council", 1, 13.0], ["The The", 5, 11.0], ["The Waterboys", 1, 12.0], ["Tina Turner", 2, 12.5], ["Tom Odell", 3, 6.7], ["Tommy Shaw", 2, 10.5], ["Tony Carey", 1, 12.0], ["Tori Amos", 1, 11.0], ["Toto", 9, 13.1], ["Tracey Ullman", 1, 8.0], ["Tracy Chapman", 1, 14.0], ["Traveling Wilburys", 1, 13.0], ["Trevor Horn", 1, 7.0], ["Trisha Yearwood", 1, 9.0], ["Tupelo", 1, 9.0], ["U2", 5, 11.4], ["USA For Africa", 1, 13.0], ["Ultravox", 1, 11.0], ["Van Morrison", 4, 11.5], ["Various", 13, 12.1], ["Vonda Shepard", 1, 9.0], ["Wet Wet Wet", 2, 12.0], ["Wham!", 2, 11.0], ["Whitney Houston", 2, 13.0], ["William Shatner", 1, 9.0], ["Wilson Phillips", 1, 13.0], ["Wise Guys", 1, 8.0], ["World Party", 1, 13.0], ["Yazoo", 2, 14.5], ["Yes", 3, 10.3], ["Youssou N'Dour & Neneh Cherry", 1, 11.0]];
+      if (hotArtists) { try { hotArtists.destroy(); } catch(e) {} }
+      hotArtists = new Handsontable(document.getElementById('hot-artists'), {
+        data: rows, colHeaders: headers, rowHeaders: false,
+        width: '100%', height: 'calc(100vh - 76px)',
+        licenseKey: 'non-commercial-and-evaluation',
+        themeName: 'ht-theme-classic', readOnly: true,
+        filters: true, dropdownMenu: true, columnSorting: true,
+        manualColumnResize: true, colWidths: headers.map(defaultWidth), stretchH: 'all'
+      });
+    }
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        if (btn.dataset.tab === 'albums' && hotAlbums) hotAlbums.render();
+        if (btn.dataset.tab === 'artists' && hotArtists) hotArtists.render();
+      });
+    });
+
+    document.getElementById('reload').addEventListener('click', renderAlbums);
+
+    renderAlbums();
+    renderArtists();
+  </script>
+</body>
+</html>

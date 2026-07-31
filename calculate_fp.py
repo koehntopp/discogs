@@ -2,7 +2,7 @@
 # /// script
 # dependencies = [
 #   "structlog",
-#   "pytaglib",
+#   "mutagen",
 #   "requests",
 #   "pyacoustid",
 # ]
@@ -14,11 +14,8 @@ import os
 import sys
 from pathlib import Path, PurePosixPath
 
-# https://github.com/beetbox/pyacoustid/tree/master
 import acoustid
-
-# https://github.com/supermihi/pytaglib
-import taglib
+from mutagen.flac import FLAC
 
 from log import logger
 
@@ -36,40 +33,42 @@ def calculate_fp(albumpath: str) -> None:
 	"""
 	total = 0
 	calculated = 0
-	# assumption: folder only contains a single album
-	# iterate over FLAC files, calculate title DR (if possible)
+
 	for p in Path(albumpath).rglob('*.flac'):
 		fullfilename = str(PurePosixPath(p))
 		total += 1
 		fingerprint = ''
+
 		try:
-			with taglib.File(fullfilename) as dr_tags:
+			audio = FLAC(fullfilename)
+			if not audio.tags:
+				audio.add_tags()
+
+			fp_tags = audio.tags.get('ACOUSTID_FINGERPRINT') or audio.tags.get(
+				'ACOUSTID FINGERPRINT'
+			)
+			fingerprint = str(fp_tags[0]).strip() if fp_tags else ''
+
+			if not fingerprint:
 				try:
-					fp_tags = dr_tags.tags.get('ACOUSTID_FINGERPRINT') or dr_tags.tags.get(
-						'ACOUSTID FINGERPRINT'
+					_duration, fingerprint = acoustid.fingerprint_file(
+						fullfilename, maxlength=10000, force_fpcalc=False
 					)
-					fingerprint = fp_tags[0].strip() if fp_tags else ''
-				except (KeyError, IndexError):
-					fingerprint = ''
-				if fingerprint == '':
+					audio['ACOUSTID_FINGERPRINT'] = [fingerprint]
+					audio.save()
 					try:
-						duration, fingerprint = acoustid.fingerprint_file(
-							fullfilename, maxlength=10000, force_fpcalc=False
-						)
-						dr_tags.tags['ACOUSTID_FINGERPRINT'] = [fingerprint]
-						dr_tags.save()
-						try:
-							os.utime(fullfilename, None)
-						except Exception as e:  # noqa: BLE001
-							logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
-						title_str = (dr_tags.tags.get('TITLE') or ['Unknown'])[0]
-						logger.info(f'Calculated AcoustID fingerprint for {title_str}')
-						calculated += 1
+						os.utime(fullfilename, None)
 					except Exception as e:  # noqa: BLE001
-						logger.error(f'Fingerprint calculation failed for {fullfilename}: {e}')
-		except OSError as e:
+						logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
+					title_str = (audio.tags.get('TITLE') or ['Unknown'])[0]
+					logger.info(f'Calculated AcoustID fingerprint for {title_str}')
+					calculated += 1
+				except Exception as e:  # noqa: BLE001
+					logger.error(f'Fingerprint calculation failed for {fullfilename}: {e}')
+		except Exception as e:  # noqa: BLE001
 			logger.warning(f'Could not read FLAC file {fullfilename}: {e}')
 			continue
+
 	logger.info(f'AcoustID fingerprints generated for {calculated} of {total} files.')
 
 
@@ -85,7 +84,7 @@ def main() -> None:
 	else:
 		flacdir = sys.argv[1]
 	flac_directories = []
-	for root, dirs, files in os.walk(flacdir):
+	for root, _dirs, files in os.walk(flacdir):
 		for file in files:
 			if file.endswith('.flac'):
 				flac_directories.append(root)

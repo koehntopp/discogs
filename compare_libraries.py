@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.14"
 # dependencies = [
-# 	"pytaglib",
+# 	"mutagen",
 # 	"structlog",
 # ]
 # ///
@@ -13,7 +13,7 @@ import os
 import re
 from pathlib import Path
 
-import taglib
+from mutagen.flac import FLAC
 
 from log import logger
 
@@ -46,8 +46,12 @@ def scan_album_directories(root: str) -> list[dict]:
 		first_flac = os.path.join(dirpath, flacs[0])
 		tags: dict[str, list[str]] = {}
 		try:
-			with taglib.File(first_flac) as tf:
-				tags = tf.tags
+			audio = FLAC(first_flac)
+			tags = (
+				{k.upper(): [str(x) for x in v] for k, v in audio.tags.items()}
+				if audio.tags
+				else {}
+			)
 		except Exception as e:  # noqa: BLE001
 			logger.warning(f'Could not read FLAC tags from {first_flac}: {e}')
 

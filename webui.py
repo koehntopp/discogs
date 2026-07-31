@@ -1344,8 +1344,7 @@ async def about():
       <tr><td><a href="https://github.com/encode/uvicorn" target="_blank" rel="noopener">Uvicorn</a></td><td>ASGI server</td></tr>
       <tr><td><a href="https://github.com/bigskysoftware/htmx" target="_blank" rel="noopener">HTMX</a></td><td>HTML-driven interactivity without JavaScript</td></tr>
       <tr><td><a href="https://github.com/joalla/discogs_client" target="_blank" rel="noopener">discogs_client</a></td><td>Discogs API client</td></tr>
-      <tr><td><a href="https://github.com/supermihi/pytaglib" target="_blank" rel="noopener">pytaglib</a></td><td>FLAC tag reading and writing via TagLib</td></tr>
-      <tr><td><a href="https://github.com/quodlibet/mutagen" target="_blank" rel="noopener">mutagen</a></td><td>Pure-Python audio metadata library</td></tr>
+      <tr><td><a href="https://github.com/quodlibet/mutagen" target="_blank" rel="noopener">mutagen</a></td><td>Pure-Python audio metadata library for FLAC tag reading and writing</td></tr>
       <tr><td><a href="https://github.com/pandas-dev/pandas" target="_blank" rel="noopener">pandas</a></td><td>Album inventory as DataFrames</td></tr>
       <tr><td><a href="https://github.com/matplotlib/matplotlib" target="_blank" rel="noopener">matplotlib</a></td><td>Dynamic Range distribution chart</td></tr>
       <tr><td><a href="https://github.com/Textualize/rich" target="_blank" rel="noopener">Rich</a></td><td>Coloured terminal output and logging</td></tr>

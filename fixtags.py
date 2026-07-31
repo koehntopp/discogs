@@ -2,7 +2,6 @@
 # /// script
 # dependencies = [
 #   "structlog",
-#   "pytaglib",
 #   "requests",
 #   "discogs_client",
 #   "mutagen",
@@ -19,6 +18,7 @@ from json import JSONDecodeError
 from pathlib import Path, PurePosixPath
 
 from discogs_client.exceptions import HTTPError
+from mutagen.flac import FLAC
 from rich.console import Console
 from rich.progress import (
 	BarColumn,
@@ -140,25 +140,33 @@ def resize_covers(directory: str, max_size: int = _cover_max_size) -> None:
 
 
 # extract a single FLAC tag
-def flactag(song: taglib.File, tag: str, required: bool = False) -> str:
+def flactag(song: FLAC | dict, tag: str, required: bool = False) -> str:
 	"""Extract a single tag value from a FLAC file's metadata.
 
 	Args:
-	    song: TagLib file object with loaded tags.
+	    song: Mutagen FLAC object or dict with loaded tags.
 	    tag: Tag key to retrieve (e.g. 'ALBUM', 'ARTIST').
 	    required: If True, log an error when the tag is missing.
 
 	Returns:
 	    First value for the tag, or empty string if the key is absent.
 	"""
-	try:
-		return song.tags[tag][0]
-	except (KeyError, IndexError):
-		if required:
-			logger.error(
-				f'Tag Error: {tag} -- {song.tags["ALBUMARTIST"][0]} - {song.tags["ALBUM"][0]}'
-			)
-		return ''
+	tags = song.tags if isinstance(song, FLAC) and song.tags else song
+	if not isinstance(tags, dict):
+		try:
+			tags = dict(tags)
+		except Exception:
+			tags = {}
+
+	# Try exact key or uppercase/lowercase key
+	for k in (tag, tag.upper(), tag.lower()):
+		if k in tags and tags[k]:
+			val = tags[k]
+			return str(val[0]) if isinstance(val, (list, tuple)) else str(val)
+
+	if required:
+		logger.error(f'Tag Error: {tag} missing in FLAC metadata')
+	return ''
 
 
 # fix tags for a single album (in a single directory)
@@ -191,10 +199,12 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 	else:
 		return
 	try:
-		with taglib.File(first_flac_path) as tags:
-			first_tags = {k: list(v) for k, v in tags.tags.items()}
-			first_sample_rate = tags.sampleRate
-	except OSError as e:
+		audio = FLAC(first_flac_path)
+		first_tags = (
+			{k.upper(): [str(x) for x in v] for k, v in audio.tags.items()} if audio.tags else {}
+		)
+		first_sample_rate = audio.info.sample_rate if audio.info else 44100
+	except Exception as e:
 		logger.warning(f'Skipping unreadable file {first_flac_path}: {e}')
 		return
 
@@ -223,8 +233,8 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 		# Sample rate & resolution
 		def _read_sr(filepath: str) -> int:
 			try:
-				with taglib.File(filepath) as f:
-					return f.sampleRate
+				f = FLAC(filepath)
+				return f.info.sample_rate if f.info else 0
 			except Exception:  # noqa: BLE001
 				return 0
 
@@ -318,27 +328,33 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 		for p in Path(fixdir).rglob('*.flac'):
 			fullfilename = str(PurePosixPath(p))
 			try:
-				with taglib.File(fullfilename) as tags:
-					stale_removed = False
-					for opt_tag in managed_optional:
-						if opt_tag not in new_tags and opt_tag in tags.tags:
-							tags.tags.pop(opt_tag, None)
-							stale_removed = True
+				audio = FLAC(fullfilename)
+				if not audio.tags:
+					audio.add_tags()
 
-					if stale_removed or any(tags.tags.get(k) != v for k, v in new_tags.items()):
-						tags.tags.update(new_tags)
+				stale_removed = False
+				for opt_tag in managed_optional:
+					if opt_tag not in new_tags and opt_tag in audio.tags:
+						audio.tags.pop(opt_tag, None)
+						stale_removed = True
+
+				needs_update = stale_removed or any(
+					[str(x) for x in audio.tags.get(k, [])] != v for k, v in new_tags.items()
+				)
+
+				if needs_update:
+					for k, v in new_tags.items():
+						audio[k] = v
+					try:
+						audio.save()
 						try:
-							tags.save()
-							try:
-								os.utime(fullfilename, None)
-							except Exception as e:
-								logger.warning(
-									f'Could not touch file mtime for {fullfilename}: {e}'
-								)
-							flac_files += 1
-						except OSError as e:
-							logger.warning(f'Could not save tags for {fullfilename}: {e}')
-			except OSError as e:
+							os.utime(fullfilename, None)
+						except Exception as e:
+							logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
+						flac_files += 1
+					except Exception as e:
+						logger.warning(f'Could not save tags for {fullfilename}: {e}')
+			except Exception as e:
 				logger.warning(f'Skipping unreadable file {fullfilename}: {e}')
 
 		if flac_files > 0:

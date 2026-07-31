@@ -45,7 +45,7 @@ We adopt the following general Python standards and architectural rules across a
   * **Interactive TTY**: Displays live updating progress bars with fixed positional counter fields (`LRC`, `TXT`, `None`, `New`).
   * **Non-TTY (Web UI / Background Tasks)**: Disables ANSI terminal control codes to prevent log output corruption, falling back to periodic `logger.info()` progress broadcasts every 5 seconds.
 
-### 5. Tagging Safety & Metadata Preservation (`pytaglib`)
+### 5. Tagging Safety & Metadata Preservation (`mutagen`)
 * **Authority Anchor**: User-set tags (e.g. `DISCOGS_RELEASE_ID`) are treated as authoritative and must never be overwritten arbitrarily.
 * **Header Parsing Robustness**: Metadata header parsing and regex operations (such as LRC tag headers `[ar:...]`, `[ti:...]`) must use greedy line-boundary matching (`^\[(ar|ti|al|by|length|offset):.*\]\s*$`) to safely handle bracketed values (e.g. titles with `[Remaster]`) without generating duplicate metadata entries.
 

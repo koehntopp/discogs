@@ -2,7 +2,7 @@
 # /// script
 # dependencies = [
 #   "structlog",
-#   "pytaglib",
+#   "mutagen",
 #   "requests",
 #   "rich",
 # ]
@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
-import taglib
+from mutagen.flac import FLAC
 from rich.console import Console
 from rich.progress import (
 	BarColumn,
@@ -58,11 +58,18 @@ def _apply_headers(lrc: str, artist: str, title: str, album: str, length_secs: f
 	return _make_headers(artist, title, album, length_secs) + _strip_headers(lrc)
 
 
-def flactag(song: taglib.File, tag: str) -> str:
-	try:
-		return song.tags.get(tag, [''])[0]
-	except (KeyError, IndexError):
-		return ''
+def flactag(song: FLAC | dict, tag: str) -> str:
+	tags = song.tags if isinstance(song, FLAC) and song.tags else song
+	if not isinstance(tags, dict):
+		try:
+			tags = dict(tags)
+		except Exception:
+			tags = {}
+	for k in (tag, tag.upper(), tag.lower()):
+		if tags.get(k):
+			val = tags[k]
+			return str(val[0]) if isinstance(val, (list, tuple)) else str(val)
+	return ''
 
 
 def _fetch_one(
@@ -79,13 +86,13 @@ def _fetch_one(
 	title = ''
 
 	try:
-		with taglib.File(flac_path) as song:
-			artist = flactag(song, 'ARTIST')
-			title = flactag(song, 'TITLE')
-			discogs_id = flactag(song, 'DISCOGS_RELEASE_ID')
-			track = flactag(song, 'TRACKNUMBER')
-			master_title = flactag(song, 'ALBUM_MASTER_TITLE') or flactag(song, 'ORIGINAL_TITLE')
-			length = float(song.length) if hasattr(song, 'length') else 0.0
+		song = FLAC(flac_path)
+		artist = flactag(song, 'ARTIST')
+		title = flactag(song, 'TITLE')
+		discogs_id = flactag(song, 'DISCOGS_RELEASE_ID')
+		track = flactag(song, 'TRACKNUMBER')
+		master_title = flactag(song, 'ALBUM_MASTER_TITLE') or flactag(song, 'ORIGINAL_TITLE')
+		length = float(song.info.length) if song.info and hasattr(song.info, 'length') else 0.0
 	except Exception as e:  # noqa: BLE001
 		logger.warning(f'Could not read FLAC tags for {flac_path}: {e}')
 		return flac_path, '', '', '', 'none', 'error', '', ''
@@ -212,29 +219,21 @@ def _collect_tracks(flacdir: str) -> list[tuple[str, str]]:
 			continue
 		first = os.path.join(root, flacs[0])
 		try:
-			with taglib.File(first) as tags:
-				discogs_id_str = flactag(tags, 'DISCOGS_RELEASE_ID')
-				album_name = (
-					flactag(tags, 'ALBUM_TITLE_OVERRIDE').strip()
-					or flactag(tags, 'ORIGINAL FILENAME').strip()
-					or flactag(tags, 'ORIGINAL_FILENAME').strip()
-					or flactag(tags, 'ALBUM_MASTER_TITLE').strip()
-					or flactag(tags, 'ORIGINAL_TITLE').strip()
-					or flactag(tags, 'ALBUM').strip()
-				)
-				if '[' in album_name:
-					album_name = album_name.split('[')[0].strip()
+			song = FLAC(first)
+			discogs_id_str = flactag(song, 'DISCOGS_RELEASE_ID')
+			album_name = (
+				flactag(song, 'ALBUM_TITLE_OVERRIDE').strip()
+				or flactag(song, 'ORIGINAL FILENAME').strip()
+				or flactag(song, 'ORIGINAL_FILENAME').strip()
+				or flactag(song, 'ALBUM_MASTER_TITLE').strip()
+				or flactag(song, 'ORIGINAL_TITLE').strip()
+				or flactag(song, 'ALBUM').strip()
+			)
+			if '[' in album_name:
+				album_name = album_name.split('[')[0].strip()
 			int(discogs_id_str)
-		except (OSError, ValueError):
+		except Exception:  # noqa: BLE001
 			continue
-		album_name = (
-			flactag(tags, 'ALBUM_TITLE_OVERRIDE').strip()
-			or flactag(tags, 'ORIGINAL FILENAME').strip()
-			or flactag(tags, 'ORIGINAL_FILENAME').strip()
-			or flactag(tags, 'ALBUM_MASTER_TITLE').strip()
-			or flactag(tags, 'ORIGINAL_TITLE').strip()
-			or flactag(tags, 'ALBUM').strip()
-		)
 		for f in flacs:
 			tracks.append((os.path.join(root, f), album_name))
 	return tracks
@@ -322,28 +321,30 @@ def main() -> None:
 						if action in ('new', 'header', 'clear'):
 							stats['new'] += 1
 							try:
-								with taglib.File(flac_path) as t:
-									if action == 'clear':
-										t.tags.pop('LYRICS', None)
-										t.save()
-										try:
-											os.utime(flac_path, None)
-										except Exception as e:
-											logger.warning(
-												f'Could not touch file mtime for {flac_path}: {e}'
-											)
+								t = FLAC(flac_path)
+								if not t.tags:
+									t.add_tags()
+								if action == 'clear':
+									t.tags.pop('LYRICS', None)
+									t.save()
+									try:
+										os.utime(flac_path, None)
+									except Exception as e:
 										logger.warning(
-											f'Invalid LRC cleared (no replacement found): {title} ({artist})'
+											f'Could not touch file mtime for {flac_path}: {e}'
 										)
-									else:
-										t.tags['LYRICS'] = [lyrics]
-										t.save()
-										try:
-											os.utime(flac_path, None)
-										except Exception as e:
-											logger.warning(
-												f'Could not touch file mtime for {flac_path}: {e}'
-											)
+									logger.warning(
+										f'Invalid LRC cleared (no replacement found): {title} ({artist})'
+									)
+								else:
+									t['LYRICS'] = [lyrics]
+									t.save()
+									try:
+										os.utime(flac_path, None)
+									except Exception as e:
+										logger.warning(
+											f'Could not touch file mtime for {flac_path}: {e}'
+										)
 										if action == 'header':
 											logger.info(f'LRC headers updated: {title} ({artist})')
 										else:

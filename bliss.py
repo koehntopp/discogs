@@ -2,7 +2,7 @@
 # /// script
 # dependencies = [
 #   "structlog",
-#   "pytaglib",
+#   "mutagen",
 #   "pathvalidate",
 #   "unidecode",
 #   "python-slugify",
@@ -22,13 +22,44 @@ _config_dir = os.environ.get('CONFIG_DIR')
 if _config_dir and _config_dir not in sys.path:
 	sys.path.insert(0, _config_dir)
 
-# https://github.com/supermihi/pytaglib
-import taglib
+from mutagen.flac import FLAC
+from mutagen.mp3 import MP3
 from pathvalidate import sanitize_filename
 from slugify import slugify
 
 from config import flacroot, mp3root
 from log import logger, success
+
+
+def read_audio_tags(filepath: str) -> dict[str, list[str]]:
+	"""Read Vorbis/ID3 tags from FLAC or MP3 using mutagen."""
+	if filepath.endswith('.mp3'):
+		try:
+			audio = MP3(filepath)
+			tags: dict[str, list[str]] = {}
+			if audio.tags:
+				for k, v in audio.tags.items():
+					if k.startswith('TALB'):
+						tags['ALBUM'] = [str(v)]
+					elif k.startswith('TPE1'):
+						tags['ARTIST'] = [str(v)]
+					elif k.startswith('TPE2'):
+						tags['ALBUMARTIST'] = [str(v)]
+					elif k.startswith('TIT2'):
+						tags['TITLE'] = [str(v)]
+			return tags
+		except Exception as e:  # noqa: BLE001
+			logger.warning(f'Could not read MP3 tags from {filepath}: {e}')
+			return {}
+
+	try:
+		audio = FLAC(filepath)
+		if audio and audio.tags:
+			return {k.upper(): [str(x) for x in v] for k, v in audio.tags.items()}
+	except Exception as e:  # noqa: BLE001
+		logger.warning(f'Could not read FLAC tags from {filepath}: {e}')
+
+	return {}
 
 
 def hasSubDirs(dir_name: str) -> bool:
@@ -77,29 +108,19 @@ def get_target_path_and_filename(flac_file: str, root_dir: str) -> tuple[str, st
 	    Tuple of (target_path, target_filename, metadata_dict) where metadata_dict
 	    contains 'artist', 'album', and 'track' keys with sanitised string values.
 	"""
-	with taglib.File(flac_file) as metadata:
-		track_title = clean(str(metadata.tags.get('TITLE', ['Unknown Title'])[0]))
-		album_title = clean(str(metadata.tags.get('ALBUM', ['Unknown Album'])[0]))
-		artist = clean(
-			str(
-				metadata.tags.get(
-					'ALBUM_ARTIST_OVERRIDE',
-					metadata.tags.get(
-						'ALBUMARTIST', metadata.tags.get('ARTIST', ['Unknown Artist'])
-					),
-				)[0]
-			)
-		)
+	tags = read_audio_tags(flac_file)
+	track_title = clean(tags.get('TITLE', ['Unknown Title'])[0])
+	album_title = clean(tags.get('ALBUM', ['Unknown Album'])[0])
+	artist = clean(
+		tags.get(
+			'ALBUM_ARTIST_OVERRIDE', tags.get('ALBUMARTIST', tags.get('ARTIST', ['Unknown Artist']))
+		)[0]
+	)
 
-		filename = (
-			str(metadata.tags.get('DISCNUMBER', ['01'])[0]).zfill(2)
-			+ '_'
-			+ str(metadata.tags.get('TRACKNUMBER', ['00'])[0]).zfill(2)
-			+ '_'
-			+ track_title
-			+ '.flac'
-		)
-		path = os.path.join(root_dir, artist, album_title) + '/'
+	disc = tags.get('DISCNUMBER', ['01'])[0].split('/')[0].zfill(2)
+	track = tags.get('TRACKNUMBER', ['00'])[0].split('/')[0].zfill(2)
+	filename = f'{disc}_{track}_{track_title}.flac'
+	path = os.path.join(root_dir, artist, album_title) + '/'
 
 	return path, filename, {'artist': artist, 'album': album_title, 'track': track_title}
 
@@ -161,43 +182,34 @@ def movefiles(flacroot: str, full: bool = False) -> None:
 	for p in pattern_iter:
 		fullfilename = str(PurePosixPath(p))
 		try:
-			# Use safer tag access with defaults
-			with taglib.File(fullfilename) as metadata:
-				stracktitle = clean(str(metadata.tags.get('TITLE', [''])[0]))
-				salbumtitle = clean(str(metadata.tags.get('ALBUM', [''])[0]))
-				sartist = clean(
-					str(
-						metadata.tags.get(
-							'ALBUM_ARTIST_OVERRIDE',
-							metadata.tags.get('ALBUMARTIST', metadata.tags.get('ARTIST', [''])),
-						)[0]
-					)
-				)
-				tobefilename = (
-					str(metadata.tags.get('DISCNUMBER', ['0'])[0]).zfill(2)
-					+ '_'
-					+ str(metadata.tags.get('TRACKNUMBER', ['0'])[0]).zfill(2)
-					+ '_'
-					+ stracktitle
-					+ '.flac'
-				)
-				tobepathname = flacroot + sartist + '/' + salbumtitle + '/'
-				tobefullname = tobepathname + tobefilename
+			tags = read_audio_tags(fullfilename)
+			stracktitle = clean(tags.get('TITLE', [''])[0])
+			salbumtitle = clean(tags.get('ALBUM', [''])[0])
+			sartist = clean(
+				tags.get(
+					'ALBUM_ARTIST_OVERRIDE', tags.get('ALBUMARTIST', tags.get('ARTIST', ['']))
+				)[0]
+			)
+			disc = tags.get('DISCNUMBER', ['0'])[0].split('/')[0].zfill(2)
+			track = tags.get('TRACKNUMBER', ['0'])[0].split('/')[0].zfill(2)
+			tobefilename = f'{disc}_{track}_{stracktitle}.flac'
+			tobepathname = flacroot + sartist + '/' + salbumtitle + '/'
+			tobefullname = tobepathname + tobefilename
 
-				if unicodedata.normalize('NFD', fullfilename.lower()) != unicodedata.normalize(
-					'NFD', tobefullname.lower()
-				):
-					if salbumtitle != currentalbum:
-						currentalbum = salbumtitle
-						success(f'Moving album {salbumtitle}')
-					if os.path.exists(tobefullname):
-						logger.error(
-							f'Refusing to move {fullfilename} -> {tobefullname}: target file already exists!'
-						)
-						continue
-					if not os.path.exists(tobepathname):
-						os.makedirs(tobepathname)
-					shutil.move(fullfilename, tobefullname)
+			if unicodedata.normalize('NFD', fullfilename.lower()) != unicodedata.normalize(
+				'NFD', tobefullname.lower()
+			):
+				if salbumtitle != currentalbum:
+					currentalbum = salbumtitle
+					success(f'Moving album {salbumtitle}')
+				if os.path.exists(tobefullname):
+					logger.error(
+						f'Refusing to move {fullfilename} -> {tobefullname}: target file already exists!'
+					)
+					continue
+				if not os.path.exists(tobepathname):
+					os.makedirs(tobepathname)
+				shutil.move(fullfilename, tobefullname)
 		except Exception as e:  # noqa: BLE001
 			logger.error(f'Error moving file {fullfilename}: {e}')
 			continue
@@ -317,20 +329,14 @@ def checkMP3() -> None:
 				try:
 					if os.path.isfile(firstflac):
 						flac_mtime = os.path.getmtime(firstflac)
-						f_path = firstflac
+						tags = read_audio_tags(firstflac)
 					else:
-						# if we don't have FLAC, read MP3 metadata before deleting
-						f_path = firstmp3
+						tags = read_audio_tags(firstmp3)
 
-					with taglib.File(f_path) as metadata:
-						salbumtitle = clean(str(metadata.tags.get('ALBUM', ['Unknown Album'])[0]))
-						sartist = clean(
-							str(
-								metadata.tags.get(
-									'ALBUMARTIST', metadata.tags.get('ARTIST', ['Unknown Artist'])
-								)[0]
-							)
-						)
+					salbumtitle = clean(tags.get('ALBUM', ['Unknown Album'])[0])
+					sartist = clean(
+						tags.get('ALBUMARTIST', tags.get('ARTIST', ['Unknown Artist']))[0]
+					)
 
 					if not os.path.isfile(firstflac):
 						logger.warning(f'MP3 but no FLAC - deleting {sartist} - {salbumtitle}')
@@ -363,16 +369,10 @@ def createMP3() -> None:
 
 			if not os.path.isfile(mp3filename):
 				# Get metadata
-				with taglib.File(flacfilename) as metadata:
-					stracktitle = clean(str(metadata.tags.get('TITLE', ['Unknown Title'])[0]))
-					salbumtitle = clean(str(metadata.tags.get('ALBUM', ['Unknown Album'])[0]))
-					sartist = clean(
-						str(
-							metadata.tags.get(
-								'ALBUMARTIST', metadata.tags.get('ARTIST', ['Unknown Artist'])
-							)[0]
-						)
-					)
+				tags = read_audio_tags(flacfilename)
+				stracktitle = clean(tags.get('TITLE', ['Unknown Title'])[0])
+				salbumtitle = clean(tags.get('ALBUM', ['Unknown Album'])[0])
+				sartist = clean(tags.get('ALBUMARTIST', tags.get('ARTIST', ['Unknown Artist']))[0])
 
 				# Create directory structure
 				tobepathname = Path(mp3root) / sartist / salbumtitle
@@ -395,7 +395,7 @@ def createMP3() -> None:
 					'2',
 					mp3filename,
 				]
-				subprocess.run(flac2mp3)
+				subprocess.run(flac2mp3, check=False)
 
 		except Exception as e:
 			logger.error(f'Error creating MP3 {flacfilename}: {e}')

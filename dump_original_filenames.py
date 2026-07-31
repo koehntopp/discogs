@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.14"
 # dependencies = [
-# 	"pytaglib",
+# 	"mutagen",
 # 	"structlog",
 # ]
 # ///
@@ -12,7 +12,7 @@ import csv
 import os
 from pathlib import Path
 
-import taglib
+from mutagen.flac import FLAC
 
 from log import logger
 
@@ -23,7 +23,7 @@ except ImportError:
 
 
 def flactag(tags: dict[str, list[str]], tag_name: str) -> str:
-	"""Safely extract the first string value of a tag from taglib tags dict."""
+	"""Safely extract the first string value of a tag from tags dict."""
 	val = tags.get(tag_name, [''])
 	return val[0] if val and val[0] else ''
 
@@ -50,8 +50,12 @@ def dump_original_filenames(root_dir: str, output_csv: str) -> int:
 			continue
 		flac_path = os.path.join(directory, flacs[0])
 		try:
-			with taglib.File(flac_path) as f:
-				tags = f.tags
+			audio = FLAC(flac_path)
+			tags = (
+				{k.upper(): [str(x) for x in v] for k, v in audio.tags.items()}
+				if audio.tags
+				else {}
+			)
 		except Exception as e:  # noqa: BLE001
 			logger.warning(f'Could not read FLAC file {flac_path}: {e}')
 			continue

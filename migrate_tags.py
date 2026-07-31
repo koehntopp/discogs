@@ -2,7 +2,6 @@
 # /// script
 # dependencies = [
 #   "structlog",
-#   "pytaglib",
 #   "pandas",
 #   "mutagen",
 #   "rich",
@@ -16,7 +15,7 @@ import sys
 from pathlib import Path, PurePosixPath
 
 import pandas as pd
-import taglib
+from mutagen.flac import FLAC
 from rich.console import Console
 from rich.progress import (
 	BarColumn,
@@ -68,8 +67,9 @@ def process_album_directory(directory: str, write_mode: bool) -> dict | None:
 	for fname in flacs:
 		fpath = str(PurePosixPath(directory) / fname)
 		try:
-			with taglib.File(fpath) as tf:
-				max_rate_hz = max(max_rate_hz, tf.sampleRate)
+			audio = FLAC(fpath)
+			if audio.info:
+				max_rate_hz = max(max_rate_hz, audio.info.sample_rate)
 		except Exception:  # noqa: BLE001, S110
 			pass
 	max_res_str = (
@@ -79,8 +79,8 @@ def process_album_directory(directory: str, write_mode: bool) -> dict | None:
 	# 2. Read first track metadata
 	first_flac = str(PurePosixPath(directory) / flacs[0])
 	try:
-		with taglib.File(first_flac) as tf:
-			tags = tf.tags
+		audio = FLAC(first_flac)
+		tags = {k.upper(): [str(x) for x in v] for k, v in audio.tags.items()} if audio.tags else {}
 	except Exception as e:  # noqa: BLE001
 		logger.warning(f'Could not read first track in {directory}: {e}')
 		return None
@@ -130,12 +130,14 @@ def process_album_directory(directory: str, write_mode: bool) -> dict | None:
 	if write_mode:
 		album_updates = {
 			'ALBUM_MASTER_TITLE': [title_source],
-			'ALBUM_MASTER_YEAR': [master_year] if master_year else [],
-			'ALBUM_RELEASE_YEAR': [release_year] if release_year else [],
 			'ALBUM_FORMAT': [album_format],
 			'ALBUM_MAX_RESOLUTION': [max_res_str],
 			'ALBUM': [new_album],
 		}
+		if master_year:
+			album_updates['ALBUM_MASTER_YEAR'] = [master_year]
+		if release_year:
+			album_updates['ALBUM_RELEASE_YEAR'] = [release_year]
 		if album_edition:
 			album_updates['ALBUM_EDITION'] = [album_edition]
 		if dr_score:
@@ -144,96 +146,96 @@ def process_album_directory(directory: str, write_mode: bool) -> dict | None:
 		for fname in flacs:
 			fpath = str(PurePosixPath(directory) / fname)
 			try:
-				with taglib.File(fpath) as tf:
-					file_tags = tf.tags
+				tf = FLAC(fpath)
+				if not tf.tags:
+					tf.add_tags()
 
-					# Track-level space key migrations
-					if 'DYNAMIC RANGE' in file_tags:
-						file_tags['DYNAMIC_RANGE'] = file_tags.pop('DYNAMIC RANGE')
-					if 'ACOUSTID FINGERPRINT' in file_tags:
-						file_tags['ACOUSTID_FINGERPRINT'] = file_tags.pop('ACOUSTID FINGERPRINT')
-					if 'ALBUM DYNAMIC RANGE' in file_tags:
-						if not flactag(file_tags, 'ALBUM_DR'):
-							file_tags['ALBUM_DR'] = file_tags['ALBUM DYNAMIC RANGE']
-						file_tags.pop('ALBUM DYNAMIC RANGE', None)
+				# Track-level space key migrations
+				if 'DYNAMIC RANGE' in tf.tags:
+					val = tf.tags.pop('DYNAMIC RANGE')
+					tf['DYNAMIC_RANGE'] = val
+				if 'ACOUSTID FINGERPRINT' in tf.tags:
+					val = tf.tags.pop('ACOUSTID FINGERPRINT')
+					tf['ACOUSTID_FINGERPRINT'] = val
+				if 'ALBUM DYNAMIC RANGE' in tf.tags:
+					if 'ALBUM_DR' not in tf.tags:
+						tf['ALBUM_DR'] = tf.tags['ALBUM DYNAMIC RANGE']
+					tf.tags.pop('ALBUM DYNAMIC RANGE', None)
 
-					# Legacy mapping copies
-					if 'ORIGINAL_TITLE' in file_tags and 'ALBUM_MASTER_TITLE' not in file_tags:
-						file_tags['ALBUM_MASTER_TITLE'] = file_tags['ORIGINAL_TITLE']
+				# Legacy mapping copies
+				if 'DATE' in tf.tags and 'RELEASEDATE' not in tf.tags:
+					tf['RELEASEDATE'] = tf.tags['DATE']
+				if 'ORIGINALDATE' in tf.tags and 'ORIGINALRELEASEDATE' not in tf.tags:
+					tf['ORIGINALRELEASEDATE'] = tf.tags['ORIGINALDATE']
 
-					# Apply album-level updates
-					for k, v in album_updates.items():
-						if v:
-							file_tags[k] = v
+				for k, v in album_updates.items():
+					if v:
+						tf[k] = v
 
-					tf.save()
-					try:
-						os.utime(fpath, None)
-					except Exception:  # noqa: BLE001, S110
-						pass
+				tf.save()
+				try:
+					os.utime(fpath, None)
+				except Exception as e:  # noqa: BLE001
+					logger.warning(f'Could not touch file mtime for {fpath}: {e}')
 			except Exception as e:  # noqa: BLE001
-				logger.error(f'Error updating {fpath}: {e}')
+				logger.warning(f'Error updating tags in {fpath}: {e}')
 
 	return record
 
 
-def main():
-	parser = argparse.ArgumentParser(
-		description='Migrate FLAC tags to structured underscore schema.'
-	)
-	parser.add_argument('directory', nargs='?', help='Directory to process')
-	parser.add_argument(
-		'--write', action='store_true', help='Apply changes to FLAC files (default is --dry-run)'
-	)
-	args = parser.parse_args()
-
-	root_dir = args.directory or getattr(__import__('config'), 'flacroot', '.')
-	write_mode = args.write
-
-	mode_str = 'WRITE' if write_mode else 'DRY-RUN'
-	logger.info(f'Starting tag migration ({mode_str} mode) in {root_dir}')
-
-	flac_dirs = []
-	for dirpath, _, files in os.walk(root_dir):
+def scan_and_migrate(root_dir: str, write_mode: bool, output_csv: str) -> None:
+	logger.info(f'Scanning FLAC library at: {root_dir}')
+	album_dirs = []
+	for root, _dirs, files in os.walk(root_dir):
 		if any(f.endswith('.flac') for f in files):
-			flac_dirs.append(dirpath)
+			album_dirs.append(root)
 
-	logger.info(f'Found {len(flac_dirs)} album directories to process')
+	total_dirs = len(album_dirs)
+	logger.info(f'Found {total_dirs} album directories.')
 
+	records = []
+	use_tty = _is_tty()
 	console = Console(stderr=True)
+
 	progress = Progress(
 		SpinnerColumn(),
-		TextColumn('[bold blue]Migrating tags:'),
+		TextColumn('[progress.description]{task.description}'),
 		BarColumn(),
 		MofNCompleteColumn(),
 		TimeRemainingColumn(),
 		console=console,
-		disable=not _is_tty,
+		disable=not use_tty,
 	)
 
-	results = []
-	orig_stream = _console_handler.stream
 	with progress:
-		if _is_tty:
-			_console_handler.stream = sys.stderr
-		try:
-			task_id = progress.add_task('Migrating', total=len(flac_dirs))
-			for d in flac_dirs:
-				rec = process_album_directory(d, write_mode)
-				if rec:
-					results.append(rec)
-				progress.update(task_id, advance=1)
-		finally:
-			if _is_tty:
-				_console_handler.stream = orig_stream
+		task = progress.add_task('Migrating tags...', total=total_dirs)
+		for album_dir in album_dirs:
+			res = process_album_directory(album_dir, write_mode=write_mode)
+			if res:
+				records.append(res)
+			progress.update(task, advance=1)
 
-	df = pd.DataFrame(results)
-	if not write_mode:
-		out_csv = Path('migration_dry_run.csv')
-		df.to_csv(out_csv, index=False)
-		logger.info(f'Dry-run complete. Results written to {out_csv.resolve()}')
-	else:
-		logger.info(f'Migration complete. Updated {len(results)} album directories.')
+	df = pd.DataFrame(records)
+	df.to_csv(output_csv, index=False)
+	logger.info(f'Migration summary saved to {output_csv}')
+
+
+def main() -> None:
+	parser = argparse.ArgumentParser(
+		description='Migrate FLAC tags to discrete schema and generate summary CSV.'
+	)
+	parser.add_argument('directory', nargs='?', default='.', help='Library root directory')
+	parser.add_argument(
+		'--write', action='store_true', help='Write updated tags back to FLAC files'
+	)
+	parser.add_argument(
+		'--output',
+		default='migration_dry_run.csv',
+		help='Output CSV file path (default: migration_dry_run.csv)',
+	)
+	args = parser.parse_args()
+
+	scan_and_migrate(args.directory, write_mode=args.write, output_csv=args.output)
 
 
 if __name__ == '__main__':
