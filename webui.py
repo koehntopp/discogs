@@ -107,14 +107,31 @@ def _clear_proc() -> None:
 
 
 def _cache_load() -> pd.DataFrame:
-	"""Return the in-memory album cache, loading from CSV if needed."""
+	"""Return the in-memory album cache, loading from CSV if needed and filtering non-existent dirs."""
 	global _album_cache
 	if _album_cache is None:
 		csv = _config_dir() / 'albums.csv'
 		if csv.exists():
 			try:
-				_album_cache = pd.read_csv(csv, dtype=str).fillna('')
-			except Exception as e:
+				df = pd.read_csv(csv, dtype=str).fillna('')
+				dir_col = None
+				for col in ('_DIRECTORY_PATH', 'Directory', '_directory_path'):
+					if col in df.columns:
+						dir_col = col
+						break
+				if dir_col:
+					initial_len = len(df)
+					df = df[df[dir_col].apply(lambda d: bool(d and Path(d).exists()))]
+					if len(df) < initial_len:
+						try:
+							df.to_csv(csv, index=False)
+							logger.info(
+								f'_cache_load: purged {initial_len - len(df)} non-existent directory rows'
+							)
+						except Exception as e:  # noqa: BLE001
+							logger.error(f'cache load purge write: {e}')
+				_album_cache = df
+			except Exception as e:  # noqa: BLE001
 				logger.error(f'cache load: {e}')
 				_album_cache = pd.DataFrame()
 		else:
@@ -131,13 +148,15 @@ def _cache_update(new_rows: list[dict], drop_dirs: set[str]) -> None:
 	"""Replace rows matching drop_dirs with new_rows, then write through to CSV and album_cache.json."""
 	global _album_cache
 	df = _cache_load()
-	dir_col = None
 	for col in ('_DIRECTORY_PATH', 'Directory', '_directory_path'):
 		if col in df.columns:
-			dir_col = col
-			break
-	if dir_col:
-		df = df[~df[dir_col].isin(drop_dirs)]
+			df = df[~df[col].isin(drop_dirs)]
+	# Unify directory keys across all new rows
+	for r in new_rows:
+		d = r.get('_DIRECTORY_PATH') or r.get('Directory') or ''
+		if d:
+			r['_DIRECTORY_PATH'] = d
+			r['Directory'] = d
 	df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
 	_album_cache = df
 	try:
@@ -758,6 +777,7 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 		except Exception as e:
 			logger.warning(f'cover art read failed for {album_dir}: {e}')
 			row['Cover Art'] = ''
+		row['_DIRECTORY_PATH'] = album_dir
 		row['Directory'] = album_dir
 		return row
 

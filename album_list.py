@@ -108,6 +108,7 @@ def save_csv(df: pd.DataFrame, out: Path) -> None:
 	existing = [t for t in ALBUM_TAGS + ['COVER_ART'] if t in df.columns]
 	out_df = df[existing].rename(columns=DISPLAY_NAMES)
 	if '_DIRECTORY_PATH' in df.columns:
+		out_df['_DIRECTORY_PATH'] = df['_DIRECTORY_PATH'].values
 		out_df['Directory'] = df['_DIRECTORY_PATH'].values
 	out_df.to_csv(out, index=False)
 
