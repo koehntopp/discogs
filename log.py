@@ -55,9 +55,38 @@ else:
 		)
 	)
 
+
+def parse_log_level(val: str | int) -> int:
+	if isinstance(val, int):
+		return val
+	s = str(val).upper().strip()
+	if s == 'SUCCESS':
+		return SUCCESS
+	return getattr(logging, s, logging.INFO)
+
+
+_log_level_env = os.environ.get('LOG_LEVEL')
+_log_level_cfg = None
+
+try:
+	from config import log_level as _cfg_level
+
+	_log_level_cfg = _cfg_level
+except ImportError:
+	pass
+
+_active_level = parse_log_level(_log_level_env or _log_level_cfg or 'INFO')
+
 _root = logging.getLogger()
 _root.addHandler(_console_handler)
-_root.setLevel(logging.INFO)
+_root.setLevel(_active_level)
+
+
+def set_log_level(level_name_or_int: str | int) -> None:
+	"""Set active log level dynamically (e.g. 'SUCCESS' to hide INFO logs)."""
+	_root.setLevel(parse_log_level(level_name_or_int))
+
+
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
 logging.getLogger('PIL').setLevel(logging.WARNING)
 

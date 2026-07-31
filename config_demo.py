@@ -36,6 +36,7 @@ rsgain_true_peak = True
 rsgain_skip = True
 
 # Logging
+log_level = 'SUCCESS'  # 'INFO', 'SUCCESS', 'WARNING', or 'ERROR'
 # syslog_host = '192.168.1.1'  # uncomment to enable Synology log server
 # syslog_port = 514
 log_file = 'discogs.log'

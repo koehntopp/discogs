@@ -112,6 +112,7 @@ uv run webui.py
 |-----------------|---------|-------------|
 | `PORT`          | `8000`  | HTTP port for the FastAPI server |
 | `CONFIG_DIR`    | `.`     | Path to directory containing `config.py` and log files |
+| `LOG_LEVEL`     | `SUCCESS` | Active log verbosity (`DEBUG`, `INFO`, `SUCCESS`, `WARNING`, `ERROR`). Set to `SUCCESS` (25) to suppress `INFO` logs. |
 | `DISCOGS_CHILD` | *(unset)* | Set to `1` in child subprocesses to skip duplicate log file writes |
 
 **Behaviour:**
