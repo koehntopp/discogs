@@ -22,6 +22,7 @@ import sys as _sys
 if _os.environ.get('PREINSTALL_ONLY'):
 	_sys.exit(0)
 
+import json
 import re
 import subprocess
 
@@ -127,17 +128,41 @@ def _cache_invalidate() -> None:
 
 
 def _cache_update(new_rows: list[dict], drop_dirs: set[str]) -> None:
-	"""Replace rows matching drop_dirs with new_rows, then write through to CSV."""
+	"""Replace rows matching drop_dirs with new_rows, then write through to CSV and album_cache.json."""
 	global _album_cache
 	df = _cache_load()
-	if 'Directory' in df.columns:
-		df = df[~df['Directory'].isin(drop_dirs)]
+	dir_col = None
+	for col in ('_DIRECTORY_PATH', 'Directory', '_directory_path'):
+		if col in df.columns:
+			dir_col = col
+			break
+	if dir_col:
+		df = df[~df[dir_col].isin(drop_dirs)]
 	df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
 	_album_cache = df
 	try:
 		df.to_csv(_config_dir() / 'albums.csv', index=False)
-	except Exception as e:
+	except Exception as e:  # noqa: BLE001
 		logger.error(f'cache write: {e}')
+
+	# Synchronize album_cache.json so rescans don't revert metadata
+	cache_file = _config_dir() / 'album_cache.json'
+	if cache_file.exists():
+		try:
+			cache_data = json.loads(cache_file.read_text(encoding='utf-8'))
+			for r in new_rows:
+				d = r.get('_DIRECTORY_PATH') or r.get('Directory')
+				if d and Path(d).exists():
+					flacs = [f for f in os.listdir(d) if f.endswith('.flac')]
+					if flacs:
+						mtime = max(os.path.getmtime(os.path.join(d, f)) for f in flacs)
+						cache_data[d] = {'mtime': mtime, 'data': r}
+			for d in drop_dirs:
+				if d in cache_data and not Path(d).exists():
+					cache_data.pop(d, None)
+			cache_file.write_text(json.dumps(cache_data, indent=2), encoding='utf-8')
+		except Exception as e:  # noqa: BLE001
+			logger.warning(f'Could not update album_cache.json: {e}')
 
 
 COLUMNS = [
