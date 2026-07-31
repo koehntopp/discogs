@@ -284,80 +284,98 @@ def main() -> None:
 					executor.submit(_fetch_one, path, album, session): path
 					for path, album in tracks
 				}
-				for future in as_completed(futures):
-					try:
-						flac_path, artist, title, lyrics, lyric_type, action, discogs_id, track = (
-							future.result()
-						)
-					except Exception as e:
-						logger.error(f'Fetch error: {e}')
-						done += 1
-						progress.update(task_id, advance=1, **stats)
-						continue
-
-					done += 1
-					if lyric_type == 'lrc':
-						stats['lrc'] += 1
-					elif lyric_type == 'txt':
-						stats['txt'] += 1
-					else:
-						stats['none'] += 1
-
-					if action in ('new', 'header', 'clear'):
-						stats['new'] += 1
+				try:
+					for future in as_completed(futures):
 						try:
-							t = taglib.File(flac_path)
-							if action == 'clear':
-								t.tags.pop('LYRICS', None)
-								t.save()
-								try:
-									os.utime(flac_path, None)
-								except Exception as e:
+							(
+								flac_path,
+								artist,
+								title,
+								lyrics,
+								lyric_type,
+								action,
+								discogs_id,
+								track,
+							) = future.result()
+						except Exception as e:
+							logger.error(f'Fetch error: {e}')
+							done += 1
+							progress.update(task_id, advance=1, **stats)
+							continue
+
+						done += 1
+						if lyric_type == 'lrc':
+							stats['lrc'] += 1
+						elif lyric_type == 'txt':
+							stats['txt'] += 1
+						else:
+							stats['none'] += 1
+
+						if action in ('new', 'header', 'clear'):
+							stats['new'] += 1
+							try:
+								t = taglib.File(flac_path)
+								if action == 'clear':
+									t.tags.pop('LYRICS', None)
+									t.save()
+									try:
+										os.utime(flac_path, None)
+									except Exception as e:
+										logger.warning(
+											f'Could not touch file mtime for {flac_path}: {e}'
+										)
 									logger.warning(
-										f'Could not touch file mtime for {flac_path}: {e}'
+										f'Invalid LRC cleared (no replacement found): {title} ({artist})'
 									)
-								logger.warning(
-									f'Invalid LRC cleared (no replacement found): {title} ({artist})'
-								)
-							else:
-								t.tags['LYRICS'] = [lyrics]
-								t.save()
-								try:
-									os.utime(flac_path, None)
-								except Exception as e:
-									logger.warning(
-										f'Could not touch file mtime for {flac_path}: {e}'
-									)
-								if action == 'header':
-									logger.info(f'LRC headers updated: {title} ({artist})')
 								else:
-									kind = 'LRC' if lyric_type == 'lrc' else 'TXT'
-									logger.info(f'{kind} lyrics added: {title} ({artist})')
-						except OSError as e:
-							logger.error(f'Could not save lyrics for {flac_path}: {e}')
+									t.tags['LYRICS'] = [lyrics]
+									t.save()
+									try:
+										os.utime(flac_path, None)
+									except Exception as e:
+										logger.warning(
+											f'Could not touch file mtime for {flac_path}: {e}'
+										)
+									if action == 'header':
+										logger.info(f'LRC headers updated: {title} ({artist})')
+									else:
+										kind = 'LRC' if lyric_type == 'lrc' else 'TXT'
+										logger.info(f'{kind} lyrics added: {title} ({artist})')
+							except OSError as e:
+								logger.error(f'Could not save lyrics for {flac_path}: {e}')
 
-					if discogs_id:
-						lrc_file = lyrics_dir / f'{discogs_id}_{track}.lrc'
-						txt_file = lyrics_dir / f'{discogs_id}_{track}.txt'
-						if action == 'clear' or not lyrics:
-							lrc_file.unlink(missing_ok=True)
-							txt_file.unlink(missing_ok=True)
-						elif lyrics:
-							ext = 'lrc' if lyric_type == 'lrc' or lyrics.startswith('[') else 'txt'
-							target_file = lyrics_dir / f'{discogs_id}_{track}.{ext}'
-							other_file = txt_file if ext == 'lrc' else lrc_file
-							other_file.unlink(missing_ok=True)
-							target_file.write_text(lyrics, encoding='utf-8')
+						if discogs_id:
+							lrc_file = lyrics_dir / f'{discogs_id}_{track}.lrc'
+							txt_file = lyrics_dir / f'{discogs_id}_{track}.txt'
+							if action == 'clear' or not lyrics:
+								lrc_file.unlink(missing_ok=True)
+								txt_file.unlink(missing_ok=True)
+							elif lyrics:
+								ext = (
+									'lrc'
+									if lyric_type == 'lrc' or lyrics.startswith('[')
+									else 'txt'
+								)
+								target_file = lyrics_dir / f'{discogs_id}_{track}.{ext}'
+								other_file = txt_file if ext == 'lrc' else lrc_file
+								other_file.unlink(missing_ok=True)
+								target_file.write_text(lyrics, encoding='utf-8')
 
-					progress.update(task_id, advance=1, **stats)
+						progress.update(task_id, advance=1, **stats)
 
-					if not is_tty and time.monotonic() - last_report >= 5:
-						logger.info(
-							f'Progress: {done}/{total} tracks — '
-							f'LRC: {stats["lrc"]} TXT: {stats["txt"]} '
-							f'None: {stats["none"]} New/updated: {stats["new"]}'
-						)
-						last_report = time.monotonic()
+						if not is_tty and time.monotonic() - last_report >= 5:
+							logger.info(
+								f'Progress: {done}/{total} tracks — '
+								f'LRC: {stats["lrc"]} TXT: {stats["txt"]} '
+								f'None: {stats["none"]} New/updated: {stats["new"]}'
+							)
+							last_report = time.monotonic()
+				except KeyboardInterrupt:
+					logger.warning('Interrupted by user (Ctrl+C). Exiting...')
+					executor.shutdown(wait=False, cancel_futures=True)
+					if is_tty:
+						_console_handler.stream = orig_stream
+					sys.exit(130)
 		finally:
 			if is_tty:
 				_console_handler.stream = orig_stream
