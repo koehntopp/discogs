@@ -107,7 +107,7 @@ def scan_and_migrate(root_dir: str, write_mode: bool, output_csv: str) -> None:
 	logger.info(f'Found {total_dirs} album directories.')
 
 	records = []
-	use_tty = _is_tty()
+	use_tty = _is_tty
 	console = Console(stderr=True)
 
 	progress = Progress(
