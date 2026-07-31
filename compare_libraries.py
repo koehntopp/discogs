@@ -233,6 +233,22 @@ def compare_libraries(reference_dir: str, target_dir: str, output_csv: str) -> N
 	logger.warning(f'Detailed report saved to: {output_path.resolve()}')
 
 
+def list_library_stats(directory: str) -> None:
+	"""Scan a single library directory and print summary of album and song counts."""
+	path = Path(directory).resolve()
+	logger.info(f'Scanning FLAC library statistics at: {path}')
+	albums = scan_album_directories(str(path))
+	total_albums = len(albums)
+	total_songs = sum(a['track_count'] for a in albums)
+	avg_songs = (total_songs / total_albums) if total_albums > 0 else 0.0
+
+	logger.warning('=== Library Statistics ===')
+	logger.warning(f'Directory:    {path}')
+	logger.warning(f'Total Albums: {total_albums}')
+	logger.warning(f'Total Songs:  {total_songs} FLAC files')
+	logger.warning(f'Avg Tracks:   {avg_songs:.1f} songs/album')
+
+
 def main():
 	parser = argparse.ArgumentParser(
 		description='Tag-aware comparison between reference library (old tags/paths) and target library.'
@@ -244,6 +260,12 @@ def main():
 		help=f'Path to target library root (default: {default_target})',
 	)
 	parser.add_argument(
+		'-s',
+		'--stats',
+		action='store_true',
+		help='List album and song counts for the specified directory instead of comparing',
+	)
+	parser.add_argument(
 		'-o',
 		'--output',
 		default='library_comparison.csv',
@@ -251,7 +273,10 @@ def main():
 	)
 	args = parser.parse_args()
 
-	compare_libraries(args.reference_dir, args.target, args.output)
+	if args.stats:
+		list_library_stats(args.reference_dir)
+	else:
+		compare_libraries(args.reference_dir, args.target, args.output)
 
 
 if __name__ == '__main__':

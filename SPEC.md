@@ -458,13 +458,14 @@ uv run dump_original_filenames.py [-o OUTPUT_CSV] [DIR]
 **Usage:**
 
 ```bash
-uv run compare_libraries.py /path/to/reference_library [--target /path/to/target_library] [-o library_comparison.csv]
+uv run compare_libraries.py /path/to/reference_library [--target /path/to/target_library] [-s] [-o library_comparison.csv]
 ```
 
 | Argument | Required | Description |
 |---|---|---|
 | `reference_dir` | Yes | Path to the reference / backup FLAC library root. |
 | `--target` | No | Path to target library root (defaults to `config.flacroot`). |
+| `-s`, `--stats` | No | List total albums, FLAC song count, and average tracks/album for `reference_dir` instead of comparing. |
 | `-o`, `--output` | No | Output CSV report path (defaults to `library_comparison.csv`). |
 
 ---
