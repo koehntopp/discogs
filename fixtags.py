@@ -87,10 +87,20 @@ def resize_covers(directory: str, max_size: int = _cover_max_size) -> None:
 			changed = False
 			new_pictures = []
 			for pic in audio.pictures:
-				if pic.mime not in ('image/jpeg', 'image/png'):
+				if (
+					pic.mime not in ('image/jpeg', 'image/png')
+					or not pic.data
+					or len(pic.data) < 100
+				):
 					new_pictures.append(pic)
 					continue
-				img = Image.open(io.BytesIO(pic.data))
+				try:
+					img = Image.open(io.BytesIO(pic.data))
+					img.load()
+				except Exception as err:  # noqa: BLE001
+					logger.warning(f'Corrupt or unparseable embedded image in {flac_path}: {err}')
+					new_pictures.append(pic)
+					continue
 				w, h = img.size
 				if w <= max_size and h <= max_size:
 					new_pictures.append(pic)
