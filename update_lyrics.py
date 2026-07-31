@@ -1,3 +1,4 @@
+#!/usr/bin/env -S uv run
 # /// script
 # dependencies = [
 #   "structlog",
@@ -28,8 +29,8 @@ from rich.progress import (
 
 from log import _console_handler, logger
 
-LRC_TIMESTAMP = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]')        # valid: [MM:SS.xx]
-LRC_BAD_TS    = re.compile(r'\[\d{3,}:\d{2}:\d{2}\.\d{2}\]') # invalid: [HH:MM:SS.xx]
+LRC_TIMESTAMP = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]')  # valid: [MM:SS.xx]
+LRC_BAD_TS = re.compile(r'\[\d{3,}:\d{2}:\d{2}\.\d{2}\]')  # invalid: [HH:MM:SS.xx]
 LRC_HEADER_LINE = re.compile(r'^\[(ar|ti|al|by|length|offset):.*\]\s*$', re.IGNORECASE)
 MAX_WORKERS = 8
 
@@ -44,20 +45,12 @@ def _is_invalid_lrc(text: str) -> bool:
 
 def _make_headers(artist: str, title: str, album: str, length_secs: float) -> str:
 	mins, secs = divmod(int(length_secs), 60)
-	return (
-		f'[ar:{artist}]\n'
-		f'[ti:{title}]\n'
-		f'[al:{album}]\n'
-		f'[length:{mins:02d}:{secs:02d}]\n'
-	)
+	return f'[ar:{artist}]\n[ti:{title}]\n[al:{album}]\n[length:{mins:02d}:{secs:02d}]\n'
 
 
 def _strip_headers(lrc: str) -> str:
 	"""Remove existing metadata header lines, keep timestamp lines."""
-	return '\n'.join(
-		line for line in lrc.splitlines()
-		if not LRC_HEADER_LINE.match(line)
-	).strip()
+	return '\n'.join(line for line in lrc.splitlines() if not LRC_HEADER_LINE.match(line)).strip()
 
 
 def _apply_headers(lrc: str, artist: str, title: str, album: str, length_secs: float) -> str:
@@ -71,7 +64,9 @@ def flactag(song: taglib.File, tag: str) -> str:
 		return ''
 
 
-def _fetch_one(flac_path: str, album_name: str, session: requests.Session) -> tuple[str, str, str, str, str, str, str, str]:
+def _fetch_one(
+	flac_path: str, album_name: str, session: requests.Session
+) -> tuple[str, str, str, str, str, str, str, str]:
 	"""Read tags, fetch/upgrade lyrics, apply LRC metadata headers from FLAC tags.
 
 	Returns (flac_path, artist, title, lyrics, lyric_type, action, discogs_id, track) where
@@ -83,12 +78,16 @@ def _fetch_one(flac_path: str, album_name: str, session: requests.Session) -> tu
 		logger.warning(f'Skipping unreadable file {flac_path}: {e}')
 		return flac_path, '', '', '', 'none', 'none', '', '00'
 
-	artist     = flactag(tags, 'ARTIST')
-	title      = flactag(tags, 'TITLE')
-	length     = tags.length
-	existing   = flactag(tags, 'LYRICS').strip()
+	artist = (
+		flactag(tags, 'ARTIST')
+		or flactag(tags, 'ALBUM_ARTIST_OVERRIDE')
+		or flactag(tags, 'ALBUMARTIST')
+	)
+	title = flactag(tags, 'TITLE')
+	length = tags.length
+	existing = flactag(tags, 'LYRICS').strip()
 	discogs_id = flactag(tags, 'DISCOGS_RELEASE_ID').strip()
-	track      = flactag(tags, 'TRACKNUMBER').split('/')[0].zfill(2)
+	track = flactag(tags, 'TRACKNUMBER').split('/')[0].zfill(2)
 
 	had_invalid_lrc = bool(existing and _is_invalid_lrc(existing))
 	if had_invalid_lrc:
@@ -104,14 +103,21 @@ def _fetch_one(flac_path: str, album_name: str, session: requests.Session) -> tu
 			return flac_path, artist, title, with_headers, 'lrc', 'header', discogs_id, track
 		return flac_path, artist, title, existing, 'lrc', 'keep', discogs_id, track
 
-	clean_album = flactag(tags, 'ALBUM_MASTER_TITLE') or album_name.split(' [')[0].strip()
+	clean_album = (
+		flactag(tags, 'ALBUM_MASTER_TITLE').strip()
+		or flactag(tags, 'ORIGINAL_TITLE').strip()
+		or flactag(tags, 'ALBUM_TITLE_OVERRIDE').strip()
+		or flactag(tags, 'ORIGINAL FILENAME').strip()
+		or flactag(tags, 'ORIGINAL_FILENAME').strip()
+		or album_name.split(' [')[0].strip()
+	)
 
 	# No LRC yet — fetch from lrclib
 	params = {
 		'artist_name': artist,
-		'track_name':  title,
-		'album_name':  clean_album,
-		'duration':    str(round(length)),
+		'track_name': title,
+		'album_name': clean_album,
+		'duration': str(round(length)),
 	}
 	data = {}
 	max_retries = 5
@@ -128,26 +134,35 @@ def _fetch_one(flac_path: str, album_name: str, session: requests.Session) -> tu
 				data = response.json()
 				break
 			elif response.status_code == 404:
-				# Normal case: lyrics not found
+				# If album_name exact match was not found on lrclib, fallback to artist + title + duration
+				if 'album_name' in params:
+					params.pop('album_name')
+					continue
 				break
 			elif response.status_code == 429:
 				if attempt < max_retries:
-					sleep_time = backoff * (2 ** attempt)
+					sleep_time = backoff * (2**attempt)
 					time.sleep(sleep_time)
 				else:
-					logger.warning(f"Rate limited (429) fetching lyrics for '{title}', retries exhausted")
+					logger.warning(
+						f"Rate limited (429) fetching lyrics for '{title}', retries exhausted"
+					)
 			else:
 				if attempt < max_retries:
-					sleep_time = backoff * (2 ** attempt)
+					sleep_time = backoff * (2**attempt)
 					time.sleep(sleep_time)
 				else:
-					logger.warning(f"Server error ({response.status_code}) fetching lyrics for '{title}', retries exhausted")
+					logger.warning(
+						f"Server error ({response.status_code}) fetching lyrics for '{title}', retries exhausted"
+					)
 		except Exception as e:
 			if attempt < max_retries:
-				sleep_time = backoff * (2 ** attempt)
+				sleep_time = backoff * (2**attempt)
 				time.sleep(sleep_time)
 			else:
-				logger.warning(f"Request error ({type(e).__name__}) fetching lyrics for '{title}', retries exhausted")
+				logger.warning(
+					f"Request error ({type(e).__name__}) fetching lyrics for '{title}', retries exhausted"
+				)
 
 	if data.get('syncedLyrics'):
 		lrc = re.sub(r'\[(\d{2}:\d{2}\.\d{2})\d\]', r'[\1]', data['syncedLyrics'])
@@ -161,7 +176,16 @@ def _fetch_one(flac_path: str, album_name: str, session: requests.Session) -> tu
 
 	if had_invalid_lrc:
 		return flac_path, artist, title, '', 'none', 'clear', discogs_id, track
-	return flac_path, artist, title, existing, ('txt' if existing else 'none'), 'keep', discogs_id, track
+	return (
+		flac_path,
+		artist,
+		title,
+		existing,
+		('txt' if existing else 'none'),
+		'keep',
+		discogs_id,
+		track,
+	)
 
 
 def _collect_tracks(flacdir: str) -> list[tuple[str, str]]:
@@ -180,7 +204,14 @@ def _collect_tracks(flacdir: str) -> list[tuple[str, str]]:
 			int(flactag(tags, 'DISCOGS_RELEASE_ID'))
 		except ValueError:
 			continue
-		album_name = flactag(tags, 'ORIGINAL_TITLE').strip() or flactag(tags, 'ALBUM')
+		album_name = (
+			flactag(tags, 'ALBUM_TITLE_OVERRIDE').strip()
+			or flactag(tags, 'ORIGINAL FILENAME').strip()
+			or flactag(tags, 'ORIGINAL_FILENAME').strip()
+			or flactag(tags, 'ALBUM_MASTER_TITLE').strip()
+			or flactag(tags, 'ORIGINAL_TITLE').strip()
+			or flactag(tags, 'ALBUM').strip()
+		)
 		for f in flacs:
 			tracks.append((os.path.join(root, f), album_name))
 	return tracks
@@ -202,7 +233,9 @@ def main() -> None:
 	last_report = time.monotonic()
 	is_tty = sys.stderr.isatty()
 
-	data_dir = Path(os.environ.get('CONFIG_DIR') or getattr(__import__('config'), 'config_dir', '.'))
+	data_dir = Path(
+		os.environ.get('CONFIG_DIR') or getattr(__import__('config'), 'config_dir', '.')
+	)
 	lyrics_dir = data_dir / 'lyrics'
 	lyrics_dir.mkdir(parents=True, exist_ok=True)
 
@@ -232,10 +265,15 @@ def main() -> None:
 		try:
 			task_id = progress.add_task('Fetching', total=total, **stats)
 			with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-				futures = {executor.submit(_fetch_one, path, album, session): path for path, album in tracks}
+				futures = {
+					executor.submit(_fetch_one, path, album, session): path
+					for path, album in tracks
+				}
 				for future in as_completed(futures):
 					try:
-						flac_path, artist, title, lyrics, lyric_type, action, discogs_id, track = future.result()
+						flac_path, artist, title, lyrics, lyric_type, action, discogs_id, track = (
+							future.result()
+						)
 					except Exception as e:
 						logger.error(f'Fetch error: {e}')
 						done += 1
@@ -260,15 +298,21 @@ def main() -> None:
 								try:
 									os.utime(flac_path, None)
 								except Exception as e:
-									logger.warning(f'Could not touch file mtime for {flac_path}: {e}')
-								logger.warning(f'Invalid LRC cleared (no replacement found): {title} ({artist})')
+									logger.warning(
+										f'Could not touch file mtime for {flac_path}: {e}'
+									)
+								logger.warning(
+									f'Invalid LRC cleared (no replacement found): {title} ({artist})'
+								)
 							else:
 								t.tags['LYRICS'] = [lyrics]
 								t.save()
 								try:
 									os.utime(flac_path, None)
 								except Exception as e:
-									logger.warning(f'Could not touch file mtime for {flac_path}: {e}')
+									logger.warning(
+										f'Could not touch file mtime for {flac_path}: {e}'
+									)
 								if action == 'header':
 									logger.info(f'LRC headers updated: {title} ({artist})')
 								else:

@@ -1,10 +1,12 @@
+#!/usr/bin/env -S uv run
 # /// script
 # dependencies = ["structlog"]
 # ///
 
-import sys
-import os
 import logging
+import os
+import sys
+
 import structlog
 
 # Allow config.py to live outside the scripts directory (e.g. /config in Docker).
@@ -22,9 +24,7 @@ _shared_processors = [
 ]
 
 structlog.configure(
-	processors=_shared_processors + [
-		structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
-	],
+	processors=_shared_processors + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
 	logger_factory=structlog.stdlib.LoggerFactory(),
 	wrapper_class=structlog.stdlib.BoundLogger,
 	cache_logger_on_first_use=True,
@@ -36,7 +36,7 @@ if _is_tty:
 	# Interactive terminal: pretty coloured output to stderr
 	_level_styles = {
 		**structlog.dev.ConsoleRenderer.get_default_level_styles(),
-		'info':    structlog.dev.RESET_ALL,
+		'info': structlog.dev.RESET_ALL,
 		'success': '\033[32m',  # green
 	}
 	_console_handler = logging.StreamHandler(sys.stderr)
@@ -51,8 +51,7 @@ else:
 	_console_handler = logging.StreamHandler(sys.stdout)
 	_console_handler.setFormatter(
 		structlog.stdlib.ProcessorFormatter(
-			processor=structlog.processors.JSONRenderer(),
-			foreign_pre_chain=_shared_processors,
+			processor=structlog.processors.JSONRenderer(), foreign_pre_chain=_shared_processors
 		)
 	)
 
@@ -66,19 +65,20 @@ if not os.environ.get('DISCOGS_CHILD'):
 	# Skip file logging in child processes spawned by webui — the parent captures
 	# their stdout and re-logs, so writing to the file here would double every line.
 	try:
-		from config import log_file, log_rotation, log_retention
+		from config import log_file
+
 		try:
 			from config import config_dir
 		except ImportError:
 			config_dir = '.'
 		from pathlib import Path
+
 		_log_path = Path(os.environ.get('CONFIG_DIR') or config_dir) / log_file
 		_log_path.parent.mkdir(parents=True, exist_ok=True)
 		_file_handler = logging.FileHandler(str(_log_path), encoding='utf-8')
 		_file_handler.setFormatter(
 			structlog.stdlib.ProcessorFormatter(
-				processor=structlog.processors.JSONRenderer(),
-				foreign_pre_chain=_shared_processors,
+				processor=structlog.processors.JSONRenderer(), foreign_pre_chain=_shared_processors
 			)
 		)
 		_root.addHandler(_file_handler)
@@ -86,11 +86,11 @@ if not os.environ.get('DISCOGS_CHILD'):
 		pass  # log to console only if config is missing or broken
 
 
-
 if not os.environ.get('DISCOGS_CHILD'):
 	try:
-		from config import syslog_host, syslog_port
 		from logging.handlers import SysLogHandler
+
+		from config import syslog_host, syslog_port
 
 		class _SafeSysLogHandler(SysLogHandler):
 			def emit(self, record):

@@ -1,3 +1,4 @@
+#!/usr/bin/env -S uv run
 # /// script
 # dependencies = [
 #   "structlog",
@@ -25,26 +26,36 @@ import taglib
 from mutagen.flac import FLAC
 
 ALBUM_TAGS = [
-	'ALBUMARTIST', 'ALBUM', 'ALBUM_DR', 'ALBUM_FORMAT', 'ALBUM_EDITION',
-	'ORIGINAL_TITLE', 'ORIGINAL FILENAME', 'ORIGINALDATE', 'RELEASEDATE',
-	'CATALOGNUMBER', 'DISCOGS_RELEASE_ID', 'MUSICBRAINZ_ALBUMID', 'SUBTITLE',
+	'ALBUMARTIST',
+	'ALBUM',
+	'ALBUM_DR',
+	'ALBUM_FORMAT',
+	'ALBUM_EDITION',
+	'ORIGINAL_TITLE',
+	'ORIGINAL FILENAME',
+	'ORIGINALDATE',
+	'RELEASEDATE',
+	'CATALOGNUMBER',
+	'DISCOGS_RELEASE_ID',
+	'MUSICBRAINZ_ALBUMID',
+	'SUBTITLE',
 ]
 
 DISPLAY_NAMES = {
-	'ALBUMARTIST':        'Album Artist',
-	'ALBUM':              'Album',
-	'ALBUM_DR':           'DR',
-	'ALBUM_FORMAT':       'Format',
-	'ALBUM_EDITION':      'Edition',
-	'ORIGINAL_TITLE':     'Original Title',
-	'ORIGINAL FILENAME':  'Original Filename',
-	'ORIGINALDATE':       'Original Date',
-	'RELEASEDATE':        'Release Date',
-	'CATALOGNUMBER':      'Catalog',
+	'ALBUMARTIST': 'Album Artist',
+	'ALBUM': 'Album',
+	'ALBUM_DR': 'DR',
+	'ALBUM_FORMAT': 'Format',
+	'ALBUM_EDITION': 'Edition',
+	'ORIGINAL_TITLE': 'Original Title',
+	'ORIGINAL FILENAME': 'Original Filename',
+	'ORIGINALDATE': 'Original Date',
+	'RELEASEDATE': 'Release Date',
+	'CATALOGNUMBER': 'Catalog',
 	'DISCOGS_RELEASE_ID': 'Discogs',
-	'MUSICBRAINZ_ALBUMID':'MusicBrainz',
-	'SUBTITLE':           'Version',
-	'COVER_ART':          'Cover Art',
+	'MUSICBRAINZ_ALBUMID': 'MusicBrainz',
+	'SUBTITLE': 'Version',
+	'COVER_ART': 'Cover Art',
 }
 
 SCRIPTS_DIR = Path(__file__).parent
@@ -75,8 +86,11 @@ def read_album(directory: str) -> dict | None:
 		return None
 
 	album_result = {tag: (tags.get(tag, [''])[0] or '') for tag in ALBUM_TAGS}
+	artist_override = tags.get('ALBUM_ARTIST_OVERRIDE', [''])[0]
+	if artist_override:
+		album_result['ALBUMARTIST'] = artist_override
 	if not album_result.get('ALBUM_DR'):
-		album_result['ALBUM_DR'] = (tags.get('ALBUM DYNAMIC RANGE', [''])[0] or '')
+		album_result['ALBUM_DR'] = tags.get('ALBUM DYNAMIC RANGE', [''])[0] or ''
 	album_result['COVER_ART'] = cover_art_dimensions(flac_path)
 	album_result['_DIRECTORY_PATH'] = directory
 	return album_result
@@ -123,11 +137,13 @@ def save_chart(df: pd.DataFrame, out: Path) -> None:
 def main() -> None:
 	root = sys.argv[1] if len(sys.argv) == 2 else str(__import__('config').flacroot)
 
-	logger.info(f"Scanning {root}")
+	logger.info(f'Scanning {root}')
 	flac_dirs = find_flac_dirs(root)
-	logger.info(f"Found {len(flac_dirs)} album directories")
+	logger.info(f'Found {len(flac_dirs)} album directories')
 
-	data_dir = Path(os.environ.get('CONFIG_DIR') or getattr(__import__('config'), 'config_dir', '.'))
+	data_dir = Path(
+		os.environ.get('CONFIG_DIR') or getattr(__import__('config'), 'config_dir', '.')
+	)
 	data_dir.mkdir(parents=True, exist_ok=True)
 	cache_file = data_dir / 'album_cache.json'
 
@@ -136,7 +152,7 @@ def main() -> None:
 		try:
 			cache = json.loads(cache_file.read_text(encoding='utf-8'))
 		except Exception as e:
-			logger.warning(f"Could not load album cache, rebuilding: {e}")
+			logger.warning(f'Could not load album cache, rebuilding: {e}')
 
 	new_cache = {}
 	to_scan = []
@@ -158,7 +174,7 @@ def main() -> None:
 
 	cache_hits = len(flac_dirs) - len(to_scan)
 	if cache_hits > 0:
-		logger.info(f"Using cached metadata for {cache_hits}/{len(flac_dirs)} albums")
+		logger.info(f'Using cached metadata for {cache_hits}/{len(flac_dirs)} albums')
 
 	albums = [entry['data'] for entry in new_cache.values()]
 
@@ -175,17 +191,17 @@ def main() -> None:
 					albums.append(result)
 					new_cache[d] = {'mtime': mtime, 'data': result}
 				if done % 50 == 0 or done == len(to_scan):
-					logger.info(f"Scanned {done}/{len(to_scan)} modified albums")
+					logger.info(f'Scanned {done}/{len(to_scan)} modified albums')
 
 	try:
 		cache_file.write_text(json.dumps(new_cache, indent=2), encoding='utf-8')
 	except Exception as e:
-		logger.warning(f"Could not save album cache: {e}")
+		logger.warning(f'Could not save album cache: {e}')
 
 	df = pd.DataFrame(albums)
 	save_csv(df, data_dir / 'albums.csv')
 	save_chart(df, data_dir / 'albums_dr.png')
-	logger.info(f"Done: {len(albums)} albums written to {data_dir / 'albums.csv'}")
+	logger.info(f'Done: {len(albums)} albums written to {data_dir / "albums.csv"}')
 
 
 if __name__ == '__main__':

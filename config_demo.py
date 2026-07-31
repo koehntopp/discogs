@@ -1,43 +1,43 @@
 # Copy this file to /config/config.py and fill in your values.
 # In Docker: all paths below are container-internal paths (from volume mounts).
 
-config_dir = '/config'          # must match CONFIG_DIR env var
+config_dir = '/config'  # must match CONFIG_DIR env var
 
-discogs_api_key = '<DISCOGS API KEY>'   # https://www.discogs.com/settings/developers
+discogs_api_key = '<DISCOGS API KEY>'  # https://www.discogs.com/settings/developers
 
-tagger_scheme = 'yate://load'   # URL scheme for your tagger app
+tagger_scheme = 'yate://load'  # URL scheme for your tagger app
 
 # Container-internal path (Docker volume mount point)
-flacroot    = '/flac/'          # mapped from e.g. /volume1/FLAC on Synology
-mp3root     = '/mp3/'           # mapped from e.g. /volume1/MP3 on Synology
+flacroot = '/flac/'  # mapped from e.g. /volume1/FLAC on Synology
+mp3root = '/mp3/'  # mapped from e.g. /volume1/MP3 on Synology
 
 # Path as seen from the machine running the browser (for tagger links)
 flacroot_local = '/volume1/FLAC/'
 
-nzbdir      = '/nzb/'           # mapped from e.g. /volume1/nzb/complete
+nzbdir = '/nzb/'  # mapped from e.g. /volume1/nzb/complete
 
 # rclone sync to remote
-rclone_source    = 'FLAC:/flac'         # rclone remote for source
-flacroot_remote  = 'REMOTE:/path/'      # rclone remote for destination
-rclone_flags     = 'sync'
+rclone_source = 'FLAC:/flac'  # rclone remote for source
+flacroot_remote = 'REMOTE:/path/'  # rclone remote for destination
+rclone_flags = 'sync'
 rclone_transfers = 16
-rclone_checkers  = 32
+rclone_checkers = 32
 rclone_buffer_size = '128M'
-rclone_stats     = '5s'
+rclone_stats = '5s'
 
 # Cover art
-cover_max_size = 1500               # resize embedded cover art to this max dimension (px)
+cover_max_size = 1500  # resize embedded cover art to this max dimension (px)
 
 # rsgain ReplayGain settings
-rsgain_loudness    = -14
-rsgain_clip_mode   = 'a'
-rsgain_max_peak    = -1.0
-rsgain_true_peak   = True
-rsgain_skip        = True
+rsgain_loudness = -14
+rsgain_clip_mode = 'a'
+rsgain_max_peak = -1.0
+rsgain_true_peak = True
+rsgain_skip = True
 
 # Logging
 # syslog_host = '192.168.1.1'  # uncomment to enable Synology log server
 # syslog_port = 514
-log_file      = 'discogs.log'
-log_rotation  = '10 MB'
+log_file = 'discogs.log'
+log_rotation = '10 MB'
 log_retention = '30 days'

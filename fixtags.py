@@ -1,3 +1,4 @@
+#!/usr/bin/env -S uv run
 # /// script
 # dependencies = [
 #   "structlog",
@@ -45,25 +46,13 @@ def discogs_fetch(fn, *args, retries: int = 3, backoff: float = 60.0):
 			return fn(*args)
 		except (JSONDecodeError, HTTPError) as e:
 			if attempt < retries:
-				logger.warning(f'Discogs API error ({type(e).__name__}), sleeping {backoff}s (attempt {attempt + 1}/{retries})')
+				logger.warning(
+					f'Discogs API error ({type(e).__name__}), sleeping {backoff}s (attempt {attempt + 1}/{retries})'
+				)
 				time.sleep(backoff)
 			else:
 				raise
 
-KNOWN_FORMATS = {'CD', 'SACD', 'BLU-RAY', 'BLURAY', 'VINYL', 'VINYL RIP', 'LP', 'CASSETTE', 'TAPE', 'WEB', 'DIGITAL'}
-
-def parse_subtitle(subtitle: str) -> tuple[str, str]:
-	"""Parse SUBTITLE into (format, edition)."""
-	if not subtitle:
-		return 'CD', ''
-	upper = subtitle.upper()
-	if upper in KNOWN_FORMATS:
-		return subtitle, ''
-	for fmt in sorted(KNOWN_FORMATS, key=len, reverse=True):
-		if upper.startswith(fmt):
-			edition = subtitle[len(fmt):].strip(' -_,()')
-			return fmt, edition
-	return 'CD', subtitle
 
 # import music libraries
 # https://github.com/joalla/discogs_client
@@ -124,189 +113,226 @@ def resize_covers(directory: str, max_size: int = _cover_max_size) -> None:
 				for pic in new_pictures:
 					audio.add_picture(pic)
 				audio.save()
-				success(f'Album art resized {orig_size} → {new_pictures[-1].width}x{new_pictures[-1].height} in {album_name}')
+				success(
+					f'Album art resized {orig_size} → {new_pictures[-1].width}x{new_pictures[-1].height} in {album_name}'
+				)
 		except Exception as e:
 			logger.warning(f'Cover resize failed for {flac_path}: {e}')
 
 
 # extract a single FLAC tag
 def flactag(song: taglib.File, tag: str, required: bool = False) -> str:
-   """Extract a single tag value from a FLAC file's metadata.
+	"""Extract a single tag value from a FLAC file's metadata.
 
-   Args:
-       song: TagLib file object with loaded tags.
-       tag: Tag key to retrieve (e.g. 'ALBUM', 'ARTIST').
-       required: If True, log an error when the tag is missing.
+	Args:
+	    song: TagLib file object with loaded tags.
+	    tag: Tag key to retrieve (e.g. 'ALBUM', 'ARTIST').
+	    required: If True, log an error when the tag is missing.
 
-   Returns:
-       First value for the tag, or empty string if the key is absent.
-   """
-   try:
-      return(song.tags[tag][0])
-   except (KeyError, IndexError):
-      if required:
-         logger.error(f'Tag Error: {tag} -- {song.tags["ALBUMARTIST"][0]} - {song.tags["ALBUM"][0]}')
-      return("")
+	Returns:
+	    First value for the tag, or empty string if the key is absent.
+	"""
+	try:
+		return song.tags[tag][0]
+	except (KeyError, IndexError):
+		if required:
+			logger.error(
+				f'Tag Error: {tag} -- {song.tags["ALBUMARTIST"][0]} - {song.tags["ALBUM"][0]}'
+			)
+		return ''
+
 
 # fix tags for a single album (in a single directory)
 def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
-   """Enrich all FLAC files in a single album directory with Discogs metadata.
+	"""Enrich all FLAC files in a single album directory with Discogs metadata.
 
-   Reads the DISCOGS_RELEASE_ID tag from the first FLAC file found, queries the
-   Discogs API for release and master-release data, then updates every FLAC file in
-   the directory with a normalised set of tags:
+	Reads the DISCOGS_RELEASE_ID tag from the first FLAC file found, queries the
+	Discogs API for release and master-release data, then updates every FLAC file in
+	the directory with a normalised set of tags:
 
-       RELEASEDATE / DATE    – release year of this specific pressing
-       ORIGINALDATE / ORIGINALRELEASEDATE – year of the master (original) release
-       ALBUM                 – formatted title: "<name> [<year> <desc> <kHz>DR<dr>]"
-       ORIGINAL_TITLE        – canonical Discogs title (from master release if available)
+	    RELEASEDATE / DATE    – release year of this specific pressing
+	    ORIGINALDATE / ORIGINALRELEASEDATE – year of the master (original) release
+	    ALBUM                 – formatted title: "<name> [<year> <desc> <kHz>DR<dr>]"
+	    ORIGINAL_TITLE        – canonical Discogs title (from master release if available)
 
-   Skips the directory silently if no FLAC files exist or if DISCOGS_RELEASE_ID is
-   missing / non-numeric. Sleeps 1 second after each Discogs API call to respect the
-   rate limit.
+	Skips the directory silently if no FLAC files exist or if DISCOGS_RELEASE_ID is
+	missing / non-numeric. Sleeps 1 second after each Discogs API call to respect the
+	rate limit.
 
-   Args:
-       fixdir: Absolute path to the album directory to process.
-       dclient: Authenticated Discogs client instance.
-   """
-   flac_files = 0
-   first_flac = next((filename for filename in os.listdir(fixdir) if filename.endswith(".flac")), None)
-   if first_flac is not None:
-      first_flac_path = os.path.join(fixdir, first_flac)
-   else:
-      return
-   try:
-      tags = taglib.File(first_flac_path)
-   except OSError as e:
-      logger.warning(f'Skipping unreadable file {first_flac_path}: {e}')
-      return
-   discogs = True
-   try:
-      discogs_id = int(flactag(tags, 'DISCOGS_RELEASE_ID'))
-   except ValueError:
-      discogs = False
-      return
-   # if we found discogs tags to work with go ahead
-   if discogs:
-      drelease = discogs_fetch(dclient.release, discogs_id)
+	Args:
+	    fixdir: Absolute path to the album directory to process.
+	    dclient: Authenticated Discogs client instance.
+	"""
+	flac_files = 0
+	first_flac = next(
+		(filename for filename in os.listdir(fixdir) if filename.endswith('.flac')), None
+	)
+	if first_flac is not None:
+		first_flac_path = os.path.join(fixdir, first_flac)
+	else:
+		return
+	try:
+		tags = taglib.File(first_flac_path)
+	except OSError as e:
+		logger.warning(f'Skipping unreadable file {first_flac_path}: {e}')
+		return
+	discogs = True
+	try:
+		discogs_id = int(flactag(tags, 'DISCOGS_RELEASE_ID'))
+	except ValueError:
+		discogs = False
+		return
+	# if we found discogs tags to work with go ahead
+	if discogs:
+		drelease = discogs_fetch(dclient.release, discogs_id)
 
-      try:
-         master = discogs_fetch(lambda: drelease.master)
-         discogs_name = master.title.strip() if master else discogs_fetch(lambda: drelease.title.strip())
-      except Exception:
-         master = None
-         discogs_name = discogs_fetch(lambda: drelease.title.strip())
+		release_title = discogs_fetch(lambda: drelease.title.strip())
+		try:
+			master = discogs_fetch(lambda: drelease.master)
+			master_title = discogs_fetch(lambda: master.title.strip()) if master else release_title
+		except Exception:  # noqa: BLE001
+			master = None
+			master_title = release_title
 
-      album_name = flactag(tags, 'ALBUM_TITLE_OVERRIDE') or flactag(tags, 'ORIGINAL FILENAME').strip() or discogs_name
-      
-      # Sample rate & resolution
-      max_rate_hz = max((taglib.File(str(p)).sampleRate for p in Path(fixdir).rglob('*.flac') if p.suffix == '.flac'), default=tags.sampleRate)
-      max_res_str = f"{max_rate_hz / 1000:.1f}kHz".replace('.0kHz', 'kHz') if max_rate_hz > 0 else '44.1kHz'
+		album_name = flactag(tags, 'ALBUM_TITLE_OVERRIDE') or master_title
 
-      try:
-         album_year_release = int(flactag(tags, 'ALBUM_RELEASE_YEAR') or flactag(tags, 'DATE'))
-      except ValueError:
-         album_year_release = drelease.year
-      try:
-         album_year_master = discogs_fetch(lambda: master.main_release.year) if master else album_year_release
-      except Exception:
-         logger.warning(f'Could not fetch master release year for Discogs ID {discogs_id} in {fixdir}, using release year')
-         album_year_master = album_year_release
-      if album_year_release == 0 and album_year_master != 0:
-         album_year_release = album_year_master
-      if album_year_release != 0 and album_year_master == 0:
-         album_year_master = album_year_release
+		# Sample rate & resolution
+		max_rate_hz = max(
+			(
+				taglib.File(str(p)).sampleRate
+				for p in Path(fixdir).rglob('*.flac')
+				if p.suffix == '.flac'
+			),
+			default=tags.sampleRate,
+		)
+		max_res_str = (
+			f'{max_rate_hz / 1000:.1f}kHz'.replace('.0kHz', 'kHz') if max_rate_hz > 0 else '44.1kHz'
+		)
 
-      subtitle = flactag(tags, 'SUBTITLE').strip()
-      album_format = flactag(tags, 'ALBUM_FORMAT')
-      album_edition = flactag(tags, 'ALBUM_EDITION')
-      if not album_format or not album_edition:
-         fmt_parsed, ed_parsed = parse_subtitle(subtitle)
-         if not album_format:
-            album_format = fmt_parsed
-         if not album_edition:
-            album_edition = ed_parsed
+		try:
+			album_year_release = int(flactag(tags, 'ALBUM_RELEASE_YEAR') or flactag(tags, 'DATE'))
+		except ValueError:
+			album_year_release = drelease.year
+		try:
+			album_year_master = (
+				discogs_fetch(lambda: master.main_release.year) if master else album_year_release
+			)
+		except Exception:  # noqa: BLE001
+			logger.warning(
+				f'Could not fetch master release year for Discogs ID {discogs_id} in {fixdir}, using release year'
+			)
+			album_year_master = album_year_release
+		if album_year_release == 0 and album_year_master != 0:
+			album_year_release = album_year_master
+		if album_year_release != 0 and album_year_master == 0:
+			album_year_master = album_year_release
 
-      dr_rating = flactag(tags, 'ALBUM_DR') or flactag(tags, 'ALBUM DYNAMIC RANGE').strip() or ''
+		subtitle = flactag(tags, 'SUBTITLE').strip()
+		album_format = flactag(tags, 'ALBUM_FORMAT') or subtitle or 'CD'
+		album_edition = flactag(tags, 'ALBUM_EDITION')
 
-      ed_str = f" ({album_edition})" if album_edition else ""
-      yr_str = f" {album_year_release}" if album_year_release else ""
-      fmt_str = f" {album_format}" if album_format else ""
-      album_newtitle = f"{album_name} [{yr_str.strip()}{fmt_str}{ed_str}]"
+		dr_rating = flactag(tags, 'ALBUM_DR') or flactag(tags, 'ALBUM DYNAMIC RANGE').strip() or ''
 
-      new_tags = {
-         'RELEASEDATE': [str(album_year_release)],
-         'DATE': [str(album_year_release)],
-         'ORIGINALDATE': [str(album_year_master)],
-         'ORIGINALRELEASEDATE': [str(album_year_master)],
-         'ALBUM_MASTER_TITLE': [discogs_name],
-         'ALBUM_MASTER_YEAR': [str(album_year_master)],
-         'ALBUM_RELEASE_YEAR': [str(album_year_release)],
-         'ALBUM_FORMAT': [album_format],
-         'ALBUM_MAX_RESOLUTION': [max_res_str],
-         'ALBUM': [album_newtitle],
-         'ORIGINAL_TITLE': [discogs_name],
-      }
-      if album_edition:
-         new_tags['ALBUM_EDITION'] = [album_edition]
-      if dr_rating:
-         new_tags['ALBUM_DR'] = [dr_rating]
+		ed_str = f' ({album_edition})' if album_edition else ''
+		yr_str = f' {album_year_release}' if album_year_release else ''
+		fmt_str = f' {album_format}' if album_format else ''
+		album_newtitle = f'{album_name} [{yr_str.strip()}{fmt_str}{ed_str}]'
 
-      for p in Path(fixdir).rglob('*.flac'):
-         fullfilename = str(PurePosixPath(p))
-         try:
-            tags = taglib.File(fullfilename)
-         except OSError as e:
-            logger.warning(f'Skipping unreadable file {fullfilename}: {e}')
-            continue
-         if any(tags.tags.get(k) != v for k, v in new_tags.items()):
-            tags.tags.update(new_tags)
-            try:
-               tags.save()
-               try:
-                  os.utime(fullfilename, None)
-               except Exception as e:
-                  logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
-               flac_files += 1
-            except OSError as e:
-               logger.warning(f'Could not save tags for {fullfilename}: {e}')
-      
-      if flac_files > 0:
-         success(f'Album name changed to {album_newtitle}')
-      else:
-         logger.info(f'No changes required for {album_newtitle}')
-      resize_covers(fixdir)
-   else:
-      logger.error(f'No Discogs release ID found in {fixdir}')
+		new_tags = {
+			'RELEASEDATE': [str(album_year_release)],
+			'DATE': [str(album_year_release)],
+			'YEAR': [str(album_year_release)],
+			'ORIGINALDATE': [str(album_year_master)],
+			'ORIGINALRELEASEDATE': [str(album_year_master)],
+			'ORIGINAL DATE': [str(album_year_master)],
+			'ORIGINAL YEAR': [str(album_year_master)],
+			'ALBUM_MASTER_TITLE': [master_title],
+			'ALBUM_RELEASE_TITLE': [release_title],
+			'ALBUM_MASTER_YEAR': [str(album_year_master)],
+			'ALBUM_RELEASE_YEAR': [str(album_year_release)],
+			'ALBUM_FORMAT': [album_format],
+			'ALBUM_MAX_RESOLUTION': [max_res_str],
+			'ALBUM': [album_newtitle],
+			'ORIGINAL_TITLE': [master_title],
+		}
+		if album_edition:
+			new_tags['ALBUM_EDITION'] = [album_edition]
+		if dr_rating:
+			new_tags['ALBUM_DR'] = [dr_rating]
+
+		try:
+			country = discogs_fetch(lambda: drelease.country.strip())
+			if country:
+				new_tags['ALBUM_RELEASE_COUNTRY'] = [country]
+		except Exception:  # noqa: BLE001
+			pass
+
+		try:
+			labels = discogs_fetch(lambda: drelease.labels)
+			if labels and len(labels) > 0:
+				label_name = labels[0].name.strip()
+				if label_name:
+					new_tags['ALBUM_RELEASE_LABEL'] = [label_name]
+		except Exception:  # noqa: BLE001
+			pass
+
+		for p in Path(fixdir).rglob('*.flac'):
+			fullfilename = str(PurePosixPath(p))
+			try:
+				tags = taglib.File(fullfilename)
+			except OSError as e:
+				logger.warning(f'Skipping unreadable file {fullfilename}: {e}')
+				continue
+			if any(tags.tags.get(k) != v for k, v in new_tags.items()):
+				tags.tags.update(new_tags)
+				try:
+					tags.save()
+					try:
+						os.utime(fullfilename, None)
+					except Exception as e:
+						logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
+					flac_files += 1
+				except OSError as e:
+					logger.warning(f'Could not save tags for {fullfilename}: {e}')
+
+		if flac_files > 0:
+			success(f'Album name changed to {album_newtitle}')
+		else:
+			logger.info(f'No changes required for {album_newtitle}')
+		resize_covers(fixdir)
+	else:
+		logger.error(f'No Discogs release ID found in {fixdir}')
+
 
 def main() -> None:
-    """Entry point: locate all FLAC album directories and apply Discogs tag enrichment.
+	"""Entry point: locate all FLAC album directories and apply Discogs tag enrichment.
 
-    Accepts an optional positional directory argument; falls back to flacdir from
-    config.py when none is given. Creates a single authenticated Discogs client and
-    processes each discovered album directory in sequence.
-    """
-    parser = argparse.ArgumentParser(description='Fix FLAC file tags using Discogs metadata')
-    parser.add_argument('directory', nargs='?',
-                       help='directory containing FLAC files to process')
-    args = parser.parse_args()
+	Accepts an optional positional directory argument; falls back to flacdir from
+	config.py when none is given. Creates a single authenticated Discogs client and
+	processes each discovered album directory in sequence.
+	"""
+	parser = argparse.ArgumentParser(description='Fix FLAC file tags using Discogs metadata')
+	parser.add_argument('directory', nargs='?', help='directory containing FLAC files to process')
+	args = parser.parse_args()
 
-    if args.directory:
-        flacdir = args.directory
-    else:
-        import config
-        flacdir = config.nzbdir
+	if args.directory:
+		flacdir = args.directory
+	else:
+		import config
 
-    flac_directories = []
-    for root, dirs, files in os.walk(flacdir):
-        for file in files:
-            if file.endswith(".flac"):
-                flac_directories.append(root)
-                break
-    
-    dclient = discogs_client.Client('PyDiscogsTagger/0.1', user_token=api_key)
-    for directory in flac_directories:
-        fixdir(directory, dclient)
+		flacdir = config.nzbdir
+
+	flac_directories = []
+	for root, dirs, files in os.walk(flacdir):
+		for file in files:
+			if file.endswith('.flac'):
+				flac_directories.append(root)
+				break
+
+	dclient = discogs_client.Client('PyDiscogsTagger/0.1', user_token=api_key)
+	for directory in flac_directories:
+		fixdir(directory, dclient)
+
 
 if __name__ == '__main__':
-   main()
+	main()

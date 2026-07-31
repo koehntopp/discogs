@@ -1,12 +1,13 @@
+#!/usr/bin/env -S uv run
 # /// script
 # dependencies = ["mcp", "pandas"]
 # ///
 """Standalone MCP server exposing the albums.csv music library."""
 
-import os
-import sys
 import csv
+import os
 from pathlib import Path
+
 from mcp.server.fastmcp import FastMCP
 
 # Locate albums.csv: prefer CONFIG_DIR, fall back to script directory
@@ -73,8 +74,7 @@ def get_albums_by_dr(min_dr: int = 0, max_dr: int = 20) -> list[dict]:
 	"""Return albums with DR score in the given range (inclusive)."""
 	rows = _load()
 	return [
-		r for r in rows
-		if r.get('DR', '').strip().isdigit() and min_dr <= int(r['DR']) <= max_dr
+		r for r in rows if r.get('DR', '').strip().isdigit() and min_dr <= int(r['DR']) <= max_dr
 	]
 
 

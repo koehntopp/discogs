@@ -29,11 +29,11 @@ cp config_demo.py config/config.py
 Open `config/config.py` and fill in the three required values:
 
 ```python
-config_dir = '/config'          # leave as-is for Docker
+config_dir = '/config'  # leave as-is for Docker
 
 discogs_api_key = 'YOUR_TOKEN'  # from https://www.discogs.com/settings/developers
 
-flacroot = '/flac/'             # path inside the container — matches the volume mount below
+flacroot = '/flac/'  # path inside the container — matches the volume mount below
 ```
 
 Everything else can stay at its default for now.
@@ -127,10 +127,10 @@ flacroot/
 These features work on a staging directory (`nzbdir`) where you drop freshly tagged files before they are enriched and moved into the library:
 
 ```python
-nzbdir = '/nzb/'               # staging area for new albums
+nzbdir = '/nzb/'  # staging area for new albums
 
 flacroot_local = '/Volumes/FLAC/'  # path to flacroot as seen from your Mac
-                                    # used for tagger deep-links in the UI
+# used for tagger deep-links in the UI
 ```
 
 Add a volume mount for the staging directory in `docker-compose.yml`:
@@ -206,13 +206,13 @@ ssh-keyscan -H 192.168.1.20 >> config/known_hosts
 ### Config values
 
 ```python
-rclone_source      = 'FLAC:/flac'      # rclone remote:path for source
-flacroot_remote    = 'ROCK:/mnt/flac'  # rclone remote:path for destination
-rclone_flags       = 'sync'            # rclone subcommand
-rclone_transfers   = 16                # parallel file transfers
-rclone_checkers    = 32                # parallel metadata checks
-rclone_buffer_size = '128M'            # per-transfer buffer
-rclone_stats       = '5s'             # progress reporting interval
+rclone_source = 'FLAC:/flac'  # rclone remote:path for source
+flacroot_remote = 'ROCK:/mnt/flac'  # rclone remote:path for destination
+rclone_flags = 'sync'  # rclone subcommand
+rclone_transfers = 16  # parallel file transfers
+rclone_checkers = 32  # parallel metadata checks
+rclone_buffer_size = '128M'  # per-transfer buffer
+rclone_stats = '5s'  # progress reporting interval
 ```
 
 ### Add to docker-compose.yml
@@ -231,8 +231,8 @@ environment:
 To forward logs to a Synology log server (or any syslog daemon):
 
 ```python
-syslog_host = '192.168.1.1'   # IP of your log server
-syslog_port = 514              # UDP port (514 is standard)
+syslog_host = '192.168.1.1'  # IP of your log server
+syslog_port = 514  # UDP port (514 is standard)
 ```
 
 No restart needed after adding these via the Settings UI — they are read at startup. If you add them manually to `config.py`, restart the container.
