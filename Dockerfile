@@ -1,5 +1,5 @@
 # ── Stage 1: build rsgain + TagLib 2.x ───────────────────────────────────────
-FROM ubuntu:22.04 AS builder
+FROM ubuntu:26.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 ARG RSGAIN_VERSION=3.7
@@ -29,7 +29,7 @@ RUN curl -fsSL "https://github.com/complexlogic/rsgain/releases/download/v${RSGA
     && strip /tmp/rsgain-build/rsgain
 
 # ── Stage 2: runtime image ───────────────────────────────────────────────────
-FROM ubuntu:22.04
+FROM ubuntu:26.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
