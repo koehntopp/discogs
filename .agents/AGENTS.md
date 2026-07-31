@@ -1,8 +1,9 @@
 # Antigravity Agent Guidelines — Discogs Music Library Manager
 
-## After Every Commit
-- After completing changes and making a commit, update relevant specification and documentation files (`SPEC.md`, `README.md`, and ADRs in `docs/adr/`) to reflect the current project state.
-- Keep all documentation accurate and synchronized with the codebase.
+## After Every Code Change & Commit
+- After completing any code changes or commits, automatically update relevant specification and documentation files (`SPEC.md`, `README.md`, and ADRs in `docs/adr/`) to reflect the current project state.
+- Keep all documentation accurate, synchronized, and up-to-date with the codebase at all times.
+- Automatically commit completed code and documentation changes to Git with concise, descriptive, and meaningful commit messages.
 
 ## Project Overview & Core Philosophy
 - A collection of Python scripts to manage a local FLAC music library using Discogs metadata, paired with a FastAPI/HTMX web UI.

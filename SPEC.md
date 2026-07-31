@@ -9,7 +9,17 @@ data flows for every script in this repository.
 - **Mandatory Implementation Plans**: You MUST create an `implementation_plan.md` artifact for any change, regardless of how minor or trivial it seems. Do not skip the planning phase for simple tweaks or quick bug fixes.
 - **No Unapproved Edits**: You are strictly prohibited from modifying any source code files, configurations, or running write/exec commands until the user has explicitly approved the implementation plan.
 - **Discuss First**: Always discuss your proposed design choices with the user and wait for approval before shifting from the planning/research phase to the execution phase.
+- **Mandatory Automatic Documentation Synchronization**: After every code change, specification and documentation files (`SPEC.md`, `README.md`, and ADRs in `docs/adr/`) MUST be automatically updated to reflect the new codebase state, ensuring documentation is never outdated.
+- **Mandatory Meaningful Git Commits**: After completing every code change and verifying tests/linting, all modified files MUST be committed with a concise, descriptive, and meaningful Git commit message summarizing the work completed.
 
+
+## Script Execution & Shebang
+
+All standalone Python scripts begin with the `uv` shebang line:
+```python
+#!/usr/bin/env -S uv run
+```
+Scripts can be executed directly from the terminal (e.g. `./fixtags.py [args]` or `./bliss.py [args]`) or via `uv run <script>.py [args]`. Inline dependencies are managed automatically via PEP 723 metadata headers.
 
 ## Common conventions
 
@@ -174,13 +184,13 @@ At least one of the two must be provided; otherwise help is printed.
 2. For each album directory, reads `DISCOGS_RELEASE_ID` from the first FLAC found.
 3. Queries the Discogs API (1 s sleep per album) for release and master-release metadata.
 4. Writes the following tags to every FLAC file in the directory if any value changed:
-   - `RELEASEDATE`, `DATE` — year of this specific pressing
-   - `ORIGINALDATE`, `ORIGINALRELEASEDATE` — year of the original master release
+   - `RELEASEDATE`, `DATE`, `YEAR` — year of this specific pressing
+   - `ORIGINALDATE`, `ORIGINALRELEASEDATE`, `ORIGINAL DATE`, `ORIGINAL YEAR` — year of the original master release
    - `ALBUM_MASTER_TITLE` — canonical master release title from Discogs
    - `ALBUM_MASTER_YEAR` — original release year
    - `ALBUM_RELEASE_TITLE` — specific release title
    - `ALBUM_RELEASE_YEAR` — pressing release year
-   - `ALBUM_EDITION` — edition information (e.g. Deluxe Edition, Remaster)
+   - `ALBUM_EDITION` — edition information (e.g. Deluxe Edition, Remaster; extracted from `()` brackets in existing `ALBUM` titles if tag is missing)
    - `ALBUM_RELEASE_COUNTRY` — pressing release country
    - `ALBUM_RELEASE_LABEL` — pressing record label
    - `ALBUM_FORMAT` — format of the audio source (default "CD")
@@ -189,16 +199,16 @@ At least one of the two must be provided; otherwise help is printed.
    - `ALBUM` — formatted display title for players:
      *   If `ALBUM_EDITION` is absent: `"<title> [<year> <format>]"`
      *   If `ALBUM_EDITION` is present: `"<title> [<year> <format> (<edition>)]"` (extra space and parentheses are added only if there is an edition).
-     *   *Title*: Taken from `ALBUM_TITLE_OVERRIDE` if present, otherwise `ALBUM_MASTER_TITLE`.
+     *   *Title*: Taken from `ALBUM_TITLE_OVERRIDE` if present, otherwise clean `ALBUM_MASTER_TITLE` or `ORIGINAL_TITLE`.
      *   *Year*: Taken from `ALBUM_RELEASE_YEAR`.
-     *   *Format*: Taken from `ALBUM_FORMAT` (defaults to "CD").
+     *   *Format*: Taken from `ALBUM_FORMAT` (falls back to `SUBTITLE`, defaults to "CD").
      *   *Example (no edition):* `Brothers in Arms [2025 Blu-ray]`
      *   *Example (with edition):* `Brothers in Arms [2025 Blu-ray (40th Anniversary Edition)]`
 
 **Tags read:** `DISCOGS_RELEASE_ID`, `ORIGINAL FILENAME`, `DATE`, `SUBTITLE`,
 `ALBUM_DR` (or deprecated `ALBUM DYNAMIC RANGE`), `ALBUM_TITLE_OVERRIDE`, `ALBUM_ARTIST_OVERRIDE`
 
-**Tags written:** `RELEASEDATE`, `DATE`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`,
+**Tags written:** `RELEASEDATE`, `DATE`, `YEAR`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`, `ORIGINAL DATE`, `ORIGINAL YEAR`,
 `ALBUM`, `ALBUM_MASTER_TITLE`, `ALBUM_MASTER_YEAR`, `ALBUM_RELEASE_TITLE`,
 `ALBUM_RELEASE_YEAR`, `ALBUM_EDITION`, `ALBUM_RELEASE_COUNTRY`, `ALBUM_RELEASE_LABEL`,
 `ALBUM_FORMAT`, `ALBUM_MAX_RESOLUTION`, `ALBUM_DR`
@@ -224,14 +234,14 @@ uv run calculate_dr.py [FLAC_DIR]
 **Behaviour:**
 
 1. Walks `FLAC_DIR` recursively to find all album directories.
-2. For each album, reads the `DYNAMIC RANGE` tag from every FLAC.
-   - If absent, computes the score via `drmeter` + `soundfile` and writes it back.
+2. For each album, reads the `DYNAMIC_RANGE` tag (with fallback to deprecated `DYNAMIC RANGE`) from every FLAC.
+   - If absent, computes the score via `drmeter` + `soundfile` and writes `DYNAMIC_RANGE` back.
 3. Derives the album DR score as the rounded mean of all per-track scores.
-4. Writes `ALBUM DYNAMIC RANGE` to every file in the album when the value changed.
+4. Writes `ALBUM_DR` to every file in the album when the value changed.
 
-**Tags read:** `DYNAMIC RANGE`, `ALBUM DYNAMIC RANGE`, `TITLE`, `ALBUM`
+**Tags read:** `DYNAMIC_RANGE` (or `DYNAMIC RANGE`), `ALBUM_DR` (or `ALBUM DYNAMIC RANGE`), `TITLE`, `ALBUM`
 
-**Tags written:** `DYNAMIC RANGE`, `ALBUM DYNAMIC RANGE`
+**Tags written:** `DYNAMIC_RANGE`, `ALBUM_DR`
 
 **External tools:** none (pure Python via `drmeter` / `soundfile`)
 
@@ -254,13 +264,13 @@ uv run calculate_fp.py [FLAC_DIR]
 **Behaviour:**
 
 1. Walks `FLAC_DIR` recursively to find all album directories.
-2. For each FLAC, checks for an existing `ACOUSTID FINGERPRINT` tag.
-3. If absent, runs `fpcalc` via `pyacoustid` and stores the result.
+2. For each FLAC, checks for an existing `ACOUSTID_FINGERPRINT` tag (with fallback to deprecated `ACOUSTID FINGERPRINT`).
+3. If absent, runs `fpcalc` via `pyacoustid` and stores the result in `ACOUSTID_FINGERPRINT`.
 4. Logs counts of generated vs total tracks per album.
 
-**Tags read:** `ACOUSTID FINGERPRINT`
+**Tags read:** `ACOUSTID_FINGERPRINT` (or `ACOUSTID FINGERPRINT`)
 
-**Tags written:** `ACOUSTID FINGERPRINT`
+**Tags written:** `ACOUSTID_FINGERPRINT`
 
 **External tools:** `fpcalc` (Chromaprint) must be installed and on `$PATH`.
 
@@ -283,15 +293,16 @@ uv run update_lyrics.py [FLAC_DIR]
 **Behaviour:**
 
 1. Walks `FLAC_DIR` recursively to find all album directories.
-2. For each album, reads `ORIGINAL_TITLE` from the first FLAC as the album name.
+2. For each album, extracts canonical Discogs master title (`ALBUM_MASTER_TITLE` $\rightarrow$ `ORIGINAL_TITLE`) as the primary clean album name for lrclib.net.
 3. For each FLAC:
    - Skips if the `LYRICS` tag already contains LRC-format content (timestamp pattern `[mm:ss.xx]`).
-   - Queries lrclib.net with artist, title, album, and duration.
+   - Stage 1: Queries lrclib.net with artist, title, clean album name, and duration.
+   - Stage 2: If Stage 1 returns 404, retries lrclib.net with artist, title, and duration (omitting album name).
    - Writes synced LRC lyrics if available, otherwise plain-text lyrics when the tag was empty.
 4. Saves modified files immediately after each successful fetch.
 5. Prints summary totals: LRC count, plain-text count, no-lyrics count, and new writes.
 
-**Tags read:** `LYRICS`, `DISCOGS_RELEASE_ID`, `ORIGINAL_TITLE`, `ARTIST`, `TITLE`
+**Tags read:** `LYRICS`, `DISCOGS_RELEASE_ID`, `ARTIST`, `ALBUM_ARTIST_OVERRIDE`, `ALBUMARTIST`, `TITLE`, `ALBUM_MASTER_TITLE`, `ORIGINAL_TITLE`, `ALBUM_TITLE_OVERRIDE`, `ORIGINAL FILENAME`, `ALBUM`
 
 **Tags written:** `LYRICS`
 
@@ -408,6 +419,58 @@ No command-line arguments.  The source directory and mask/colour image paths are
 **Tags read:** `LYRICS`
 
 **Tags written:** none
+
+---
+
+### `migrate_tags.py` — FLAC structured tag schema migration
+
+**Purpose:** Walk a FLAC library, extract metadata from existing tags and decorated album titles, and migrate all files to the structured underscore tag schema (`ALBUM_MASTER_TITLE`, `ALBUM_RELEASE_YEAR`, `ALBUM_FORMAT`, `ALBUM_EDITION`, `ALBUM_DR`, `DYNAMIC_RANGE`, `ACOUSTID_FINGERPRINT`). Includes live rich progress bar display.
+
+**Usage:**
+
+```bash
+uv run migrate_tags.py [--write] [DIR]
+```
+
+| Argument | Required | Description |
+|---|---|---|
+| `DIR` | No | Root directory to scan (defaults to `config.flacroot`). |
+| `--write` | No | Apply changes directly to FLAC files (default is dry-run mode). |
+
+---
+
+### `dump_original_filenames.py` — Export albums with ORIGINAL FILENAME tag
+
+**Purpose:** Scan a FLAC library and export a CSV summary (`file_path`, `album_name`, `discogs_album_title`, `ORIGINAL FILENAME`) for all albums containing the `ORIGINAL FILENAME` tag.
+
+**Usage:**
+
+```bash
+uv run dump_original_filenames.py [-o OUTPUT_CSV] [DIR]
+```
+
+| Argument | Required | Description |
+|---|---|---|
+| `DIR` | No | Root directory to scan (defaults to `config.flacroot`). |
+| `-o`, `--output` | No | Output CSV file path (defaults to `albums_original_filename.csv`). |
+
+---
+
+### `compare_libraries.py` — Compare directory structure and track counts between libraries
+
+**Purpose:** Walk a reference FLAC library (e.g. a backup copy) and compare its album directories and track counts against a target library (defaults to `config.flacroot`), generating a CSV report (`library_comparison.csv`).
+
+**Usage:**
+
+```bash
+uv run compare_libraries.py /path/to/reference_library [--target /path/to/target_library] [-o library_comparison.csv]
+```
+
+| Argument | Required | Description |
+|---|---|---|
+| `reference_dir` | Yes | Path to the reference / backup FLAC library root. |
+| `--target` | No | Path to target library root (defaults to `config.flacroot`). |
+| `-o`, `--output` | No | Output CSV report path (defaults to `library_comparison.csv`). |
 
 ---
 

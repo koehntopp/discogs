@@ -109,10 +109,12 @@ All config values are also editable via the Settings modal in the web UI.
 | `fixtags.py` | Discogs API tag enrichment |
 | `bliss.py` | File organisation + MP3 sync |
 | `album_list.py` | Album inventory scan → CSV + DR chart |
-| `update_lyrics.py` | Parallel lyrics fetch from lrclib.net (32 workers) |
+| `update_lyrics.py` | Parallel lyrics fetch from lrclib.net (8 workers) |
 | `calculate_dr.py` | Dynamic Range calculation |
 | `calculate_fp.py` | AcoustID fingerprint generation |
-| `convert_opus.py` | FLAC → Opus transcoding |
+| `migrate_tags.py` | Tag schema migration to discrete `ALBUM_*` tags |
+| `dump_original_filenames.py` | Export albums with `ORIGINAL FILENAME` to CSV |
+| `compare_libraries.py` | Compare directory trees & track counts between libraries |
 | `build_synology.sh` | Build Docker image tar for Synology upload |
 
 All scripts use [uv](https://github.com/astral-sh/uv) and declare their own dependencies via PEP 723 headers — no manual `pip install` needed:
