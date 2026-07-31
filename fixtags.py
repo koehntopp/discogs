@@ -295,6 +295,12 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 		except Exception:  # noqa: BLE001
 			pass
 
+		managed_optional = [
+			'ALBUM_EDITION',
+			'ALBUM_DR',
+			'ALBUM_RELEASE_COUNTRY',
+			'ALBUM_RELEASE_LABEL',
+		]
 		for p in Path(fixdir).rglob('*.flac'):
 			fullfilename = str(PurePosixPath(p))
 			try:
@@ -302,7 +308,14 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 			except OSError as e:
 				logger.warning(f'Skipping unreadable file {fullfilename}: {e}')
 				continue
-			if any(tags.tags.get(k) != v for k, v in new_tags.items()):
+
+			stale_removed = False
+			for opt_tag in managed_optional:
+				if opt_tag not in new_tags and opt_tag in tags.tags:
+					tags.tags.pop(opt_tag, None)
+					stale_removed = True
+
+			if stale_removed or any(tags.tags.get(k) != v for k, v in new_tags.items()):
 				tags.tags.update(new_tags)
 				try:
 					tags.save()
