@@ -85,31 +85,38 @@ All config values are also editable via the Settings modal in the web UI.
 
 `config.py` is gitignored — it contains credentials.
 
-## Tagging Suggestions
+## Tagging Guidelines & Contract
 
-- Assign a Discogs release ID and a MusicBrainz ID for every album
-- Add decent cover art
-- Put source info (vendor, medium) in `DESCRIPTION` (e.g. `"Qobuz 24/96"`)
-- For ambiguous titles or deluxe editions, put the disambiguation in `ORIGINAL_FILENAME`
-- Use `SUBTITLE` for format variants (e.g. `"SACD"`, `"5.1"`)
+- **Primary Anchor**: Assign `DISCOGS_RELEASE_ID` for every album using Yate or your preferred tagger (mandatory anchor for metadata enrichment).
+- **Optional MusicBrainz Tags**: MusicBrainz IDs (`MUSICBRAINZ_ALBUMID`, `MUSICBRAINZ_ARTISTID`, `MUSICBRAINZ_TRACKID`) populated by your tagger are preserved.
+- **Cover Art**: Embedded cover art is automatically resized if larger than 1500px.
+- **Format Tag**: Set `ALBUM_FORMAT` for physical or digital source media (e.g. `"CD"`, `"SACD"`, `"Blu-ray"`, `"Vinyl"`). Defaults to `"CD"`.
+- **Edition Tag**: Set `ALBUM_EDITION` for special pressings (e.g. `"Deluxe Edition"`, `"40th Anniversary Remaster"`).
+- **User Overrides**:
+  - `ALBUM_TITLE_OVERRIDE`: Custom title to override the Discogs master album title.
+  - `ALBUM_ARTIST_OVERRIDE`: Custom artist name to override Discogs artist in player displays, bliss paths, and album lists.
 
 ## Typical Workflow
 
-1. Tag FLAC files with a Discogs Release ID using Yate or similar
-2. Drop files into `nzbdir` (staging)
-3. Run `nzbfix.py` (or click Refresh in the web UI) to enrich tags, calculate DR, generate fingerprints, fetch lyrics, and organise files into the library
-4. Use the web UI to browse, search, and manage the library
+1. **Tag FLAC Files**: Assign `DISCOGS_RELEASE_ID` tag in Yate or your tagger (along with optional MusicBrainz tags and cover art).
+2. **Stage Files**: Drop new album folders into `nzbdir` (staging directory).
+3. **Run Pipeline (`nzbfix.py`)**: Run `./nzbfix.py` (or click Refresh in the web UI) to execute post-processing:
+   - `dot_clean`: Strips macOS `.DS_Store` / `._*` AppleDouble junk.
+   - Parallel tasks: `calculate_dr` (DR scores), `rsgain` (ReplayGain tags), `calculate_fp` (AcoustID fingerprints).
+   - Sequential tasks: `fixtags` (Discogs metadata enrichment & player date tags), `update_lyrics` (LrcLib.net lyrics download).
+4. **Organise & Mirror (`bliss.py`)**: Run `./bliss.py` to move FLACs into `Artist/Album/track.flac` structure in `flacroot` (with non-destructive overwrite protection) and generate optional MP3 mirrors.
+5. **Browse & Manage (`webui.py`)**: Use the FastAPI/HTMX web UI to browse, search, and manage the library.
 
 ## Scripts
 
 | Script | Purpose |
 |--------|---------|
 | `webui.py` | Web interface (FastAPI + HTMX) |
-| `nzbfix.py` | Pipeline orchestrator |
-| `fixtags.py` | Discogs API tag enrichment |
-| `bliss.py` | File organisation + MP3 sync |
+| `nzbfix.py` | Pipeline orchestrator (`dot_clean` → `calculate_dr` / `rsgain` / `calculate_fp` → `fixtags` → `update_lyrics`) |
+| `fixtags.py` | Discogs API tag enrichment & date tag mapping |
+| `bliss.py` | File organisation + MP3 sync (with overwrite protection) |
 | `album_list.py` | Album inventory scan → CSV + DR chart |
-| `update_lyrics.py` | Parallel lyrics fetch from lrclib.net (8 workers) |
+| `update_lyrics.py` | Parallel lyrics fetch from lrclib.net (32 workers) |
 | `calculate_dr.py` | Dynamic Range calculation |
 | `calculate_fp.py` | AcoustID fingerprint generation |
 | `migrate_tags.py` | Tag schema migration to discrete `ALBUM_*` tags |
@@ -117,10 +124,12 @@ All config values are also editable via the Settings modal in the web UI.
 | `compare_libraries.py` | Compare directory trees & track counts between libraries |
 | `build_synology.sh` | Build Docker image tar for Synology upload |
 
-All scripts use [uv](https://github.com/astral-sh/uv) and declare their own dependencies via PEP 723 headers — no manual `pip install` needed:
+All Python scripts feature executable shebang lines (`#!/usr/bin/env -S uv run`) and declare dependencies via PEP 723 headers — run them directly from your shell:
 
 ```bash
-uv run fixtags.py /path/to/album
+./fixtags.py /path/to/album
+./nzbfix.py /path/to/staging
+./bliss.py
 ```
 
 ## Requirements
