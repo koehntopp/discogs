@@ -88,6 +88,17 @@ def read_album(directory: str) -> dict | None:
 	artist_override = tags.get('ALBUM_ARTIST_OVERRIDE', [''])[0]
 	if artist_override:
 		album_result['ALBUMARTIST'] = artist_override
+	title_override = tags.get('ALBUM_TITLE_OVERRIDE', [''])[0]
+	master_title = tags.get('ALBUM_MASTER_TITLE', [''])[0]
+	if title_override:
+		album_result['ALBUM'] = title_override
+	elif master_title:
+		album_result['ALBUM'] = master_title
+	else:
+		alb = album_result.get('ALBUM', '')
+		if '[' in alb:
+			alb = alb.split('[')[0].strip()
+		album_result['ALBUM'] = alb
 	if not album_result.get('ALBUM_DR'):
 		album_result['ALBUM_DR'] = tags.get('ALBUM DYNAMIC RANGE', [''])[0] or ''
 	album_result['COVER_ART'] = cover_art_dimensions(flac_path)

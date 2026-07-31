@@ -187,13 +187,13 @@ def _cache_update(new_rows: list[dict], drop_dirs: set[str]) -> None:
 COLUMNS = [
 	'Album Artist',
 	'Album',
-	'DR',
-	'Original Date',
+	'Edition',
 	'Release Date',
+	'Original Date',
+	'DR',
 	'Catalog',
 	'Cover Art',
 	'Format',
-	'Edition',
 ]
 
 
@@ -338,14 +338,14 @@ def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
 		f'<td class="reprocess">{btn}</td>'
 		f'<td class="artist">{escape(row.get("Album Artist", ""))}</td>'
 		f'<td class="album">{_album_link(row, album_title)}</td>'
-		f'<td class="dr {dr_class(row.get("DR", ""))}">{dr}{dr_btn}</td>'
-		f'<td>{escape(row.get("Original Date", ""))}</td>'
+		f'<td class="edition">{ed}</td>'
 		f'<td>{escape(row.get("Release Date", ""))}</td>'
+		f'<td>{escape(row.get("Original Date", ""))}</td>'
+		f'<td class="dr {dr_class(row.get("DR", ""))}">{dr}{dr_btn}</td>'
 		f'{discogs_cell}{mb_cell}'
 		f'<td>{escape(row.get("Catalog", ""))}</td>'
 		f'<td class="cover-art">{_cover_art_cell(row)}</td>'
 		f'<td class="format">{fmt}</td>'
-		f'<td class="edition">{ed}</td>'
 		f'</tr>'
 	)
 
@@ -763,6 +763,17 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 		artist_override = raw.get('ALBUM_ARTIST_OVERRIDE', [''])[0]
 		if artist_override:
 			row['Album Artist'] = artist_override
+		title_override = raw.get('ALBUM_TITLE_OVERRIDE', [''])[0]
+		master_title = raw.get('ALBUM_MASTER_TITLE', [''])[0]
+		if title_override:
+			row['Album'] = title_override
+		elif master_title:
+			row['Album'] = master_title
+		else:
+			alb = row.get('Album', '')
+			if '[' in alb:
+				alb = alb.split('[')[0].strip()
+			row['Album'] = alb
 		try:
 			import io
 

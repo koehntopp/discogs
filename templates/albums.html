@@ -19,11 +19,12 @@
     <tr>
       <td>{{ row['Album Artist'] }}</td>
       <td class="album">{{ row['Album'] }}</td>
+      <td class="edition">{{ row['Edition'] }}</td>
+      <td>{{ row['Release Date'] }}</td>
+      <td>{{ row['Original Date'] }}</td>
       <td class="dr {% if row['DR'] | int >= 12 %}dr-hi{% elif row['DR'] | int >= 8 %}dr-mid{% else %}dr-lo{% endif %}">
         {{ row['DR'] }}
       </td>
-      <td>{{ row['Original Date'] }}</td>
-      <td>{{ row['Release Date'] }}</td>
       <td>{{ row['Catalog'] }}</td>
       <td>{{ row['Version'] }}</td>
     </tr>
