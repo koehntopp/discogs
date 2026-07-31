@@ -1,6 +1,6 @@
 rich
 tqdm
-mutagen>=1.45.1
+mutagen>=1.48.1
 drmeter
 requests
 pyacoustid
