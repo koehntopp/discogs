@@ -289,11 +289,7 @@ def _cover_art_cell(row: dict) -> str:
 
 def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
 	dr = escape(row.get('DR', ''))
-	album_title = (
-		row.get('Original Filename', '').strip()
-		or row.get('Original Title', '').strip()
-		or row.get('Album', '')
-	)
+	album_title = row.get('Album', '')
 	artist_dir = escape(str(Path(row.get('Directory', '')).parent))
 	btn = (
 		f'<button class="reprocess-btn" title="Re-run fixtags + bliss for all {escape(row.get("Album Artist", ""))} albums" '
@@ -765,10 +761,13 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 			row['Album Artist'] = artist_override
 		title_override = raw.get('ALBUM_TITLE_OVERRIDE', [''])[0]
 		master_title = raw.get('ALBUM_MASTER_TITLE', [''])[0]
+		orig_title = raw.get('ORIGINAL_TITLE', [''])[0]
 		if title_override:
 			row['Album'] = title_override
 		elif master_title:
 			row['Album'] = master_title
+		elif orig_title:
+			row['Album'] = orig_title
 		else:
 			alb = row.get('Album', '')
 			if '[' in alb:

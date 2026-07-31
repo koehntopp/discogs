@@ -90,10 +90,13 @@ def read_album(directory: str) -> dict | None:
 		album_result['ALBUMARTIST'] = artist_override
 	title_override = tags.get('ALBUM_TITLE_OVERRIDE', [''])[0]
 	master_title = tags.get('ALBUM_MASTER_TITLE', [''])[0]
+	orig_title = tags.get('ORIGINAL_TITLE', [''])[0]
 	if title_override:
 		album_result['ALBUM'] = title_override
 	elif master_title:
 		album_result['ALBUM'] = master_title
+	elif orig_title:
+		album_result['ALBUM'] = orig_title
 	else:
 		alb = album_result.get('ALBUM', '')
 		if '[' in alb:
