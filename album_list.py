@@ -11,7 +11,6 @@
 
 import json
 import os
-import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path, PurePosixPath
 
@@ -135,7 +134,26 @@ def save_chart(df: pd.DataFrame, out: Path) -> None:
 
 
 def main() -> None:
-	root = sys.argv[1] if len(sys.argv) == 2 else str(__import__('config').flacroot)
+	"""Scan FLAC library, build albums.csv and DR distribution chart.
+
+	Supports caching via album_cache.json based on max file mtime per album.
+	Use --force / -f to bypass the cache and force a full re-scan.
+	"""
+	import argparse
+
+	parser = argparse.ArgumentParser(description='Scan FLAC library and generate albums.csv')
+	parser.add_argument('directory', nargs='?', help='Root directory of the FLAC library')
+	parser.add_argument(
+		'-f', '--force', action='store_true', help='Force full rescan ignoring album_cache.json'
+	)
+	args = parser.parse_args()
+
+	if args.directory:
+		root = args.directory
+	else:
+		import config
+
+		root = config.flacroot
 
 	logger.info(f'Scanning {root}')
 	flac_dirs = find_flac_dirs(root)
@@ -148,10 +166,10 @@ def main() -> None:
 	cache_file = data_dir / 'album_cache.json'
 
 	cache = {}
-	if cache_file.exists():
+	if not args.force and cache_file.exists():
 		try:
 			cache = json.loads(cache_file.read_text(encoding='utf-8'))
-		except Exception as e:
+		except Exception as e:  # noqa: BLE001
 			logger.warning(f'Could not load album cache, rebuilding: {e}')
 
 	new_cache = {}
@@ -162,8 +180,7 @@ def main() -> None:
 			flacs = sorted(f for f in os.listdir(d) if f.endswith('.flac'))
 			if not flacs:
 				continue
-			first_flac = str(PurePosixPath(d) / flacs[0])
-			mtime = os.path.getmtime(first_flac)
+			mtime = max(os.path.getmtime(os.path.join(d, f)) for f in flacs)
 		except OSError:
 			continue
 		entry = cache.get(d)
@@ -195,7 +212,7 @@ def main() -> None:
 
 	try:
 		cache_file.write_text(json.dumps(new_cache, indent=2), encoding='utf-8')
-	except Exception as e:
+	except Exception as e:  # noqa: BLE001
 		logger.warning(f'Could not save album cache: {e}')
 
 	df = pd.DataFrame(albums)

@@ -133,19 +133,19 @@ uv run webui.py
 **Usage:**
 
 ```
-uv run album_list.py [FLAC_DIR]
+./album_list.py [-f | --force] [FLAC_DIR]
 ```
 
-| Argument   | Required | Description                                             |
-|------------|----------|---------------------------------------------------------|
-| `FLAC_DIR` | No       | Root of the FLAC library.  Falls back to `config.flacdir`. |
+| Flag / Argument | Required | Description                                             |
+|-----------------|----------|---------------------------------------------------------|
+| `FLAC_DIR`      | No       | Root of the FLAC library. Falls back to `config.flacroot`.|
+| `-f`, `--force` | No       | Force a full re-scan, bypassing `album_cache.json`.      |
 
 **Behaviour:**
 
-1. Walks `FLAC_DIR` recursively, reading one FLAC file per album directory.
-2. Writes `albums.csv` and `albums_dr.png` in the current working directory.
-3. Starts a watchdog observer; updates the CSV automatically on FLAC create / modify / delete events.
-4. Runs indefinitely — press **Ctrl-C** to stop.
+1. Walks `FLAC_DIR` recursively, discovering all subdirectories containing FLAC files.
+2. Checks `album_cache.json` using the maximum modification time (`mtime`) across all FLAC tracks in each directory. Re-scans only modified or new albums (unless `--force` is given).
+3. Writes `albums.csv` and `albums_dr.png` in `config_dir`.
 
 **Output files:**
 

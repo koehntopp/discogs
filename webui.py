@@ -596,7 +596,7 @@ async def albums(
 	return HTMLResponse(render_table(rows, sort, order, search))
 
 
-def _start_album_scan(label: str = 'refresh') -> None:
+def _start_album_scan(label: str = 'refresh', force: bool = False) -> None:
 	"""Launch album_list.py in a background thread; sets _refresh_done on completion."""
 	import threading
 
@@ -610,9 +610,13 @@ def _start_album_scan(label: str = 'refresh') -> None:
 		return
 	script = SCRIPTS_DIR / 'album_list.py'
 	logger.info(f'{label}: running library scan')
+	cmd = ['uv', 'run', str(script)]
+	if force:
+		cmd.append('--force')
+	cmd.append(str(flacroot))
 	proc = _set_proc(
 		subprocess.Popen(
-			['uv', 'run', str(script), str(flacroot)],
+			cmd,
 			stdout=subprocess.PIPE,
 			stderr=subprocess.DEVNULL,
 			text=True,
@@ -637,7 +641,7 @@ def _start_album_scan(label: str = 'refresh') -> None:
 
 @app.get('/refresh/start', response_class=HTMLResponse)
 async def refresh_start():
-	_start_album_scan('refresh')
+	_start_album_scan('refresh', force=True)
 	return await log_modal()
 
 
