@@ -358,10 +358,11 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 			except Exception as e:
 				logger.warning(f'Skipping unreadable file {fullfilename}: {e}')
 
+		display_title = f'{album_name} [{version_str}]' if version_str else album_name
 		if flac_files > 0:
-			success(f'Album name changed to {album_newtitle}')
+			success(f'Album name changed to {display_title}')
 		else:
-			logger.info(f'No changes required for {album_newtitle}')
+			logger.info(f'No changes required for {display_title}')
 		resize_covers(fixdir)
 	else:
 		logger.error(f'No Discogs release ID found in {fixdir}')
