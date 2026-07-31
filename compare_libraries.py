@@ -224,13 +224,13 @@ def compare_libraries(reference_dir: str, target_dir: str, output_csv: str) -> N
 		writer.writeheader()
 		writer.writerows(rows)
 
-	logger.info('=== Library Tag-Aware Comparison Results ===')
-	logger.info(f'Exact Matches: {matched_count}')
-	logger.info(f'Renamed / Moved Directories (matching release ID/tags): {renamed_count}')
-	logger.info(f'Missing in Target ({target_dir}): {len(missing_in_target)}')
-	logger.info(f'Only in Target ({target_dir}): {len(extra_in_target)}')
-	logger.info(f'Track Count Mismatches: {len(track_mismatches)}')
-	logger.info(f'Detailed report saved to: {output_path.resolve()}')
+	logger.warning('=== Library Tag-Aware Comparison Results ===')
+	logger.warning(f'Exact Matches: {matched_count}')
+	logger.warning(f'Renamed / Moved Directories (matching release ID/tags): {renamed_count}')
+	logger.warning(f'Missing in Target ({target_dir}): {len(missing_in_target)}')
+	logger.warning(f'Only in Target ({target_dir}): {len(extra_in_target)}')
+	logger.warning(f'Track Count Mismatches: {len(track_mismatches)}')
+	logger.warning(f'Detailed report saved to: {output_path.resolve()}')
 
 
 def main():

@@ -108,9 +108,15 @@ def get_target_path_and_filename(flac_file: str, root_dir: str) -> tuple[str, st
 	    Tuple of (target_path, target_filename, metadata_dict) where metadata_dict
 	    contains 'artist', 'album', and 'track' keys with sanitised string values.
 	"""
-	tags = read_audio_tags(flac_file)
+	raw_album = tags.get('ALBUM', ['Unknown Album'])[0]
+	version_tag = tags.get('VERSION', [''])[0]
+	if version_tag and version_tag not in raw_album:
+		full_album_name = f'{raw_album} {version_tag}'
+	else:
+		full_album_name = raw_album
+
 	track_title = clean(tags.get('TITLE', ['Unknown Title'])[0])
-	album_title = clean(tags.get('ALBUM', ['Unknown Album'])[0])
+	album_title = clean(full_album_name)
 	artist = clean(
 		tags.get(
 			'ALBUM_ARTIST_OVERRIDE', tags.get('ALBUMARTIST', tags.get('ARTIST', ['Unknown Artist']))
@@ -194,8 +200,15 @@ def movefiles(flacroot: str, full: bool = False) -> None:
 				)
 				continue
 
+			raw_album = tags.get('ALBUM', [''])[0]
+			version_tag = tags.get('VERSION', [''])[0]
+			if version_tag and version_tag not in raw_album:
+				full_album_name = f'{raw_album} {version_tag}'
+			else:
+				full_album_name = raw_album
+
 			stracktitle = clean(tags.get('TITLE', [''])[0])
-			salbumtitle = clean(tags.get('ALBUM', [''])[0])
+			salbumtitle = clean(full_album_name)
 			sartist = clean(
 				tags.get(
 					'ALBUM_ARTIST_OVERRIDE', tags.get('ALBUMARTIST', tags.get('ARTIST', ['']))

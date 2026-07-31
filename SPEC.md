@@ -197,20 +197,14 @@ At least one of the two must be provided; otherwise help is printed.
    - `ALBUM_FORMAT` — format of the audio source (default "CD")
    - `ALBUM_MAX_RESOLUTION` — maximum sample rate of tracks in the folder (e.g., 44.1kHz, 96kHz)
    - `ALBUM_DR` — album dynamic range score (mirrored from ALBUM DYNAMIC RANGE)
-   - `ALBUM` — formatted display title for players:
-     *   If `ALBUM_EDITION` is absent: `"<title> [<year> <format>]"`
-     *   If `ALBUM_EDITION` is present: `"<title> [<year> <format> (<edition>)]"` (extra space and parentheses are added only if there is an edition).
-     *   *Title*: Taken from `ALBUM_TITLE_OVERRIDE` if present, otherwise clean `ALBUM_MASTER_TITLE` or `ORIGINAL_TITLE`.
-     *   *Year*: Taken from `ALBUM_RELEASE_YEAR`.
-     *   *Format*: Taken from `ALBUM_FORMAT` (falls back to `SUBTITLE`, defaults to "CD").
-     *   *Example (no edition):* `Brothers in Arms [2025 Blu-ray]`
-     *   *Example (with edition):* `Brothers in Arms [2025 Blu-ray (40th Anniversary Edition)]`
+   - `ALBUM` — clean master release title for players (e.g. `Brothers in Arms`). Taken from `ALBUM_TITLE_OVERRIDE` if present, otherwise clean `ALBUM_MASTER_TITLE` or `ORIGINAL_TITLE`.
+   - `VERSION` — release decoration string for Roon version display (no square brackets): `<year> <format>` or `<year> <format> (<edition>)` (e.g., `2025 Blu-ray (40th Anniversary Edition)`).
 
 **Tags read:** `DISCOGS_RELEASE_ID`, `ORIGINAL FILENAME`, `DATE`, `SUBTITLE`,
 `ALBUM_DR` (or deprecated `ALBUM DYNAMIC RANGE`), `ALBUM_TITLE_OVERRIDE`, `ALBUM_ARTIST_OVERRIDE`
 
 **Tags written:** `RELEASEDATE`, `DATE`, `YEAR`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`, `ORIGINAL DATE`, `ORIGINAL YEAR`,
-`ALBUM`, `ALBUM_MASTER_TITLE`, `ALBUM_MASTER_YEAR`, `ALBUM_RELEASE_TITLE`,
+`ALBUM`, `VERSION`, `ALBUM_MASTER_TITLE`, `ALBUM_MASTER_YEAR`, `ALBUM_RELEASE_TITLE`,
 `ALBUM_RELEASE_YEAR`, `ALBUM_EDITION`, `ALBUM_RELEASE_COUNTRY`, `ALBUM_RELEASE_LABEL`,
 `ALBUM_FORMAT`, `ALBUM_MAX_RESOLUTION`, `ALBUM_DR`
 

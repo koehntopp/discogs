@@ -275,9 +275,9 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 		)
 
 		ed_str = f' ({album_edition})' if album_edition else ''
-		yr_str = f' {album_year_release}' if album_year_release else ''
+		yr_str = f'{album_year_release}' if album_year_release else ''
 		fmt_str = f' {album_format}' if album_format else ''
-		album_newtitle = f'{album_name} [{yr_str.strip()}{fmt_str}{ed_str}]'
+		version_str = f'{yr_str}{fmt_str}{ed_str}'.strip()
 
 		new_tags = {
 			'RELEASEDATE': [str(album_year_release)],
@@ -293,7 +293,8 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 			'ALBUM_RELEASE_YEAR': [str(album_year_release)],
 			'ALBUM_FORMAT': [album_format],
 			'ALBUM_MAX_RESOLUTION': [max_res_str],
-			'ALBUM': [album_newtitle],
+			'ALBUM': [album_name],
+			'VERSION': [version_str],
 			'ORIGINAL_TITLE': [master_title],
 		}
 		if album_edition:

@@ -25,6 +25,7 @@ from mutagen.flac import FLAC
 ALBUM_TAGS = [
 	'ALBUMARTIST',
 	'ALBUM',
+	'VERSION',
 	'ALBUM_DR',
 	'ALBUM_FORMAT',
 	'ALBUM_EDITION',
@@ -41,6 +42,7 @@ ALBUM_TAGS = [
 DISPLAY_NAMES = {
 	'ALBUMARTIST': 'Album Artist',
 	'ALBUM': 'Album',
+	'VERSION': 'Version',
 	'ALBUM_DR': 'DR',
 	'ALBUM_FORMAT': 'Format',
 	'ALBUM_EDITION': 'Edition',
@@ -48,10 +50,10 @@ DISPLAY_NAMES = {
 	'ORIGINAL FILENAME': 'Original Filename',
 	'ORIGINALDATE': 'Original Date',
 	'RELEASEDATE': 'Release Date',
-	'CATALOGNUMBER': 'Catalog',
-	'DISCOGS_RELEASE_ID': 'Discogs',
-	'MUSICBRAINZ_ALBUMID': 'MusicBrainz',
-	'SUBTITLE': 'Version',
+	'CATALOGNUMBER': 'Catalog Number',
+	'DISCOGS_RELEASE_ID': 'Discogs Release ID',
+	'MUSICBRAINZ_ALBUMID': 'MusicBrainz Album ID',
+	'SUBTITLE': 'Subtitle',
 	'COVER_ART': 'Cover Art',
 }
 
@@ -59,23 +61,23 @@ SCRIPTS_DIR = Path(__file__).parent
 
 
 def cover_art_dimensions(flac_path: str) -> str:
-	"""Return 'WxH' of the first embedded picture, or empty string if none."""
+	"""Read embedded FLAC cover art and return 'WIDTHxHEIGHT' or empty string."""
 	try:
 		audio = FLAC(flac_path)
 		if audio.pictures:
 			pic = audio.pictures[0]
 			return f'{pic.width}x{pic.height}'
-	except Exception:
+	except Exception:  # noqa: BLE001
 		pass
 	return ''
 
 
-def read_album(directory: str) -> dict | None:
-	"""Read album tags from the first FLAC file in the directory."""
+def read_album(directory: str) -> dict[str, str] | None:
+	"""Read first FLAC in directory and return dict of album tags + COVER_ART + _DIRECTORY_PATH."""
 	flacs = sorted(f for f in os.listdir(directory) if f.endswith('.flac'))
 	if not flacs:
 		return None
-	flac_path = str(PurePosixPath(directory) / flacs[0])
+	flac_path = os.path.join(directory, flacs[0])
 	try:
 		audio = FLAC(flac_path)
 		tags = {k.upper(): [str(x) for x in v] for k, v in audio.tags.items()} if audio.tags else {}
@@ -100,6 +102,10 @@ def read_album(directory: str) -> dict | None:
 		if '[' in alb:
 			alb = alb.split('[')[0].strip()
 		album_result['ALBUM'] = alb
+	if not album_result.get('VERSION'):
+		album_result['VERSION'] = (
+			tags.get('VERSION', [''])[0] or tags.get('SUBTITLE', [''])[0] or ''
+		)
 	if not album_result.get('ALBUM_DR'):
 		album_result['ALBUM_DR'] = tags.get('ALBUM DYNAMIC RANGE', [''])[0] or ''
 	album_result['COVER_ART'] = cover_art_dimensions(flac_path)

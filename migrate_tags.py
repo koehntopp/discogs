@@ -26,7 +26,7 @@ from rich.progress import (
 	TimeRemainingColumn,
 )
 
-from log import _console_handler, _is_tty, logger
+from log import _is_tty, logger
 
 
 def flactag(tags: dict, key: str) -> str:
@@ -111,16 +111,18 @@ def process_album_directory(directory: str, write_mode: bool) -> dict | None:
 
 	dr_score = flactag(tags, 'ALBUM_DR') or flactag(tags, 'ALBUM DYNAMIC RANGE')
 
-	# Construct new decorated ALBUM tag
+	# Construct clean ALBUM tag and plain text VERSION tag (no square brackets)
 	ed_str = f' ({album_edition})' if album_edition else ''
-	yr_str = f' {release_year}' if release_year else ''
+	yr_str = f'{release_year}' if release_year else ''
 	fmt_str = f' {album_format}' if album_format else ''
-	new_album = f'{title_source} [{yr_str.strip()}{fmt_str}{ed_str}]'
+	version_tag = f'{yr_str}{fmt_str}{ed_str}'.strip()
+	new_album = title_source
 
 	record = {
 		'Directory': directory,
 		'Old_Album': old_album,
 		'New_Album': new_album,
+		'Version': version_tag,
 		'Extracted_Format': album_format,
 		'Extracted_Edition': album_edition,
 		'Max_Resolution': max_res_str,
@@ -133,6 +135,7 @@ def process_album_directory(directory: str, write_mode: bool) -> dict | None:
 			'ALBUM_FORMAT': [album_format],
 			'ALBUM_MAX_RESOLUTION': [max_res_str],
 			'ALBUM': [new_album],
+			'VERSION': [version_tag],
 		}
 		if master_year:
 			album_updates['ALBUM_MASTER_YEAR'] = [master_year]

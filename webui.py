@@ -709,6 +709,7 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 	ALBUM_TAGS = [
 		'ALBUMARTIST',
 		'ALBUM',
+		'VERSION',
 		'ALBUM_DR',
 		'ALBUM_FORMAT',
 		'ALBUM_EDITION',
@@ -724,6 +725,7 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 	DISPLAY = {
 		'ALBUMARTIST': 'Album Artist',
 		'ALBUM': 'Album',
+		'VERSION': 'Version',
 		'ALBUM_DR': 'DR',
 		'ALBUM_FORMAT': 'Format',
 		'ALBUM_EDITION': 'Edition',
@@ -734,7 +736,7 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 		'CATALOGNUMBER': 'Catalog',
 		'DISCOGS_RELEASE_ID': 'Discogs',
 		'MUSICBRAINZ_ALBUMID': 'MusicBrainz',
-		'SUBTITLE': 'Version',
+		'SUBTITLE': 'Subtitle',
 	}
 
 	def read_album_dir(album_dir: str) -> dict | None:
@@ -756,6 +758,8 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 		}
 		if not row.get('DR'):
 			row['DR'] = raw.get('ALBUM DYNAMIC RANGE', [''])[0] or ''
+		if not row.get('Version'):
+			row['Version'] = raw.get('VERSION', [''])[0] or raw.get('SUBTITLE', [''])[0] or ''
 		artist_override = raw.get('ALBUM_ARTIST_OVERRIDE', [''])[0]
 		if artist_override:
 			row['Album Artist'] = artist_override

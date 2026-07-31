@@ -36,17 +36,18 @@ We establish the following binding rules and standards for all FLAC tag handling
 * `DISCOGS_RELEASE_ID` is the authoritative anchor for release matching. If missing from an album directory, scripts must skip metadata enrichment for that directory.
 * User-authored metadata (such as primary artist names, `ORIGINAL FILENAME`, or custom release IDs) must never be erased or overwritten with generic fallbacks.
 
-### 3. Album Tag Formatting (`ALBUM`)
-* `fixtags.py` normalizes the `ALBUM` tag string using a structured format:
-  * If `ALBUM_EDITION` is absent: `"<title> [<year> <format>]"`
-  * If `ALBUM_EDITION` is present: `"<title> [<year> <format> (<edition>)]"` (extra space and parentheses added only when an edition is specified).
-  * **Title source priority:** `ALBUM_TITLE_OVERRIDE` $\rightarrow$ `ORIGINAL FILENAME` $\rightarrow$ `ORIGINAL_FILENAME` $\rightarrow$ `ALBUM_MASTER_TITLE` $\rightarrow$ `ORIGINAL_TITLE`.
-  * **Year source:** `ALBUM_RELEASE_YEAR`.
-  * **Format source:** `ALBUM_FORMAT` (falls back to `SUBTITLE`, defaults to "CD").
-  * **Edition source:** `ALBUM_EDITION` (extracted from `()` brackets in existing `ALBUM` titles if tag is missing).
-  * Example (no edition): `Brothers in Arms [2025 Blu-ray]`
-  * Example (with edition): `Brothers in Arms [2025 Blu-ray (40th Anniversary Edition)]`
-* `ALBUM` tag updates must only be written to FLAC files if the computed string actually differs from the existing tag value, avoiding unnecessary disk writes.
+### 3. Album Tag Formatting (`ALBUM` and `VERSION`)
+* `fixtags.py` normalizes the `ALBUM` and `VERSION` tags:
+  * **`ALBUM` Tag:** Stores the clean master title only (no brackets/decoration), e.g., `Fatal Mistakes`.
+    * **Title source priority:** `ALBUM_TITLE_OVERRIDE` $\rightarrow$ `ALBUM_MASTER_TITLE` $\rightarrow$ `ORIGINAL_TITLE` $\rightarrow$ clean `ALBUM`.
+  * **`VERSION` Tag:** Stores the plain-text release decoration string (no square brackets), e.g., `2021 CD (Deluxe Digital Album)` or `1988 CD`.
+    * Format: `<year> <format>` (or `<year> <format> (<edition>)` when an edition is specified).
+    * **Year source:** `ALBUM_RELEASE_YEAR`.
+    * **Format source:** `ALBUM_FORMAT` (falls back to `SUBTITLE`, defaults to "CD").
+    * **Edition source:** `ALBUM_EDITION`.
+  * Example `ALBUM`: `Brothers in Arms`
+  * Example `VERSION`: `2025 Blu-ray (40th Anniversary Edition)`
+* `bliss.py` combines `clean(f"{ALBUM} {VERSION}")` to compute directory names on disk, preserving 100% backward compatibility with existing folder names (e.g. `Brothers_in_Arms_2025_Blu_ray_40th_Anniversary_Edition`).
 
 ### 4. Lyrics Tag Management (`LYRICS`)
 * **Format Distinction**:
