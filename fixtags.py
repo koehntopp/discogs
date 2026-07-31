@@ -7,20 +7,29 @@
 #   "discogs_client",
 #   "mutagen",
 #   "pillow",
+#   "rich",
 # ]
 # ///
 
 import argparse
 import os
-
-# import system libraries
+import sys
 import time
 from json import JSONDecodeError
 from pathlib import Path, PurePosixPath
 
 from discogs_client.exceptions import HTTPError
+from rich.console import Console
+from rich.progress import (
+	BarColumn,
+	MofNCompleteColumn,
+	Progress,
+	SpinnerColumn,
+	TextColumn,
+	TimeRemainingColumn,
+)
 
-from log import logger, success
+from log import _console_handler, logger, success
 
 
 def discogs_fetch(fn, *args, retries: int = 3, backoff: float = 60.0):
@@ -340,8 +349,32 @@ def main() -> None:
 				break
 
 	dclient = discogs_client.Client('PyDiscogsTagger/0.1', user_token=api_key)
-	for directory in flac_directories:
-		fixdir(directory, dclient)
+
+	is_tty = sys.stderr.isatty()
+	console = Console(stderr=True)
+
+	progress = Progress(
+		SpinnerColumn(),
+		TextColumn('[progress.description]{task.description}'),
+		BarColumn(),
+		MofNCompleteColumn(),
+		TimeRemainingColumn(),
+		console=console,
+		disable=not is_tty,
+	)
+
+	orig_stream = _console_handler.stream
+	with progress:
+		if is_tty:
+			_console_handler.stream = sys.stderr
+		try:
+			task_id = progress.add_task('Fixing tags', total=len(flac_directories))
+			for directory in flac_directories:
+				fixdir(directory, dclient)
+				progress.update(task_id, advance=1)
+		finally:
+			if is_tty:
+				_console_handler.stream = orig_stream
 
 
 if __name__ == '__main__':

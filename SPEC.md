@@ -181,7 +181,7 @@ At least one of the two must be provided; otherwise help is printed.
 
 **Behaviour:**
 
-1. Walks `DIRECTORY` recursively to find all subdirectories containing FLAC files.
+1. Walks `DIRECTORY` recursively to find all subdirectories containing FLAC files and initializes a Rich TTY progress bar (log messages render cleanly above the bar).
 2. For each album directory, reads `DISCOGS_RELEASE_ID` from the first FLAC found.
 3. Queries the Discogs API (1 s sleep per album) for release and master-release metadata.
 4. Writes the following tags to every FLAC file in the directory if any value changed:
