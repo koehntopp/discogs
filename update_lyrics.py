@@ -84,6 +84,7 @@ def _fetch_one(
 	track = ''
 	artist = ''
 	title = ''
+	existing_lyrics = ''
 
 	try:
 		song = FLAC(flac_path)
@@ -92,6 +93,7 @@ def _fetch_one(
 		discogs_id = flactag(song, 'DISCOGS_RELEASE_ID')
 		track = flactag(song, 'TRACKNUMBER')
 		master_title = flactag(song, 'ALBUM_MASTER_TITLE') or flactag(song, 'ORIGINAL_TITLE')
+		existing_lyrics = flactag(song, 'LYRICS').strip()
 		length = float(song.info.length) if song.info and hasattr(song.info, 'length') else 0.0
 	except Exception as e:  # noqa: BLE001
 		logger.warning(f'Could not read FLAC tags for {flac_path}: {e}')
@@ -104,31 +106,20 @@ def _fetch_one(
 	# Canonical album title for lrclib lookup (master title > folder name)
 	lookup_album = master_title or album_name
 
-	lrc_path = Path(flac_path).with_suffix('.lrc')
-	txt_path = Path(flac_path).with_suffix('.txt')
-
-	existing = ''
-	existing_type = 'none'
-	if lrc_path.exists():
-		existing = lrc_path.read_text(encoding='utf-8')
-		existing_type = 'lrc'
-	elif txt_path.exists():
-		existing = txt_path.read_text(encoding='utf-8')
-		existing_type = 'txt'
-
-	# Check for invalid LRC timestamps in existing file
+	# Check existing embedded FLAC lyrics
 	had_invalid_lrc = False
-	if existing_type == 'lrc' and _is_invalid_lrc(existing):
-		logger.warning(f'Found invalid LRC timestamp in {lrc_path.name}, attempting refetch')
-		had_invalid_lrc = True
-
-	# Don't refetch if valid synced LRC already exists
-	if existing_type == 'lrc' and not had_invalid_lrc and _is_lrc(existing):
-		# Re-apply updated headers if missing/stale
-		updated_lrc = _apply_headers(existing, artist, title, album_name, length)
-		if updated_lrc != existing:
-			return flac_path, artist, title, updated_lrc, 'lrc', 'update', discogs_id, track
-		return flac_path, artist, title, existing, 'lrc', 'skip', discogs_id, track
+	if existing_lyrics:
+		if _is_invalid_lrc(existing_lyrics):
+			logger.warning(
+				f'Found invalid LRC timestamp in FLAC tags for {title}, attempting refetch'
+			)
+			had_invalid_lrc = True
+		elif _is_lrc(existing_lyrics):
+			# Re-apply updated headers if missing/stale
+			updated_lrc = _apply_headers(existing_lyrics, artist, title, album_name, length)
+			if updated_lrc != existing_lyrics:
+				return flac_path, artist, title, updated_lrc, 'lrc', 'header', discogs_id, track
+			return flac_path, artist, title, existing_lyrics, 'lrc', 'skip', discogs_id, track
 
 	params = {
 		'artist_name': artist,
@@ -192,8 +183,10 @@ def _fetch_one(
 			logger.warning(f'Invalid LRC timestamps from lrclib, skipping: {title} ({artist})')
 		else:
 			lrc = _apply_headers(lrc, artist, title, album_name, length)
+			if lrc == existing_lyrics:
+				return flac_path, artist, title, existing_lyrics, 'lrc', 'skip', discogs_id, track
 			return flac_path, artist, title, lrc, 'lrc', 'new', discogs_id, track
-	if data.get('plainLyrics') and not existing:
+	if data.get('plainLyrics') and not existing_lyrics:
 		return flac_path, artist, title, data['plainLyrics'], 'txt', 'new', discogs_id, track
 
 	if had_invalid_lrc:
@@ -202,9 +195,9 @@ def _fetch_one(
 		flac_path,
 		artist,
 		title,
-		existing,
-		('txt' if existing else 'none'),
-		'keep',
+		existing_lyrics,
+		('lrc' if _is_lrc(existing_lyrics) else ('txt' if existing_lyrics else 'none')),
+		'skip',
 		discogs_id,
 		track,
 	)
