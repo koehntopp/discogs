@@ -329,7 +329,7 @@ def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
 	album_title = row.get('Album', '')
 	btn = (
 		(
-			f'<button class="reprocess-btn" hx-post="/api/reprocess?directory={escape(album_dir)}" '
+			f'<button class="reprocess-btn" hx-get="/run-pipeline?directory={escape(album_dir)}" '
 			f'hx-target="#run-pipeline-logs" hx-swap="beforeend" '
 			f"hx-on::before-request=\"var el=document.getElementById('run-pipeline-logs'); if(el) el.scrollIntoView({{behavior:'smooth',block:'end'}});\" "
 			f'title="Run full enrichment pipeline on this album"><i class="fa-solid fa-arrows-rotate"></i></button>'
@@ -1127,6 +1127,9 @@ async def sync_start():
 
 
 @app.get('/run-pipeline', response_class=StreamingResponse)
+@app.post('/run-pipeline', response_class=StreamingResponse)
+@app.get('/api/reprocess', response_class=StreamingResponse)
+@app.post('/api/reprocess', response_class=StreamingResponse)
 async def run_pipeline(directory: str = Query(...)):
 	def stream():
 		yield f'<div class="log-line">[{datetime.now().strftime("%H:%M:%S")}] Starting pipeline on {escape(directory)}</div>\n'
