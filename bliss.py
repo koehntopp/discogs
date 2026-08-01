@@ -108,6 +108,7 @@ def get_target_path_and_filename(flac_file: str, root_dir: str) -> tuple[str, st
 	    Tuple of (target_path, target_filename, metadata_dict) where metadata_dict
 	    contains 'artist', 'album', and 'track' keys with sanitised string values.
 	"""
+	tags = read_audio_tags(flac_file)
 	raw_album = tags.get('ALBUM', ['Unknown Album'])[0]
 	version_tag = tags.get('VERSION', [''])[0]
 	if version_tag and version_tag not in raw_album:
@@ -396,18 +397,21 @@ def createMP3() -> None:
 	for p in Path(flacroot).rglob('*.flac'):
 		try:
 			flacfilename = str(PurePosixPath(p))
-			mp3filename = flacfilename.replace(flacroot, mp3root).replace('.flac', '.mp3')
+			if not os.path.isfile(flacfilename):
+				continue
+
+			rel_p = os.path.relpath(flacfilename, flacroot)
+			mp3_path = Path(mp3root) / Path(rel_p).with_suffix('.mp3')
+			mp3filename = str(mp3_path)
 
 			if not os.path.isfile(mp3filename):
-				# Get metadata
+				# Get metadata for log display
 				tags = read_audio_tags(flacfilename)
 				stracktitle = clean(tags.get('TITLE', ['Unknown Title'])[0])
 				salbumtitle = clean(tags.get('ALBUM', ['Unknown Album'])[0])
-				sartist = clean(tags.get('ALBUMARTIST', tags.get('ARTIST', ['Unknown Artist']))[0])
 
-				# Create directory structure
-				tobepathname = Path(mp3root) / sartist / salbumtitle
-				tobepathname.mkdir(parents=True, exist_ok=True)
+				# Ensure destination parent directory exists
+				mp3_path.parent.mkdir(parents=True, exist_ok=True)
 
 				logger.info(f'Creating MP3 for {salbumtitle} - {stracktitle}')
 
@@ -428,7 +432,7 @@ def createMP3() -> None:
 				]
 				subprocess.run(flac2mp3, check=False)
 
-		except Exception as e:
+		except Exception as e:  # noqa: BLE001
 			logger.error(f'Error creating MP3 {flacfilename}: {e}')
 			continue
 
