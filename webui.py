@@ -940,6 +940,7 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 				else set()
 			)
 			_cache_update(rows, new_dirs | old_dirs)
+			_refresh_done['pending'] = True
 		_clear_proc()
 
 	threading.Thread(target=run_scripts, daemon=True).start()
