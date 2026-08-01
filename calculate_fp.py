@@ -51,8 +51,11 @@ def calculate_fp(albumpath: str) -> None:
 
 			if not fingerprint:
 				try:
-					_duration, fingerprint = acoustid.fingerprint_file(
+					_duration, raw_fp = acoustid.fingerprint_file(
 						fullfilename, maxlength=10000, force_fpcalc=False
+					)
+					fingerprint = (
+						raw_fp.decode('utf-8') if isinstance(raw_fp, bytes) else str(raw_fp).strip()
 					)
 					audio['ACOUSTID_FINGERPRINT'] = [fingerprint]
 					audio.save()

@@ -26,7 +26,9 @@ We establish the following binding rules and standards for all FLAC tag handling
   * **Enriched Metadata (Managed by `fixtags.py`)**: `ALBUM`, `VERSION`, `DATE`, `RELEASEDATE`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`.
   * **Structured Custom Metadata (Managed by `fixtags.py`)**: `ALBUM_MASTER_TITLE`, `ALBUM_MASTER_YEAR`, `ALBUM_RELEASE_TITLE`, `ALBUM_RELEASE_YEAR`, `ALBUM_MAX_RESOLUTION`, `ALBUM_EDITION`, `ALBUM_FORMAT`, `ALBUM_RELEASE_COUNTRY`, `ALBUM_RELEASE_LABEL`.
   * **User Overrides (Optional, read by scripts)**: `ALBUM_TITLE_OVERRIDE`, `ALBUM_ARTIST_OVERRIDE`, `ORIGINAL FILENAME`.
-  * **Calculated Metrics (Managed by `calculate_dr.py` & `calculate_fp.py`)**: `DYNAMIC_RANGE` (replaces deprecated space key `DYNAMIC RANGE`), `ALBUM_DR` (replaces deprecated space key `ALBUM DYNAMIC RANGE`), `ACOUSTID_FINGERPRINT` (replaces deprecated space key `ACOUSTID FINGERPRINT`).
+  * **Calculated Metric Tags**:
+    * **Track & Album Dynamic Range (`DYNAMIC_RANGE`, `ALBUM_DR`)**: Computed via EBU R 128 / `drmeter`. Track DR is written to `DYNAMIC_RANGE`. Album DR is the rounded arithmetic mean of all track DR scores in the album, written to `ALBUM_DR`.
+    * **AcoustID Fingerprints (`ACOUSTID_FINGERPRINT`)**: Computed via `fpcalc` (Chromaprint / `pyacoustid`). Decoded to a UTF-8 `str` string before assigning to Mutagen FLAC tags to prevent `TypeError`. Written once to `ACOUSTID_FINGERPRINT` and skipped if already present.
   * **Lyrics (Managed by `update_lyrics.py`)**: `LYRICS`.
 
 > [!WARNING]
