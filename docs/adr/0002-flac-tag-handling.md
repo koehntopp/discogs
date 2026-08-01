@@ -37,46 +37,41 @@ We establish the following binding rules and standards for all FLAC tag handling
 * **Yate Catalog Numbers**: Catalog numbers are tagged in FLAC files by Yate using the `CATALOG NUMBER` space key. Scripts (`webui.py`, `album_list.py`) read catalog numbers using robust fallback checks across `CATALOGNUMBER`, `CATALOG NUMBER`, `CATALOG_NUMBER`, and `CATALOGNO`.
 * **Non-Destructive Invariant**: Automated scripts (`fixtags.py`) do **not** fetch or overwrite user catalog numbers from external APIs, respecting User Tag Authority.
 
-### 3. MusicBrainz Release Id Tag Contract
+### 3. Discogs API Enrichment & Rate-Limiting Mechanics (`fixtags.py`)
+* **Rate-Limit Resilience (`discogs_fetch`)**: `fixtags.py` wraps API calls with retries (up to 3 attempts, 60-second backoff) on HTTP 429 rate limits or `JSONDecodeError` empty response bodies. Sleeps 1 second after API requests to respect Discogs rate limits.
+* **Master & Release Title Resolution**: Title resolution follows priority `ALBUM_TITLE_OVERRIDE` $\rightarrow$ `master.title` $\rightarrow$ `drelease.title`. `ALBUM` stores the clean master title without brackets. `ALBUM_MASTER_TITLE`, `ALBUM_RELEASE_TITLE`, and `ORIGINAL_TITLE` store exact Discogs release strings.
+* **Master & Release Year Resolution**: `ALBUM_RELEASE_YEAR` stores pressing year; `ALBUM_MASTER_YEAR` stores original master release year. Written to `RELEASEDATE`, `DATE`, `YEAR`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`, `ORIGINAL DATE`, `ORIGINAL YEAR`.
+* **Audio Resolution & Version Standard**: `ALBUM_MAX_RESOLUTION` scans max FLAC sample rate across all tracks in directory (e.g. `96kHz`, `44.1kHz`). `VERSION` stores plain-text release string `<release_year> <format> (<edition>)`.
+* **Embedded Cover Art Resizing (`resize_covers`)**: Embedded `Picture` frames exceeding `cover_max_size` (default 1500px, from `config.py`) are resized down via PIL/Pillow Lanczos resampling (`Image.LANCZOS`), re-encoded as 90% JPEG quality, and re-embedded into FLAC files.
+* **Stale Tag Cleanup**: Automatically removes stale managed optional tags (`ALBUM_EDITION`, `ALBUM_DR`, `ALBUM_RELEASE_COUNTRY`, `ALBUM_RELEASE_LABEL`) if no longer applicable to the release.
+
+### 4. MusicBrainz Release Id Tag Contract
 * Standard tag key `MUSICBRAINZ_ALBUMID` is displayed across reports (`albums.csv`) and the Web UI as **`MusicBrainz Release Id`**.
 * Fallback reads check `MUSICBRAINZ_ALBUMID`, `MUSICBRAINZ ALBUM ID`, `MUSICBRAINZ_RELEASEGROUPID`, and `MUSICBRAINZ RELEASE GROUP ID`.
 
-### 4. Album Tag Formatting (`ALBUM` and `VERSION`)
+### 5. Album Tag Formatting (`ALBUM` and `VERSION`)
 * `fixtags.py` and `migrate_tags.py` populate clean `ALBUM` and plain `VERSION` tags:
   * **`ALBUM` Tag:** Stores the clean master title only (no brackets or decoration), e.g., `Fatal Mistakes`.
-    * **Title source priority:** `ALBUM_TITLE_OVERRIDE` $\rightarrow$ `ALBUM_MASTER_TITLE` $\rightarrow$ `ORIGINAL_TITLE` $\rightarrow$ clean `ALBUM`.
   * **`VERSION` Tag:** Stores the plain-text release decoration string (without square brackets), e.g., `2021 CD (Deluxe Digital Album)` or `1988 CD`.
-    * Format: `<year> <format>` (or `<year> <format> (<edition>)` when an edition is specified).
-    * **Year source:** `ALBUM_RELEASE_YEAR`.
-    * **Format source:** `ALBUM_FORMAT` (falls back to `SUBTITLE`, defaults to "CD").
-    * **Edition source:** `ALBUM_EDITION`.
   * Example `ALBUM`: `Brothers in Arms`
   * Example `VERSION`: `2025 Blu-ray (40th Anniversary Edition)`
-* `bliss.py` combines `clean(f"{ALBUM} {VERSION}".strip())` to compute directory names on disk, preserving 100% backward compatibility with existing folder names (e.g. `Brothers_in_Arms_2025_Blu_ray_40th_Anniversary_Edition`).
+* `bliss.py` combines `clean(f"{ALBUM} {VERSION}".strip())` to compute directory names on disk, preserving 100% backward compatibility with existing folder names.
 
-### 5. Lyrics Tag Management (`LYRICS`)
-* **Format Distinction**:
-  * **Synced LRC**: Contains timestamp patterns (`[MM:SS.xx]`). Preferred over plain text.
-  * **Plain Text TXT**: Embedded if synced LRC is unavailable and no prior lyrics exist.
-* **LRC Header Preservation & Normalization**:
-  * Synced LRC lyrics embed standard headers: `[ar:...]`, `[ti:...]`, `[al:...]`, `[length:...]`.
-  * Header line matching must use line-greedy regexes (`^\[(ar|ti|al|by|length|offset):.*\]\s*$`) to safely strip and rebuild headers when metadata updates.
+### 6. Lyrics Tag Management (`LYRICS`)
+* **Format Distinction**: Synced LRC (`[MM:SS.xx]`) vs Plain Text TXT.
+* **Header Preservation**: Rebuilds headers (`[ar:...]`, `[ti:...]`, `[al:...]`, `[length:...]`) via line-greedy regexes.
 
-### 6. Calculated Metric Tags
-* **Track & Album Dynamic Range (`DYNAMIC_RANGE`, `ALBUM_DR`)**:
-  * Computed via EBU R 128 / `drmeter`. Track DR is written to `DYNAMIC_RANGE`.
-  * Album DR is the rounded arithmetic mean of all track DR scores in the album, written to `ALBUM_DR`.
-* **AcoustID Fingerprints (`ACOUSTID_FINGERPRINT`)**:
-  * Computed via `fpcalc` (Chromaprint). Written once to `ACOUSTID_FINGERPRINT` and skipped if already present.
+### 7. Calculated Metric Tags
+* Track DR (`DYNAMIC_RANGE`), Album DR (`ALBUM_DR`), AcoustID Fingerprints (`ACOUSTID_FINGERPRINT`).
 
 ---
 
 ## Consequences
 
 ### Positive
-* **Deterministic Tag Keying**: Eliminates key casing inconsistencies across different tools and platforms.
+* **Deterministic & Resilient Enrichment**: Robust retry logic prevents 429 rate limit crashes during bulk metadata updates.
+* **Embedded Image Optimization**: Keeps embedded cover art size within 1500px limits to optimize player loading speed.
 * **User Tag Preservation**: Preserves Yate catalog numbers and user overrides without destructive API overwrites.
-* **Roon Compatible VERSION Tag**: Clean master title in `ALBUM` paired with plain-text release decoration in `VERSION` allows Roon and other music servers to group albums accurately while `bliss.py` preserves 1-to-1 disk folder layout compatibility.
 
 ### Negative / Trade-offs
-* All new scripts manipulating FLAC files must adhere strictly to these tag key contracts and use safe `mutagen` extraction patterns.
+* `fixtags.py` requires an active Discogs API key configured in `config.py`.
