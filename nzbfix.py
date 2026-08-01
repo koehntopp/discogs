@@ -7,6 +7,7 @@
 
 import argparse
 import os
+import shutil
 import tempfile
 from pathlib import Path
 from subprocess import DEVNULL, Popen, call
@@ -84,7 +85,8 @@ def main() -> None:
 
 	parallel = []
 	try:
-		call(['dot_clean', nzbdir], stdout=DEVNULL, stderr=DEVNULL)
+		if shutil.which('dot_clean'):
+			call(['dot_clean', nzbdir], stdout=DEVNULL, stderr=DEVNULL)
 
 		rsgain_cmd = ['rsgain', 'easy'] + skip_flag + ['-p', preset_file.name, nzbdir]
 		if active_log_level in ('SUCCESS', 'WARNING', 'ERROR'):

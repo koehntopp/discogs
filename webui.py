@@ -325,14 +325,16 @@ def _cover_art_cell(row: dict) -> str:
 
 def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
 	album_dir = row.get('_DIRECTORY_PATH', row.get('Directory', ''))
+	artist_dir = str(Path(album_dir).parent) if album_dir else ''
+	artist_id = _artist_id(row.get('Album Artist', ''))
 	album_title = row.get('Album', '')
 	btn = (
 		(
-			f'<button class="reprocess-btn" hx-get="/run-pipeline?directory={escape(album_dir)}" '
-			f'hx-target="#modal-wrap" hx-swap="innerHTML" '
-			f'title="Run full enrichment pipeline on this album"><i class="fa-solid fa-arrows-rotate"></i></button>'
+			f'<button class="reprocess-btn" hx-get="/reprocess?artist_dir={escape(artist_dir)}&artist_id={artist_id}" '
+			f'hx-target="#{artist_id}" hx-swap="outerHTML" '
+			f'title="Reprocess artist library"><i class="fa-solid fa-arrows-rotate"></i></button>'
 		)
-		if album_dir
+		if artist_dir
 		else ''
 	)
 	dr = escape(row.get('DR', ''))
