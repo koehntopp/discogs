@@ -331,7 +331,7 @@ def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
 	btn = (
 		(
 			f'<button class="reprocess-btn" hx-get="/reprocess?artist_dir={escape(artist_dir)}&artist_id={artist_id}" '
-			f'hx-target="#{artist_id}" hx-swap="outerHTML" '
+			f'hx-target="#modal-wrap" hx-swap="innerHTML" '
 			f'title="Reprocess artist library"><i class="fa-solid fa-arrows-rotate"></i></button>'
 		)
 		if artist_dir
@@ -873,33 +873,45 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 				if album_artist:
 					break
 
-	import asyncio
+	import threading
 
 	def run_scripts():
 		child_env = {**os.environ, 'DISCOGS_CHILD': '1'}
-		# Run fixtags on each album subdir
+		# Collect all album directories under artist_dir (including artist_dir itself if it contains FLACs)
+		album_dirs = []
 		if Path(artist_dir).is_dir():
+			if any(p.suffix == '.flac' for p in Path(artist_dir).glob('*.flac')):
+				album_dirs.append(Path(artist_dir))
 			for entry in sorted(Path(artist_dir).iterdir()):
-				if entry.is_dir() and any(f.suffix == '.flac' for f in entry.iterdir()):
-					proc = _set_proc(
-						subprocess.Popen(
-							['uv', 'run', str(SCRIPTS_DIR / 'fixtags.py'), str(entry)],
-							stdout=subprocess.PIPE,
-							stderr=subprocess.DEVNULL,
-							text=True,
-							cwd=str(SCRIPTS_DIR),
-							env=child_env,
-						)
-					)
-					for line in proc.stdout:
-						_relay_child_line('fixtags', line)
-					proc.wait()
+				if (
+					entry.is_dir()
+					and any(p.suffix == '.flac' for p in entry.rglob('*.flac'))
+					and entry not in album_dirs
+				):
+					album_dirs.append(entry)
+
+		# Run fixtags on each album directory
+		for album_dir_path in album_dirs:
+			proc = _set_proc(
+				subprocess.Popen(
+					['uv', 'run', str(SCRIPTS_DIR / 'fixtags.py'), str(album_dir_path)],
+					stdout=subprocess.PIPE,
+					stderr=subprocess.STDOUT,
+					text=True,
+					cwd=str(SCRIPTS_DIR),
+					env=child_env,
+				)
+			)
+			for line in proc.stdout:
+				_relay_child_line('fixtags', line)
+			proc.wait()
+
 		# Run bliss on artist dir
 		proc = _set_proc(
 			subprocess.Popen(
 				['uv', 'run', str(SCRIPTS_DIR / 'bliss.py'), artist_dir],
 				stdout=subprocess.PIPE,
-				stderr=subprocess.DEVNULL,
+				stderr=subprocess.STDOUT,
 				text=True,
 				cwd=str(SCRIPTS_DIR),
 				env=child_env,
@@ -909,40 +921,29 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 			_relay_child_line('bliss', line)
 		proc.wait()
 
-	await asyncio.to_thread(run_scripts)
+		# Update cache after fixtags/bliss
+		from config import flacroot
 
-	# Derive the canonical new artist dir via bliss's clean() on the ALBUMARTIST tag
-	from config import flacroot
+		new_artist_dir = str(Path(flacroot) / clean(album_artist)) if album_artist else artist_dir
+		rows = []
+		if Path(new_artist_dir).is_dir():
+			for entry in sorted(Path(new_artist_dir).iterdir()):
+				if entry.is_dir():
+					row = read_album_dir(str(entry))
+					if row:
+						rows.append(row)
+		if rows:
+			new_dirs = {r['Directory'] for r in rows}
+			old_dirs = (
+				{str(e) for e in Path(artist_dir).iterdir() if e.is_dir()}
+				if Path(artist_dir).is_dir()
+				else set()
+			)
+			_cache_update(rows, new_dirs | old_dirs)
+		_clear_proc()
 
-	if album_artist:
-		new_artist_dir = str(Path(flacroot) / clean(album_artist))
-	else:
-		new_artist_dir = artist_dir  # fallback
-
-	rows = []
-	if Path(new_artist_dir).is_dir():
-		for entry in sorted(Path(new_artist_dir).iterdir()):
-			if entry.is_dir():
-				row = read_album_dir(str(entry))
-				if row:
-					rows.append(row)
-
-	if rows:
-		new_dirs = {r['Directory'] for r in rows}
-		old_dirs = (
-			{str(e) for e in Path(artist_dir).iterdir() if e.is_dir()}
-			if Path(artist_dir).is_dir()
-			else set()
-		)
-		_cache_update(rows, new_dirs | old_dirs)
-
-	if not rows:
-		return HTMLResponse(f'<tbody id="{artist_id}"></tbody>')
-
-	# Use the original artist_id so the HTMX swap target always matches, even
-	# if bliss renamed the artist directory and the artist name changed.
-	trs = ''.join(render_row(r, artist_id) for r in rows)
-	return HTMLResponse(f'<tbody id="{artist_id}">{trs}</tbody>')
+	threading.Thread(target=run_scripts, daemon=True).start()
+	return await log_modal()
 
 
 @app.get('/lyrics', response_class=HTMLResponse)
