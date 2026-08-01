@@ -6,6 +6,7 @@
 #   "pathvalidate",
 #   "unidecode",
 #   "python-slugify",
+#   "rich",
 # ]
 # ///
 
@@ -25,10 +26,19 @@ if _config_dir and _config_dir not in sys.path:
 from mutagen.flac import FLAC
 from mutagen.mp3 import MP3
 from pathvalidate import sanitize_filename
+from rich.console import Console
+from rich.progress import (
+	BarColumn,
+	MofNCompleteColumn,
+	Progress,
+	SpinnerColumn,
+	TextColumn,
+	TimeRemainingColumn,
+)
 from slugify import slugify
 
 from config import flacroot, mp3root
-from log import logger, success
+from log import _console_handler, _is_tty, logger, success
 
 
 def read_audio_tags(filepath: str) -> dict[str, list[str]]:
@@ -387,54 +397,94 @@ def checkMP3() -> None:
 def createMP3() -> None:
 	"""Transcode any FLAC files that do not yet have a corresponding MP3.
 
-	Walks flacroot recursively and, for each .flac file, checks whether the mirrored
-	.mp3 file exists under mp3root (same relative path).  Missing MP3s are created with
-	ffmpeg using libmp3lame VBR quality 2 (~190 kbps).  Directory structure is created
-	automatically under mp3root.
+	Walks flacroot recursively by album directory, checks for missing mirrored .mp3 files
+	under mp3root, and creates them using ffmpeg with libmp3lame VBR quality 2 (~190 kbps).
+	Displays a Rich progress bar in TTY mode and logs success per finished album.
 	"""
 	logger.info(f'Creating missing MP3s in {mp3root}')
 
-	for p in Path(flacroot).rglob('*.flac'):
-		try:
-			flacfilename = str(PurePosixPath(p))
-			if not os.path.isfile(flacfilename):
+	album_dirs = []
+	for root, _dirs, files in os.walk(flacroot):
+		if any(f.endswith('.flac') for f in files):
+			album_dirs.append(root)
+
+	total_albums = len(album_dirs)
+	use_tty = _is_tty
+	console = Console(stderr=True)
+
+	progress = Progress(
+		SpinnerColumn(),
+		TextColumn('[progress.description]{task.description}'),
+		BarColumn(),
+		MofNCompleteColumn(),
+		TimeRemainingColumn(),
+		console=console,
+		disable=not use_tty,
+	)
+
+	orig_stream = _console_handler.stream
+	with progress:
+		if use_tty:
+			_console_handler.stream = sys.stderr
+		task_id = progress.add_task('Transcoding MP3s...', total=total_albums)
+
+		for album_dir in album_dirs:
+			flac_files = sorted(
+				os.path.join(album_dir, f) for f in os.listdir(album_dir) if f.endswith('.flac')
+			)
+			if not flac_files:
+				progress.update(task_id, advance=1)
 				continue
 
-			rel_p = os.path.relpath(flacfilename, flacroot)
-			mp3_path = Path(mp3root) / Path(rel_p).with_suffix('.mp3')
-			mp3filename = str(mp3_path)
+			album_converted_count = 0
+			salbumtitle = ''
 
-			if not os.path.isfile(mp3filename):
-				# Get metadata for log display
-				tags = read_audio_tags(flacfilename)
-				stracktitle = clean(tags.get('TITLE', ['Unknown Title'])[0])
-				salbumtitle = clean(tags.get('ALBUM', ['Unknown Album'])[0])
+			for flacfilename in flac_files:
+				try:
+					if not os.path.isfile(flacfilename):
+						continue
 
-				# Ensure destination parent directory exists
-				mp3_path.parent.mkdir(parents=True, exist_ok=True)
+					rel_p = os.path.relpath(flacfilename, flacroot)
+					mp3_path = Path(mp3root) / Path(rel_p).with_suffix('.mp3')
+					mp3filename = str(mp3_path)
 
-				logger.info(f'Creating MP3 for {salbumtitle} - {stracktitle}')
+					if not os.path.isfile(mp3filename):
+						tags = read_audio_tags(flacfilename)
+						salbumtitle = clean(tags.get('ALBUM', ['Unknown Album'])[0])
 
-				# Construct and execute ffmpeg command with proper escaping
-				flac2mp3 = [
-					'ffmpeg',
-					'-loglevel',
-					'error',
-					'-i',
-					flacfilename,
-					'-codec:a',
-					'libmp3lame',
-					'-qscale:a',
-					'2',
-					'-vsync',
-					'2',
-					mp3filename,
-				]
-				subprocess.run(flac2mp3, check=False)
+						mp3_path.parent.mkdir(parents=True, exist_ok=True)
 
-		except Exception as e:  # noqa: BLE001
-			logger.error(f'Error creating MP3 {flacfilename}: {e}')
-			continue
+						flac2mp3 = [
+							'ffmpeg',
+							'-loglevel',
+							'error',
+							'-i',
+							flacfilename,
+							'-codec:a',
+							'libmp3lame',
+							'-qscale:a',
+							'2',
+							'-vsync',
+							'2',
+							mp3filename,
+						]
+						ret = subprocess.run(flac2mp3, check=False)
+						if ret.returncode == 0:
+							album_converted_count += 1
+				except Exception as e:  # noqa: BLE001
+					logger.error(f'Error creating MP3 {flacfilename}: {e}')
+					continue
+
+			if album_converted_count > 0:
+				display_album = salbumtitle or os.path.basename(album_dir)
+				success(
+					f'Transcoded {album_converted_count} MP3 track(s) for album {display_album}'
+				)
+
+			progress.update(task_id, advance=1)
+
+		if use_tty:
+			_console_handler.stream = orig_stream
 
 	logger.info('Done.')
 
