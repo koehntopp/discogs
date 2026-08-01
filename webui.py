@@ -1059,12 +1059,6 @@ async def sync_start():
 		rclone_conf = _config_dir() / 'rclone.conf'
 		conf_flag = ['--config', str(rclone_conf)] if rclone_conf.exists() else []
 
-		cleanup_cmd = (
-			['rclone']
-			+ conf_flag
-			+ ['cleanup', '--log-file', str(rclone_log), '--log-level', 'INFO', remote]
-		)
-
 		sync_cmd = (
 			['rclone']
 			+ conf_flag
@@ -1093,34 +1087,6 @@ async def sync_start():
 		)
 
 		def _run_sequence():
-			# 1. Run Cleanup
-			logger.info(f'rclone cleanup started: {" ".join(cleanup_cmd)}')
-			proc = _set_proc(
-				subprocess.Popen(cleanup_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-			)
-			_sync['proc'] = proc
-
-			# Read log file during cleanup
-			with open(rclone_log, 'r') as f:
-				while proc.poll() is None:
-					line = f.readline()
-					if line:
-						logger.info(f'rclone: {line.rstrip()}')
-					else:
-						time.sleep(0.5)
-				for line in f:
-					if line.strip():
-						logger.info(f'rclone: {line.rstrip()}')
-
-			if proc.returncode != 0:
-				if proc.returncode < 0:
-					logger.warning('rclone cleanup terminated by user')
-					return
-				logger.warning(f'rclone cleanup finished with non-zero exit code {proc.returncode}')
-			else:
-				logger.info('rclone cleanup finished successfully')
-
-			# 2. Run Sync
 			logger.info(f'rclone sync started: {" ".join(sync_cmd)}')
 			proc = _set_proc(
 				subprocess.Popen(sync_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -1128,8 +1094,6 @@ async def sync_start():
 			_sync['proc'] = proc
 
 			with open(rclone_log, 'r') as f:
-				# Seek to the end of the file so we only read the new logs from sync
-				f.seek(0, 2)
 				while proc.poll() is None:
 					line = f.readline()
 					if line:
