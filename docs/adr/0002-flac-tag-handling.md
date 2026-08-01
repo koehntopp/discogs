@@ -1,7 +1,7 @@
 # ADR 0002: FLAC Tag Handling Contracts and Metadata Standards
 
 - **Status**: Accepted
-- **Date**: 2026-07-27
+- **Date**: 2026-08-01 (Updated)
 - **Authors**: Discogs Project Maintainers
 
 ## Context
@@ -23,7 +23,7 @@ We establish the following binding rules and standards for all FLAC tag handling
 * **Standard Tag Inventory**:
   * **User Anchor Tag (Read-Only by scripts)**: `DISCOGS_RELEASE_ID` (anchors album to exact Discogs version).
   * **Ripping/Tagger Metadata (Read-Only by scripts)**: `ALBUMARTIST`, `ARTIST`, `TITLE`, `TRACKNUMBER`, `DISCNUMBER`, `CATALOGNUMBER`, `MUSICBRAINZ_ALBUMID`, `SUBTITLE`, `ORIGINAL FILENAME` (custom release title override).
-  * **Enriched Metadata (Managed by `fixtags.py`)**: `ALBUM`, `DATE`, `RELEASEDATE`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`.
+  * **Enriched Metadata (Managed by `fixtags.py`)**: `ALBUM`, `VERSION`, `DATE`, `RELEASEDATE`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`.
   * **Structured Custom Metadata (Managed by `fixtags.py`)**: `ALBUM_MASTER_TITLE`, `ALBUM_MASTER_YEAR`, `ALBUM_RELEASE_TITLE`, `ALBUM_RELEASE_YEAR`, `ALBUM_MAX_RESOLUTION`, `ALBUM_EDITION`, `ALBUM_FORMAT`, `ALBUM_RELEASE_COUNTRY`, `ALBUM_RELEASE_LABEL`.
   * **User Overrides (Optional, read by scripts)**: `ALBUM_TITLE_OVERRIDE`, `ALBUM_ARTIST_OVERRIDE`, `ORIGINAL FILENAME`.
   * **Calculated Metrics (Managed by `calculate_dr.py` & `calculate_fp.py`)**: `DYNAMIC_RANGE` (replaces deprecated space key `DYNAMIC RANGE`), `ALBUM_DR` (replaces deprecated space key `ALBUM DYNAMIC RANGE`), `ACOUSTID_FINGERPRINT` (replaces deprecated space key `ACOUSTID FINGERPRINT`).
@@ -32,60 +32,51 @@ We establish the following binding rules and standards for all FLAC tag handling
 > [!WARNING]
 > Tag keys containing spaces (such as `DYNAMIC RANGE`, `ALBUM DYNAMIC RANGE`, `ACOUSTID FINGERPRINT`) violate the Vorbis Comment specification and must be read with fallback checks, and rewritten using standard compliant keys containing underscores (e.g. `DYNAMIC_RANGE`, `ALBUM_DR`, `ACOUSTID_FINGERPRINT`).
 
-### 2. User Tag Authority & Non-Destructive Invariant
+### 2. User Tag Authority & Catalog Number Fallbacks
 * `DISCOGS_RELEASE_ID` is the authoritative anchor for release matching. If missing from an album directory, scripts must skip metadata enrichment for that directory.
-* User-authored metadata (such as primary artist names, `ORIGINAL FILENAME`, or custom release IDs) must never be erased or overwritten with generic fallbacks.
+* **Yate Catalog Numbers**: Catalog numbers are tagged in FLAC files by Yate using the `CATALOG NUMBER` space key. Scripts (`webui.py`, `album_list.py`) read catalog numbers using robust fallback checks across `CATALOGNUMBER`, `CATALOG NUMBER`, `CATALOG_NUMBER`, and `CATALOGNO`.
+* **Non-Destructive Invariant**: Automated scripts (`fixtags.py`) do **not** fetch or overwrite user catalog numbers from external APIs, respecting User Tag Authority.
 
-### 3. Album Tag Formatting (`ALBUM` and `VERSION`)
-* `fixtags.py` normalizes the `ALBUM` and `VERSION` tags:
-  * **`ALBUM` Tag:** Stores the clean master title only (no brackets/decoration), e.g., `Fatal Mistakes`.
+### 3. MusicBrainz Release Id Tag Contract
+* Standard tag key `MUSICBRAINZ_ALBUMID` is displayed across reports (`albums.csv`) and the Web UI as **`MusicBrainz Release Id`**.
+* Fallback reads check `MUSICBRAINZ_ALBUMID`, `MUSICBRAINZ ALBUM ID`, `MUSICBRAINZ_RELEASEGROUPID`, and `MUSICBRAINZ RELEASE GROUP ID`.
+
+### 4. Album Tag Formatting (`ALBUM` and `VERSION`)
+* `fixtags.py` and `migrate_tags.py` populate clean `ALBUM` and plain `VERSION` tags:
+  * **`ALBUM` Tag:** Stores the clean master title only (no brackets or decoration), e.g., `Fatal Mistakes`.
     * **Title source priority:** `ALBUM_TITLE_OVERRIDE` $\rightarrow$ `ALBUM_MASTER_TITLE` $\rightarrow$ `ORIGINAL_TITLE` $\rightarrow$ clean `ALBUM`.
-  * **`VERSION` Tag:** Stores the plain-text release decoration string (no square brackets), e.g., `2021 CD (Deluxe Digital Album)` or `1988 CD`.
+  * **`VERSION` Tag:** Stores the plain-text release decoration string (without square brackets), e.g., `2021 CD (Deluxe Digital Album)` or `1988 CD`.
     * Format: `<year> <format>` (or `<year> <format> (<edition>)` when an edition is specified).
     * **Year source:** `ALBUM_RELEASE_YEAR`.
     * **Format source:** `ALBUM_FORMAT` (falls back to `SUBTITLE`, defaults to "CD").
     * **Edition source:** `ALBUM_EDITION`.
   * Example `ALBUM`: `Brothers in Arms`
   * Example `VERSION`: `2025 Blu-ray (40th Anniversary Edition)`
-* `bliss.py` combines `clean(f"{ALBUM} {VERSION}")` to compute directory names on disk, preserving 100% backward compatibility with existing folder names (e.g. `Brothers_in_Arms_2025_Blu_ray_40th_Anniversary_Edition`).
+* `bliss.py` combines `clean(f"{ALBUM} {VERSION}".strip())` to compute directory names on disk, preserving 100% backward compatibility with existing folder names (e.g. `Brothers_in_Arms_2025_Blu_ray_40th_Anniversary_Edition`).
 
-### 4. Lyrics Tag Management (`LYRICS`)
+### 5. Lyrics Tag Management (`LYRICS`)
 * **Format Distinction**:
   * **Synced LRC**: Contains timestamp patterns (`[MM:SS.xx]`). Preferred over plain text.
   * **Plain Text TXT**: Embedded if synced LRC is unavailable and no prior lyrics exist.
 * **LRC Header Preservation & Normalization**:
   * Synced LRC lyrics embed standard headers: `[ar:...]`, `[ti:...]`, `[al:...]`, `[length:...]`.
-  * Header line matching must use line-greedy regexes (`^\[(ar|ti|al|by|length|offset):.*\]\s*$`) to safely strip and rebuild headers when metadata updates, preventing duplicate headers on titles containing brackets (e.g. `[2024 Remaster]`).
-* **Validation & Clearing**:
-  * Malformed LRC timestamps (e.g., 3-part timestamps like `[100:40:39.00]`) must be automatically detected, stripped, or cleared to maintain player compatibility.
+  * Header line matching must use line-greedy regexes (`^\[(ar|ti|al|by|length|offset):.*\]\s*$`) to safely strip and rebuild headers when metadata updates.
 
-### 5. Calculated Metric Tags
+### 6. Calculated Metric Tags
 * **Track & Album Dynamic Range (`DYNAMIC_RANGE`, `ALBUM_DR`)**:
   * Computed via EBU R 128 / `drmeter`. Track DR is written to `DYNAMIC_RANGE`.
   * Album DR is the rounded arithmetic mean of all track DR scores in the album, written to `ALBUM_DR`.
 * **AcoustID Fingerprints (`ACOUSTID_FINGERPRINT`)**:
   * Computed via `fpcalc` (Chromaprint). Written once to `ACOUSTID_FINGERPRINT` and skipped if already present.
 
-### 6. Helper Function Pattern (`flactag`)
-* Reading tags from `taglib.File` must use safe fallback getters to avoid `KeyError` or `IndexError`:
-  ```python
-  def flactag(song: taglib.File, tag: str) -> str:
-  	try:
-  		return song.tags.get(tag, [''])[0]
-  	except (KeyError, IndexError):
-  		return ''
-  ```
-* File modification timestamps (`os.utime(flac_path, None)`) should be preserved or updated intentionally to prevent unnecessary re-syncing by file watchers or `rclone`.
-
 ---
 
 ## Consequences
 
 ### Positive
-* **Deterministic Tag Keying**: Eliminates key casing inconsistencies (`album` vs `ALBUM`) across different tools and platforms.
-* **Resilient Header Parsing**: Eliminates duplicate `[ti:...]` header proliferation in LRC lyrics fields.
-* **Non-Destructive Workflows**: User-curated library tags and release IDs remain safe from accidental automated overwrites.
-* **Efficient File Syncing**: Minimizes unnecessary `mtime` updates when tag values have not effectively changed.
+* **Deterministic Tag Keying**: Eliminates key casing inconsistencies across different tools and platforms.
+* **User Tag Preservation**: Preserves Yate catalog numbers and user overrides without destructive API overwrites.
+* **Roon Compatible VERSION Tag**: Clean master title in `ALBUM` paired with plain-text release decoration in `VERSION` allows Roon and other music servers to group albums accurately while `bliss.py` preserves 1-to-1 disk folder layout compatibility.
 
 ### Negative / Trade-offs
-* All new scripts manipulating FLAC files must adhere strictly to these tag key contracts and use safe `flactag` extraction patterns.
+* All new scripts manipulating FLAC files must adhere strictly to these tag key contracts and use safe `mutagen` extraction patterns.

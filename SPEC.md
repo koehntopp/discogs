@@ -91,6 +91,7 @@ Detailed architectural standards and design contracts are maintained in `docs/ad
 - [ADR 0002: FLAC Tag Handling Contracts and Metadata Standards](file:///Users/koehntopp/src/discogs/docs/adr/0002-flac-tag-handling.md)
 - [ADR 0003: Web UI Architecture, Process Lifecycle, and JSON Log Streaming](file:///Users/koehntopp/src/discogs/docs/adr/0003-webui-architecture-and-subprocess-management.md)
 - [ADR 0004: Album List Caching and Direct Lyrics Export Architecture](file:///Users/koehntopp/src/discogs/docs/adr/0004-performance-caching-and-lyrics-export-architecture.md)
+- [ADR 0005: MP3 Mirror Transcoding and Multi-Copy Library Comparison](file:///Users/koehntopp/src/discogs/docs/adr/0005-mp3-transcoding-and-library-comparison.md)
 
 ---
 
