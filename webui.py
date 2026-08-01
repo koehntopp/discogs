@@ -49,7 +49,6 @@ def _relay_child_line(prefix: str, line: str) -> None:
 import os
 import sys
 import time
-from datetime import datetime
 from html import escape
 from pathlib import Path
 
@@ -61,7 +60,7 @@ if _config_dir and _config_dir not in sys.path:
 import pandas as pd
 import uvicorn
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import HTMLResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from log import logger, success
@@ -330,8 +329,7 @@ def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
 	btn = (
 		(
 			f'<button class="reprocess-btn" hx-get="/run-pipeline?directory={escape(album_dir)}" '
-			f'hx-target="#run-pipeline-logs" hx-swap="beforeend" '
-			f"hx-on::before-request=\"var el=document.getElementById('run-pipeline-logs'); if(el) el.scrollIntoView({{behavior:'smooth',block:'end'}});\" "
+			f'hx-target="#modal-wrap" hx-swap="innerHTML" '
 			f'title="Run full enrichment pipeline on this album"><i class="fa-solid fa-arrows-rotate"></i></button>'
 		)
 		if album_dir
@@ -1126,28 +1124,33 @@ async def sync_start():
 	return await log_modal()
 
 
-@app.get('/run-pipeline', response_class=StreamingResponse)
-@app.post('/run-pipeline', response_class=StreamingResponse)
-@app.get('/api/reprocess', response_class=StreamingResponse)
-@app.post('/api/reprocess', response_class=StreamingResponse)
+@app.get('/run-pipeline', response_class=HTMLResponse)
+@app.post('/run-pipeline', response_class=HTMLResponse)
+@app.get('/api/reprocess', response_class=HTMLResponse)
+@app.post('/api/reprocess', response_class=HTMLResponse)
 async def run_pipeline(directory: str = Query(...)):
-	def stream():
-		yield f'<div class="log-line">[{datetime.now().strftime("%H:%M:%S")}] Starting pipeline on {escape(directory)}</div>\n'
-		proc = subprocess.Popen(
+	import threading
+
+	logger.info(f'pipeline: starting nzbfix on {directory}')
+	proc = _set_proc(
+		subprocess.Popen(
 			['uv', 'run', str(SCRIPTS_DIR / 'nzbfix.py'), directory],
 			stdout=subprocess.PIPE,
 			stderr=subprocess.STDOUT,
 			text=True,
+			cwd=str(SCRIPTS_DIR),
+			env={**os.environ, 'DISCOGS_CHILD': '1'},
 		)
-		for line in proc.stdout:
-			line = line.rstrip()
-			if line:
-				yield f'<div class="log-line">{escape(line)}</div>\n'
-		proc.wait()
-		status = 'Done' if proc.returncode == 0 else f'Failed (exit {proc.returncode})'
-		yield f'<div class="log-line log-done">[{datetime.now().strftime("%H:%M:%S")}] {status}</div>\n'
+	)
 
-	return StreamingResponse(stream(), media_type='text/html')
+	def _stream_pipeline():
+		for line in proc.stdout:
+			_relay_child_line('nzbfix', line)
+		proc.wait()
+		_clear_proc()
+
+	threading.Thread(target=_stream_pipeline, daemon=True).start()
+	return await log_modal()
 
 
 def _config_path() -> Path:
