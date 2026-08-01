@@ -945,21 +945,26 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 		from config import flacroot
 
 		new_artist_dir = str(Path(flacroot) / clean(album_artist)) if album_artist else artist_dir
+		search_dir = Path(new_artist_dir) if Path(new_artist_dir).is_dir() else Path(artist_dir)
+		target_folders = set()
+		if search_dir.is_dir():
+			for flac_p in search_dir.rglob('*.flac'):
+				target_folders.add(str(flac_p.parent))
+
 		rows = []
-		if Path(new_artist_dir).is_dir():
-			for entry in sorted(Path(new_artist_dir).iterdir()):
-				if entry.is_dir():
-					row = read_album_dir(str(entry))
-					if row:
-						rows.append(row)
+		for folder in sorted(target_folders):
+			row = read_album_dir(folder)
+			if row:
+				rows.append(row)
+
 		if rows:
 			new_dirs = {r['Directory'] for r in rows}
-			old_dirs = (
-				{str(e) for e in Path(artist_dir).iterdir() if e.is_dir()}
+			old_folders = (
+				{str(p.parent) for p in Path(artist_dir).rglob('*.flac')}
 				if Path(artist_dir).is_dir()
-				else {artist_dir}
+				else set()
 			)
-			_cache_update(rows, new_dirs | old_dirs | {artist_dir, new_artist_dir})
+			_cache_update(rows, new_dirs | old_folders | {artist_dir, new_artist_dir})
 			_cache_invalidate()
 			_refresh_done['pending'] = True
 		_clear_proc()
