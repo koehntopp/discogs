@@ -1,37 +1,773 @@
-Directory,Old_Album,New_Album,Extracted_Format,Extracted_Edition,Max_Resolution,DR_Score
-/Volumes/Data/flac/The_Alan_Parsons_Project/Eve_1995_CD_44kHz_DR14,Eve [1995 CD 44kHz DR14],Eve [1995 CD],CD,,44.1kHz,14
-/Volumes/Data/flac/The_Alan_Parsons_Project/I_Robot_2025_Blu_ray_96kHz_DR12,I Robot [2025 Blu-ray 96kHz DR12],I Robot [2025 Blu-ray],Blu-ray,,96kHz,12
-/Volumes/Data/flac/The_Alan_Parsons_Project/Eye_In_The_Sky_1987_CD_44kHz_DR14,Eye In The Sky [1987 CD 44kHz DR14],Eye In The Sky [1987 CD],CD,,44.1kHz,14
-/Volumes/Data/flac/The_Alan_Parsons_Project/I_Robot_2025_CD_44kHz_DR10,I Robot [2025 CD 44kHz DR10],I Robot [2025 CD],CD,,44.1kHz,10
-/Volumes/Data/flac/The_Alan_Parsons_Project/Tales_Of_Mystery_And_Imagination_Edgar_Allan_Poe_2016_Blu_ray_96kHz_DR12,Tales Of Mystery And Imagination - Edgar Allan Poe [2016 Blu-ray 96kHz DR12],Tales Of Mystery And Imagination - Edgar Allan Poe [2016 Blu-ray],Blu-ray,,96kHz,12
-/Volumes/Data/flac/The_Alan_Parsons_Project/Tales_Of_Mystery_And_Imagination_Edgar_Allan_Poe_1994_MFSL_UDCD_44kHz_DR10,Tales Of Mystery And Imagination - Edgar Allan Poe [1994 MFSL UDCD 44kHz DR10],Tales Of Mystery And Imagination - Edgar Allan Poe [1994 MFSL UDCD],MFSL UDCD,,44.1kHz,10
-/Volumes/Data/flac/The_Alan_Parsons_Project/Eye_In_The_Sky_2021_MFSL_SACD_88kHz_DR12,Eye In The Sky [2021 MFSL SACD 88kHz DR12],Eye In The Sky [2021 MFSL SACD],MFSL SACD,,88.2kHz,12
-/Volumes/Data/flac/The_Alan_Parsons_Project/I_Robot_2016_MFSL_SACD_88kHz_DR10,I Robot [2016 MFSL SACD 88kHz DR10],I Robot [2016 MFSL SACD],MFSL SACD,,88.2kHz,10
-/Volumes/Data/flac/The_Alan_Parsons_Project/Vulture_Culture_2024_HDTracks_88kHz_DR14,Vulture Culture [2024 HDTracks 88kHz DR14],Vulture Culture [2024 HDTracks],HDTracks,,88.2kHz,14
-/Volumes/Data/flac/The_Alan_Parsons_Project/Eye_In_The_Sky_2026_Blu_ray_48kHz_DR13,Eye In The Sky [2026 Blu-ray 48kHz DR13],Eye In The Sky [2026 Blu-ray],Blu-ray,,96kHz,13
-/Volumes/Data/flac/The_Alan_Parsons_Project/Ammonia_Avenue_1988_CD_44kHz_DR14,Ammonia Avenue [1988 CD 44kHz DR14],Ammonia Avenue [1988 CD],CD,,44.1kHz,14
-/Volumes/Data/flac/The_Alan_Parsons_Project/Pyramid_1988_CD_44kHz_DR14,Pyramid [1988 CD 44kHz DR14],Pyramid [1988 CD],CD,,44.1kHz,14
-/Volumes/Data/flac/The_Alan_Parsons_Project/The_Turn_Of_A_Friendly_Card_2005_HDAD_192kHz_DR14,The Turn Of A Friendly Card [2005 HDAD 192kHz DR14],The Turn Of A Friendly Card [2005 HDAD],HDAD,,192kHz,14
-/Volumes/Data/flac/The_Alan_Parsons_Project/I_Robot_2005_HDAD_192kHz_DR12,I Robot [2005 HDAD 192kHz DR12],I Robot [2005 HDAD],HDAD,,192kHz,12
-/Volumes/Data/flac/The_Alan_Parsons_Project/Eye_In_The_Sky_2005_HDAD_192kHz_DR12,Eye In The Sky [2005 HDAD 192kHz DR12],Eye In The Sky [2005 HDAD],HDAD,,192kHz,12
-/Volumes/Data/flac/The_Alan_Parsons_Project/Vulture_Culture_2009_SHM_CD_44kHz_DR12,Vulture Culture [2009 SHM-CD 44kHz DR12],Vulture Culture [2009 SHM-CD],SHM-CD,,44.1kHz,12
-/Volumes/Data/flac/The_Alan_Parsons_Project/The_Turn_Of_A_Friendly_Card_Box_Set_2023_Blu_ray_44kHz_DR12,The Turn Of A Friendly Card - Box-Set [2023 Blu-ray 44kHz DR12],The Turn Of A Friendly Card [2023 Blu-ray],Blu-ray,,96kHz,12
-/Volumes/Data/flac/Dire_Straits/Live_1978_1992_2024_CD_44kHz_DR12,Live 1978-1992 [2024 CD 44kHz DR12],Live 1978-1992 [2024 CD],CD,,44.1kHz,12
-/Volumes/Data/flac/Dire_Straits/bia,Brothers In Arms (40th Anniversary Edition),Brothers In Arms [2025 Blu-ray (40th Anniversary Edition)],Blu-ray,40th Anniversary Edition,96kHz,14
-/Volumes/Data/flac/Dire_Straits/Love_Over_Gold_1983_CD_44kHz_DR14,Love Over Gold [1983 CD 44kHz DR14],Love Over Gold [1983 CD],CD,,44.1kHz,14
-/Volumes/Data/flac/Dire_Straits/Love_Over_Gold_2019_MFSL_SACD_88kHz_DR14,Love Over Gold [2019 MFSL SACD 88kHz DR14],Love Over Gold [2019 MFSL SACD],MFSL SACD,,88.2kHz,14
-/Volumes/Data/flac/Dire_Straits/Communique_1984_CD_44kHz_DR14,Communiqué [1984 CD 44kHz DR14],Communiqué [1984 CD],CD,,44.1kHz,14
-/Volumes/Data/flac/Dire_Straits/Money_For_Nothing_1988_CD_48kHz_DR15,Money For Nothing [1988 CD 48kHz DR15],Money For Nothing [1988 CD],CD,,48kHz,15
-/Volumes/Data/flac/Dire_Straits/Dire_Straits_2019_MFSL_SACD_88kHz_DR15,Dire Straits [2019 MFSL SACD 88kHz DR15],Dire Straits [2019 MFSL SACD],MFSL SACD,,88.2kHz,15
-/Volumes/Data/flac/Dire_Straits/Brothers_In_Arms_2013_MFSL_SACD_88kHz_DR15,Brothers In Arms [2013 MFSL SACD 88kHz DR15],Brothers In Arms [2013 MFSL SACD],MFSL SACD,,88.2kHz,15
-/Volumes/Data/flac/Dire_Straits/Making_Movies_2019_MFSL_SACD_88kHz_DR13,Making Movies [2019 MFSL SACD 88kHz DR13],Making Movies [2019 MFSL SACD],MFSL SACD,,88.2kHz,13
-/Volumes/Data/flac/Dire_Straits/Communique_2019_MFSL_SACD_88kHz_DR12,Communiqué [2019 MFSL SACD 88kHz DR12],Communiqué [2019 MFSL SACD],MFSL SACD,,88.2kHz,12
-/Volumes/Data/flac/Dire_Straits/On_Every_Street_2024_MFSL_SACD_88kHz_DR13,On Every Street [2024 MFSL SACD 88kHz DR13],On Every Street [2024 MFSL SACD],MFSL SACD,,88.2kHz,13
-/Volumes/Data/flac/Dire_Straits/Brothers_In_Arms_40th_Anniversary_Edition_2025_Blu_ray_96kHz_DR14,Brothers In Arms (40th Anniversary Edition) [2025 Blu-ray 96kHz DR14],Brothers In Arms [2025 Blu-ray (40th Anniversary Edition)],Blu-ray,40th Anniversary Edition,96kHz,14
-/Volumes/Data/flac/Dire_Straits/ExtendeDancEPlay_1982_Qobuz_44kHz_DR13,ExtendeDancEPlay [1982 Qobuz 44kHz DR13],ExtendeDancEPlay [1982 Qobuz],Qobuz,,44.1kHz,13
-/Volumes/Data/flac/Frankie_Goes_To_Hollywood/Rage_Hard_The_Sonic_Collection_2001_SACD_88kHz_DR13,Rage Hard - The Sonic Collection [2001 SACD 88kHz DR13],Rage Hard - The Sonic Collection [2001 SACD],SACD,,88.2kHz,13
-/Volumes/Data/flac/Frankie_Goes_To_Hollywood/Twelve_Inches_2001_CD_44kHz_DR08,Twelve Inches [2001 CD 44kHz DR08],Twelve Inches [2001 CD],CD,,44.1kHz,08
-/Volumes/Data/flac/Frankie_Goes_To_Hollywood/Welcome_To_The_Pleasuredome_Super_Deluxe_Edition_2025_CD_44kHz_DR10,Welcome To The Pleasuredome (Super Deluxe Edition) [2025 CD 44kHz DR10],Welcome To The Pleasuredome [2025 CD (Super Deluxe Edition)],CD,Super Deluxe Edition,44.1kHz,10
-/Volumes/Data/flac/Frankie_Goes_To_Hollywood/Welcome_To_The_Pleasuredome_Deluxe_Edition_2010_CD_44kHz_DR11,Welcome To The Pleasuredome - Deluxe Edition [2010 CD 44kHz DR11],Welcome To The Pleasuredome [2010 CD],CD,,44.1kHz,11
-/Volumes/Data/flac/Frankie_Goes_To_Hollywood/Welcome_To_The_Pleasuredome_1985_CD_44kHz_DR13,Welcome To The Pleasuredome [1985 CD 44kHz DR13],Welcome To The Pleasuredome [1985 CD],CD,,44.1kHz,13
-/Volumes/Data/flac/Frankie_Goes_To_Hollywood/Welcome_To_The_Pleasuredome_2025_Blu_ray_48kHz_DR13,Welcome To The Pleasuredome [2025 Blu-ray 48kHz DR13],Welcome To The Pleasuredome [2025 Blu-ray],Blu-ray,,96kHz,13
+Directory,Old_Album,Clean_Album,Version
+/Volumes/flac/Adele/Live_At_The_Royal_Albert_Hall_2011_Blu_ray,Live At The Royal Albert Hall [2011 Blu-ray],Live At The Royal Albert Hall,2011 Blu-ray
+/Volumes/flac/Adele/30_2021_CD_Target_Deluxe_Edition,30 [2021 CD (Target Deluxe Edition)],30,2021 CD (Target Deluxe Edition)
+/Volumes/flac/Adele/25_2015_CD_Target_Exclusive_Limited_Edition,25 [2015 CD (Target Exclusive Limited Edition)],25,2015 CD (Target Exclusive Limited Edition)
+/Volumes/flac/Adele/21_2011_CD_Target_Deluxe_Edition,21 [2011 CD (Target Deluxe Edition)],21,2011 CD (Target Deluxe Edition)
+/Volumes/flac/Adele/19_2008_CD_Expanded_Edition,19 [2008 CD (Expanded Edition)],19,2008 CD (Expanded Edition)
+/Volumes/flac/Air_Supply/The_Definitive_Collection_1999_Qobuz,The Definitive Collection [1999 Qobuz],The Definitive Collection,1999 Qobuz
+/Volumes/flac/Air_Supply/Lost_In_Love_1992_CD,Lost In Love [1992 CD],Lost In Love,1992 CD
+/Volumes/flac/Alison_Moyet/Alf_1984_CD,Alf [1984 CD],Alf,1984 CD
+/Volumes/flac/Amy_Macdonald/Under_Stars_2017_Qobuz,Under Stars [2017 Qobuz],Under Stars,2017 Qobuz
+/Volumes/flac/Asia/Asia_2010_Audio_Fidelity_24_KT_Gold_HDCD,Asia [2010 Audio Fidelity 24 KT + Gold HDCD],Asia,2010 Audio Fidelity 24 KT + Gold HDCD
+/Volumes/flac/Asia/Alpha_2014_SHM_SACD,Alpha [2014 SHM-SACD],Alpha,2014 SHM-SACD
+/Volumes/flac/BAP/Vun_Drinne_Noh_Drusse_1982_CD,Vun Drinne Noh Drusse [1982 CD],Vun Drinne Noh Drusse,1982 CD
+/Volumes/flac/BAP/Fur_Usszeschnigge_1986_CD,Für Usszeschnigge! [1986 CD],Für Usszeschnigge!,1986 CD
+/Volumes/flac/BAP/Zeitreise_Live_Im_Sartory_2024_Qobuz,Zeitreise / Live Im Sartory [2024 Qobuz],Zeitreise / Live Im Sartory,2024 Qobuz
+/Volumes/flac/Bad_English/Bad_English_1989_CD,Bad English [1989 CD],Bad English,1989 CD
+/Volumes/flac/Band_Aid/Do_They_Know_It_s_Christmas_2024_CD,Do They Know It's Christmas? [2024 CD],Do They Know It's Christmas?,2024 CD
+/Volumes/flac/Band_Aid/Do_They_Know_It_s_Christmas_1984_Vinyl_Promo,Do They Know It's Christmas? [1984 Vinyl (Promo)],Do They Know It's Christmas?,1984 Vinyl (Promo)
+/Volumes/flac/Bangles/Everything_1988_CD,Everything [1988 CD],Everything,1988 CD
+/Volumes/flac/Bangles/Different_Light_1986_CD,Different Light [1986 CD],Different Light,1986 CD
+/Volumes/flac/Barclay_James_Harvest/Live_Tapes_2006_CD,Live Tapes [2006 CD],Live Tapes,2006 CD
+/Volumes/flac/Barclay_James_Harvest/Turn_Of_The_Tide_2013_CD,Turn Of The Tide [2013 CD],Turn Of The Tide,2013 CD
+/Volumes/flac/Barclay_James_Harvest/Eyes_Of_The_Universe_2006_CD,Eyes Of The Universe [2006 CD],Eyes Of The Universe,2006 CD
+/Volumes/flac/Barclay_James_Harvest/Gone_To_Earth_2003_CD,Gone To Earth [2003 CD],Gone To Earth,2003 CD
+/Volumes/flac/Barclay_James_Harvest/XII_1984_CD,XII [1984 CD],XII,1984 CD
+/Volumes/flac/Barclay_James_Harvest/Berlin_A_Concert_For_The_People_2006_CD,Berlin (A Concert For The People) [2006 CD],Berlin (A Concert For The People),2006 CD
+/Volumes/flac/Barry_Manilow/Ultimate_Manilow_2002_CD,Ultimate Manilow [2002 CD],Ultimate Manilow,2002 CD
+/Volumes/flac/Barry_Manilow/Live_On_Broadway_1990_CD,Live On Broadway [1990 CD],Live On Broadway,1990 CD
+/Volumes/flac/Bee_Gees/Tales_From_The_Brothers_Gibb_A_History_In_Song_1967_1990_1990_CD,Tales From The Brothers Gibb (A History In Song 1967-1990) [1990 CD],Tales From The Brothers Gibb (A History In Song 1967-1990),1990 CD
+/Volumes/flac/Ben_Folds/Songs_For_Silverman_2005_CD,Songs For Silverman [2005 CD],Songs For Silverman,2005 CD
+/Volumes/flac/Ben_Folds/Ben_Folds_Live_2002_Qobuz,Ben Folds Live [2002 Qobuz],Ben Folds Live,2002 Qobuz
+/Volumes/flac/Beverley_Craven/Beverley_Craven_1990_CD,Beverley Craven. [1990 CD],Beverley Craven.,1990 CD
+/Volumes/flac/Billy_Joel/The_Complete_Hits_Collection_1973_1997_2001_CD,The Complete Hits Collection: 1973-1997 [2001 CD],The Complete Hits Collection: 1973-1997,2001 CD
+/Volumes/flac/Billy_Joel/The_Bridge_1986_CD,The Bridge [1986 CD],The Bridge,1986 CD
+/Volumes/flac/Billy_Joel/Piano_Man_2011_MFSL_SACD,Piano Man [2011 MFSL SACD],Piano Man,2011 MFSL SACD
+/Volumes/flac/Billy_Joel/Streetlife_Serenade_2015_Audio_Fidelity_SACD,Streetlife Serenade [2015 Audio Fidelity SACD],Streetlife Serenade,2015 Audio Fidelity SACD
+/Volumes/flac/Billy_Joel/An_Innocent_Man_2013_MFSL_SACD,An Innocent Man [2013 MFSL SACD],An Innocent Man,2013 MFSL SACD
+/Volumes/flac/Billy_Joel/Songs_In_The_Attic_2013_MFSL_SACD,Songs In The Attic [2013 MFSL SACD],Songs In The Attic,2013 MFSL SACD
+/Volumes/flac/Billy_Joel/Turn_The_Lights_Back_On_2024_Qobuz,Turn The Lights Back On [2024 Qobuz],Turn The Lights Back On,2024 Qobuz
+/Volumes/flac/Billy_Joel/The_Stranger_2012_MFSL_SACD,The Stranger [2012 MFSL SACD],The Stranger,2012 MFSL SACD
+/Volumes/flac/Billy_Joel/River_Of_Dreams_1993_CD,River Of Dreams [1993 CD],River Of Dreams,1993 CD
+/Volumes/flac/Billy_Joel/Greatest_Hits_Volume_III_1997_CD,Greatest Hits Volume III [1997 CD],Greatest Hits Volume III,1997 CD
+/Volumes/flac/Billy_Joel/The_Nylon_Curtain_2012_MFSL_SACD,The Nylon Curtain [2012 MFSL SACD],The Nylon Curtain,2012 MFSL SACD
+/Volumes/flac/Billy_Joel/An_Innocent_Man_1985_CD,An Innocent Man [1985 CD],An Innocent Man,1985 CD
+/Volumes/flac/Billy_Joel/Glass_Houses_2012_MFSL_SACD,Glass Houses [2012 MFSL SACD],Glass Houses,2012 MFSL SACD
+/Volumes/flac/Billy_Joel/Greatest_Hits_Volume_I_Volume_II_1985_CD,Greatest Hits Volume I & Volume II [1985 CD],Greatest Hits Volume I & Volume II,1985 CD
+/Volumes/flac/Billy_Joel/52nd_Street_1992_MasterSound_24_KT_Gold_Disc,52nd Street [1992 MasterSound 24 KT Gold Disc],52nd Street,1992 MasterSound 24 KT Gold Disc
+/Volumes/flac/Billy_Joel/Kontsert_1987_CD,Концерт [1987 CD],Концерт,1987 CD
+/Volumes/flac/Billy_Joel/Cold_Spring_Harbor_1984_CD,Cold Spring Harbor [1984 CD],Cold Spring Harbor,1984 CD
+/Volumes/flac/Billy_Joel/Turnstiles_2010_MFSL_SACD,Turnstiles [2010 MFSL SACD],Turnstiles,2010 MFSL SACD
+/Volumes/flac/Billy_Joel/Storm_Front_1989_CD,Storm Front [1989 CD],Storm Front,1989 CD
+/Volumes/flac/Billy_Joel/Live_At_Yankee_Stadium_June_22_23_1990_2022_Qobuz,"Live At Yankee Stadium June 22 & 23, 1990 [2022 Qobuz]","Live At Yankee Stadium June 22 & 23, 1990",2022 Qobuz
+/Volumes/flac/Billy_Joel/Glass_Houses_2010_Audio_Fidelity_24_KT_Gold_HDCD,Glass Houses [2010 Audio Fidelity 24 KT + Gold HDCD],Glass Houses,2010 Audio Fidelity 24 KT + Gold HDCD
+/Volumes/flac/Billy_Joel/Piano_Man_2024_SACD,Piano Man [2024 SACD],Piano Man,2024 SACD
+/Volumes/flac/Billy_Joel/Live_At_Shea_Stadium_The_Concert_2011_CD,Live At Shea Stadium (The Concert) [2011 CD],Live At Shea Stadium (The Concert),2011 CD
+/Volumes/flac/Billy_Ocean/Greatest_Hits_1989_CD,Greatest Hits [1989 CD],Greatest Hits,1989 CD
+/Volumes/flac/Bonnie_Raitt/Luck_Of_The_Draw_1997_DCC_24_KT_Gold_Disc,Luck Of The Draw [1997 DCC 24 KT Gold Disc],Luck Of The Draw,1997 DCC 24 KT Gold Disc
+/Volumes/flac/Boston/Third_Stage_1993_MFSL_UDCD,Third Stage [1993 MFSL UDCD],Third Stage,1993 MFSL UDCD
+/Volumes/flac/Boston/Boston_1993_MasterSound_24_KT_Gold_Disc,Boston [1993 MasterSound 24 KT Gold Disc],Boston,1993 MasterSound 24 KT Gold Disc
+/Volumes/flac/Brendan_Croker_And_The_5_O_Clock_Shadows/Brendan_Croker_And_The_5_O_Clock_Shadows_1989_CD,Brendan Croker And The 5 O'Clock Shadows [1989 CD],Brendan Croker And The 5 O'Clock Shadows,1989 CD
+/Volumes/flac/Brian_May/Back_To_The_Light_1992_CD,Back To The Light [1992 CD],Back To The Light,1992 CD
+/Volumes/flac/Brian_May_Friends/Star_Fleet_Project_2023_CD,Star Fleet Project [2023 CD],Star Fleet Project,2023 CD
+/Volumes/flac/Bronski_Beat/The_Age_Of_Consent_1987_CD,The Age Of Consent [1987 CD],The Age Of Consent,1987 CD
+/Volumes/flac/Bruce_Hornsby_And_The_Range/Scenes_From_The_Southside_2016_Qobuz,Scenes From The Southside [2016 Qobuz],Scenes From The Southside,2016 Qobuz
+/Volumes/flac/Bruce_Hornsby_And_The_Range/The_Way_It_Is_1986_CD,The Way It Is [1986 CD],The Way It Is,1986 CD
+/Volumes/flac/Bruce_Springsteen/Chimes_Of_Freedom_2008_Qobuz_EP,Chimes Of Freedom [2008 Qobuz EP],Chimes Of Freedom,2008 Qobuz EP
+/Volumes/flac/Bruce_Springsteen/Born_To_Run_1994_MasterSound_24_KT_Gold_Disc,Born To Run [1994 MasterSound 24 KT Gold Disc],Born To Run,1994 MasterSound 24 KT Gold Disc
+/Volumes/flac/Bruce_Springsteen/Greetings_From_Asbury_Park_N_J_2023_MFSL_SACD,"Greetings From Asbury Park, N.J. [2023 MFSL SACD]","Greetings From Asbury Park, N.J.",2023 MFSL SACD
+/Volumes/flac/Bruce_Springsteen/Letter_To_You_2020_Qobuz,Letter To You [2020 Qobuz],Letter To You,2020 Qobuz
+/Volumes/flac/Bruce_Springsteen/Tunnel_Of_Love_1987_CD,Tunnel Of Love [1987 CD],Tunnel Of Love,1987 CD
+/Volumes/flac/Bruce_Springsteen/The_Wild_The_Innocent_And_The_E_Street_Shuffle_2010_CD_The_Collection_1973_84,"The Wild, The Innocent And The E Street Shuffle [2010 CD (The Collection 1973-84)]","The Wild, The Innocent And The E Street Shuffle",2010 CD (The Collection 1973-84)
+/Volumes/flac/Bruce_Springsteen/The_River_2010_CD_The_Collection_1973_84,The River [2010 CD (The Collection 1973-84)],The River,2010 CD (The Collection 1973-84)
+/Volumes/flac/Bruce_Springsteen/Born_In_The_U_S_A_2010_CD_The_Collection_1973_84,Born In The U.S.A. [2010 CD (The Collection 1973-84)],Born In The U.S.A.,2010 CD (The Collection 1973-84)
+/Volumes/flac/Bruce_Springsteen/Darkness_On_The_Edge_Of_Town_2010_CD_The_Collection_1973_84,Darkness On The Edge Of Town [2010 CD (The Collection 1973-84)],Darkness On The Edge Of Town,2010 CD (The Collection 1973-84)
+/Volumes/flac/Bruce_Springsteen/Nebraska_2010_CD_The_Collection_1973_84,Nebraska [2010 CD (The Collection 1973-84)],Nebraska,2010 CD (The Collection 1973-84)
+/Volumes/flac/Bruce_Springsteen/Nebraska_2025_Qobuz,Nebraska [2025 Qobuz],Nebraska,2025 Qobuz
+/Volumes/flac/Bruce_Springsteen_Shane_MacGowan/A_Rainy_Night_In_Soho_2026_Qobuz,A Rainy Night In Soho [2026 Qobuz],A Rainy Night In Soho,2026 Qobuz
+/Volumes/flac/Bruce_Springsteen_The_E_Street_Band/Live_1975_85_1986_CD,Live / 1975-85 [1986 CD],Live / 1975-85,1986 CD
+/Volumes/flac/Bruce_Willis/If_It_Don_t_Kill_You_It_Just_Makes_You_Stronger_1989_CD,"If It Don't Kill You, It Just Makes You Stronger [1989 CD]","If It Don't Kill You, It Just Makes You Stronger",1989 CD
+/Volumes/flac/Bruce_Willis/The_Return_Of_Bruno_1987_CD,The Return Of Bruno [1987 CD],The Return Of Bruno,1987 CD
+/Volumes/flac/Bryan_Adams/Bare_Bones_2024_Qobuz,Bare Bones [2024 Qobuz],Bare Bones,2024 Qobuz
+/Volumes/flac/Bryan_Adams/Reckless_1984_CD,Reckless [1984 CD],Reckless,1984 CD
+/Volumes/flac/Bryan_Adams/Cuts_Like_A_Knife_40th_Anniversary_Live_From_The_Royal_Albert_Hall_2023_Qobuz,Cuts Like A Knife (40th Anniversary - Live From The Royal Albert Hall) [2023 Qobuz],Cuts Like A Knife (40th Anniversary - Live From The Royal Albert Hall),2023 Qobuz
+/Volumes/flac/Bryan_Adams/Cuts_Like_A_Knife_1983_CD,Cuts Like A Knife [1983 CD],Cuts Like A Knife,1983 CD
+/Volumes/flac/Bryan_Adams/Reckless_1984_MFSL_UDCD,Reckless [1984 MFSL UDCD],Reckless,1984 MFSL UDCD
+/Volumes/flac/Bryan_Adams/Reckless_2014_Qobuz,Reckless [2014 Qobuz],Reckless,2014 Qobuz
+/Volumes/flac/Bryan_Adams_Rod_Stewart_Sting/All_For_Love_1993_CD,All For Love [1993 CD],All For Love,1993 CD
+/Volumes/flac/Bryan_Ferry_Roxy_Music/Street_Life_20_Great_Hits_1989_CD,Street Life - 20 Great Hits [1989 CD],Street Life - 20 Great Hits,1989 CD
+/Volumes/flac/Carly_Simon/No_Secrets_2011_Audio_Fidelity_24_KT_Gold_HDCD,No Secrets [2011 Audio Fidelity 24 KT + Gold HDCD],No Secrets,2011 Audio Fidelity 24 KT + Gold HDCD
+/Volumes/flac/Carole_King/Tapestry_1999_SACD,Tapestry [1999 SACD],Tapestry,1999 SACD
+/Volumes/flac/Carole_King/City_Streets_1989_CD,City Streets [1989 CD],City Streets,1989 CD
+/Volumes/flac/Carole_King/The_Legendary_Demos_2012_HDTracks,The Legendary Demos [2012 HDTracks],The Legendary Demos,2012 HDTracks
+/Volumes/flac/Carole_King/Live_At_Montreux_1973_2019_CD,Live At Montreux 1973 [2019 CD],Live At Montreux 1973,2019 CD
+/Volumes/flac/Carole_King/Tapestry_1996_MasterSound_24_KT_Gold_Disc,Tapestry [1996 MasterSound 24 KT Gold Disc],Tapestry,1996 MasterSound 24 KT Gold Disc
+/Volumes/flac/Carole_King_James_Taylor/Live_At_The_Troubadour_2021_Qobuz,Live At The Troubadour [2021 Qobuz],Live At The Troubadour,2021 Qobuz
+/Volumes/flac/Carpenters/Singles_1969_1981_2004_SACD,Singles 1969-1981 [2004 SACD],Singles 1969-1981,2004 SACD
+/Volumes/flac/Carpenters/Yesterday_Once_More_1985_CD,Yesterday Once More [1985 CD],Yesterday Once More,1985 CD
+/Volumes/flac/Charlie_Dore/Where_To_Now_1979_CD,Where To Now [1979 CD],Where To Now,1979 CD
+/Volumes/flac/Charlie_Puth/Voicenotes_2018_CD,Voicenotes [2018 CD],Voicenotes,2018 CD
+/Volumes/flac/Charlie_Puth/Nine_Track_Mind_2016_CD,Nine Track Mind [2016 CD],Nine Track Mind,2016 CD
+/Volumes/flac/Charlie_Puth/Whatever_s_Clever_2026_Qobuz,Whatever's Clever! [2026 Qobuz],Whatever's Clever!,2026 Qobuz
+/Volumes/flac/Chet_Atkins_And_Mark_Knopfler/Neck_And_Neck_1990_CD,Neck And Neck [1990 CD],Neck And Neck,1990 CD
+/Volumes/flac/Chicago/Chicago_16_2013_HDTracks,Chicago 16 [2013 HDTracks],Chicago 16,2013 HDTracks
+/Volumes/flac/Chicago/Chicago_17_2013_HDTracks,Chicago 17 [2013 HDTracks],Chicago 17,2013 HDTracks
+/Volumes/flac/Chris_De_Burgh/Quiet_Revolution_1999_CD,Quiet Revolution [1999 CD],Quiet Revolution,1999 CD
+/Volumes/flac/Chris_De_Burgh/Eastern_Wind_1989_CD,Eastern Wind [1989 CD],Eastern Wind,1989 CD
+/Volumes/flac/Chris_De_Burgh/High_On_Emotion_Live_From_Dublin_1990_CD,High On Emotion - Live From Dublin! [1990 CD],High On Emotion - Live From Dublin!,1990 CD
+/Volumes/flac/Chris_De_Burgh/Spanish_Train_And_Other_Stories_1985_CD,Spanish Train And Other Stories [1985 CD],Spanish Train And Other Stories,1985 CD
+/Volumes/flac/Chris_De_Burgh/This_Way_Up_1994_CD,This Way Up [1994 CD],This Way Up,1994 CD
+/Volumes/flac/Chris_De_Burgh/At_The_End_Of_A_Perfect_Day_1987_CD,At The End Of A Perfect Day [1987 CD],At The End Of A Perfect Day,1987 CD
+/Volumes/flac/Chris_De_Burgh/Man_On_The_Line_1984_CD,Man On The Line [1984 CD],Man On The Line,1984 CD
+/Volumes/flac/Chris_De_Burgh/The_Road_To_Freedom_2004_CD,The Road To Freedom [2004 CD],The Road To Freedom,2004 CD
+/Volumes/flac/Chris_De_Burgh/Flying_Colours_1988_CD,Flying Colours [1988 CD],Flying Colours,1988 CD
+/Volumes/flac/Chris_De_Burgh/Best_Moves_1985_CD,Best Moves [1985 CD],Best Moves,1985 CD
+/Volumes/flac/Chris_De_Burgh/Crusader_1985_CD,Crusader [1985 CD],Crusader,1985 CD
+/Volumes/flac/Chris_De_Burgh/Into_The_Light_1986_CD,Into The Light [1986 CD],Into The Light,1986 CD
+/Volumes/flac/Chris_De_Burgh/The_Getaway_1985_CD,The Getaway [1985 CD],The Getaway,1985 CD
+/Volumes/flac/Chris_De_Burgh/Power_Of_Ten_1992_CD,Power Of Ten [1992 CD],Power Of Ten,1992 CD
+/Volumes/flac/Chris_Rea/Whatever_Happened_To_Benny_Santini_1991_CD,Whatever Happened To Benny Santini? [1991 CD],Whatever Happened To Benny Santini?,1991 CD
+/Volumes/flac/Chris_Rea/Shamrock_Diaries_2016_SHM_CD,Shamrock Diaries [2016 SHM-CD],Shamrock Diaries,2016 SHM-CD
+/Volumes/flac/Chris_Rea/Water_Sign_1998_CD,Water Sign [1998 CD],Water Sign,1998 CD
+/Volumes/flac/Chris_Rea/Auberge_1991_CD,Auberge [1991 CD],Auberge,1991 CD
+/Volumes/flac/Chris_Rea/On_The_Beach_1991_CD,On The Beach [1991 CD],On The Beach,1991 CD
+/Volumes/flac/Chris_Rea/Shamrock_Diaries_1985_CD,Shamrock Diaries [1985 CD],Shamrock Diaries,1985 CD
+/Volumes/flac/Chris_Rea/Dancing_With_Strangers_1987_CD,Dancing With Strangers [1987 CD],Dancing With Strangers,1987 CD
+/Volumes/flac/Chris_Rea/The_Road_To_Hell_1989_CD,The Road To Hell [1989 CD],The Road To Hell,1989 CD
+/Volumes/flac/Chris_Rea/Wired_To_The_Moon_1991_CD,Wired To The Moon [1991 CD],Wired To The Moon,1991 CD
+/Volumes/flac/Chris_Rea/Auberge_2019_CD_2019_Remaster,Auberge [2019 CD (2019 Remaster)],Auberge,2019 CD (2019 Remaster)
+/Volumes/flac/Chris_Rea/New_Light_Through_Old_Windows_The_Best_Of_Chris_Rea_1988_CD,New Light Through Old Windows (The Best Of Chris Rea) [1988 CD],New Light Through Old Windows (The Best Of Chris Rea),1988 CD
+/Volumes/flac/Chris_Rea/On_The_Beach_2019_CD_2019_Remaster,On The Beach [2019 CD (2019 Remaster)],On The Beach,2019 CD (2019 Remaster)
+/Volumes/flac/Chris_Rea/Dancing_With_Strangers_2019_CD_2019_Remaster,Dancing With Strangers [2019 CD (2019 Remaster)],Dancing With Strangers,2019 CD (2019 Remaster)
+/Volumes/flac/Chris_Rea/Shamrock_Diaries_2019_CD_2019_Remaster,Shamrock Diaries [2019 CD (2019 Remaster)],Shamrock Diaries,2019 CD (2019 Remaster)
+/Volumes/flac/Christopher_Cross/Christopher_Cross_2015_HDTracks,Christopher Cross [2015 HDTracks],Christopher Cross,2015 HDTracks
+/Volumes/flac/Christopher_Cross/Another_Page_2016_HDTracks,Another Page [2016 HDTracks],Another Page,2016 HDTracks
+/Volumes/flac/Christy_Moore/Graffiti_Tongue_1997_CD,Graffiti Tongue [1997 CD],Graffiti Tongue,1997 CD
+/Volumes/flac/Christy_Moore/The_Christy_Moore_Collection_81_91_1991_CD,The Christy Moore Collection 81 - 91 [1991 CD],The Christy Moore Collection 81 - 91,1991 CD
+/Volumes/flac/Christy_Moore/At_The_Point_Live_1994_CD,At The Point Live [1994 CD],At The Point Live,1994 CD
+/Volumes/flac/Clannad/Pastpresent_1989_Qobuz,Pastpresent [1989 Qobuz],Pastpresent,1989 Qobuz
+/Volumes/flac/Clarence_Clemons/Hero_1985_CD,Hero [1985 CD],Hero,1985 CD
+/Volumes/flac/Climax_Blues_Band/Flying_The_Flag_2012_CD,Flying The Flag [2012 CD],Flying The Flag,2012 CD
+/Volumes/flac/Clouseau/Close_Encounters_1991_CD,Close Encounters [1991 CD],Close Encounters,1991 CD
+/Volumes/flac/Cock_Robin/Cock_Robin_2014_Qobuz,Cock Robin [2014 Qobuz],Cock Robin,2014 Qobuz
+/Volumes/flac/Cowboy_Junkies/The_Caution_Horses_1990_CD,The Caution Horses [1990 CD],The Caution Horses,1990 CD
+/Volumes/flac/Crosby_Stills_Nash/Crosby_Stills_Nash_2011_Audio_Fidelity_24_KT_Gold_Disc,"Crosby, Stills & Nash [2011 Audio Fidelity 24 KT + Gold Disc]","Crosby, Stills & Nash",2011 Audio Fidelity 24 KT + Gold Disc
+/Volumes/flac/Crosby_Stills_Nash_Young/Deja_Vu_2014_Qobuz,Déjà Vu [2014 Qobuz],Déjà Vu,2014 Qobuz
+/Volumes/flac/Crowded_House/Crowded_House_1987_CD,Crowded House [1987 CD],Crowded House,1987 CD
+/Volumes/flac/Culture_Club/The_Best_Of_Culture_Club_1991_CD,The Best Of Culture Club [1991 CD],The Best Of Culture Club,1991 CD
+/Volumes/flac/Cutting_Crew/Broadcast_1986_CD,Broadcast [1986 CD],Broadcast,1986 CD
+/Volumes/flac/Cyndi_Lauper/She_s_So_Unusual_True_Colors_1992_CD,She's So Unusual / True Colors [1992 CD],She's So Unusual / True Colors,1992 CD
+/Volumes/flac/Dan_Fogelberg/Greatest_Hits_1982_CD,Greatest Hits [1982 CD],Greatest Hits,1982 CD
+/Volumes/flac/Dan_Fogelberg/Souvenirs_2025_HDTracks_50th_Anniversary_Edition,Souvenirs [2025 HDTracks (50th Anniversary Edition)],Souvenirs,2025 HDTracks (50th Anniversary Edition)
+/Volumes/flac/Daryl_Hall_John_Oates/Change_Of_Season_1990_CD,Change Of Season [1990 CD],Change Of Season,1990 CD
+/Volumes/flac/Daryl_Hall_John_Oates/H2O_2014_MFSL_SACD,H₂O [2014 MFSL SACD],H₂O,2014 MFSL SACD
+/Volumes/flac/Dave_Edmunds/Closer_To_The_Flame_1990_CD,Closer To The Flame [1990 CD],Closer To The Flame,1990 CD
+/Volumes/flac/David_Bowie/Legacy_2016_Qobuz,Legacy [2016 Qobuz],Legacy,2016 Qobuz
+/Volumes/flac/David_Lindley/El_Rayo_X_1990_Qobuz,El Rayo-X [1990 Qobuz],El Rayo-X,1990 Qobuz
+/Volumes/flac/Debbie_Gibson/Electric_Youth_1989_CD,Electric Youth [1989 CD],Electric Youth,1989 CD
+/Volumes/flac/Debbie_Gibson/Out_Of_The_Blue_1987_Qobuz,Out Of The Blue [1987 Qobuz],Out Of The Blue,1987 Qobuz
+/Volumes/flac/Deep_Purple/Made_In_Japan_1998_DCC_24_KT_Gold_Disc,Made In Japan [1998 DCC 24 KT Gold Disc],Made In Japan,1998 DCC 24 KT Gold Disc
+/Volumes/flac/Deep_Purple/Made_In_Japan_2025_Qobuz_Steven_Wilson_Remix,Made In Japan [2025 Qobuz (Steven Wilson Remix)],Made In Japan,2025 Qobuz (Steven Wilson Remix)
+/Volumes/flac/Del_Amitri/The_B_Sides_Lousy_With_Love_1998_CD,"The B-Sides, Lousy With Love [1998 CD]","The B-Sides, Lousy With Love",1998 CD
+/Volumes/flac/Del_Amitri/Can_You_Do_Me_Good_2002_CD,Can You Do Me Good? [2002 CD],Can You Do Me Good?,2002 CD
+/Volumes/flac/Del_Amitri/Always_The_Last_To_Know_1992_Maxi_Single,Always The Last To Know [1992 Maxi Single],Always The Last To Know,1992 Maxi Single
+/Volumes/flac/Del_Amitri/Waking_Hours_1989_CD,Waking Hours [1989 CD],Waking Hours,1989 CD
+/Volumes/flac/Del_Amitri/Into_The_Mirror_Del_Amitri_Live_In_Concert_2014_CD,Into The Mirror : Del Amitri Live In Concert [2014 CD],Into The Mirror : Del Amitri Live In Concert,2014 CD
+/Volumes/flac/Del_Amitri/Change_Everything_1992_CD,Change Everything [1992 CD],Change Everything,1992 CD
+/Volumes/flac/Del_Amitri/Some_Other_Sucker_s_Parade_1997_CD,Some Other Sucker's Parade [1997 CD],Some Other Sucker's Parade,1997 CD
+/Volumes/flac/Del_Amitri/Del_Amitri_1990_CD,Del Amitri [1990 CD],Del Amitri,1990 CD
+/Volumes/flac/Del_Amitri/Fatal_Mistakes_Outtakes_B_Sides_2022_CD,Fatal Mistakes - Outtakes & B-Sides [2022 CD],Fatal Mistakes - Outtakes & B-Sides,2022 CD
+/Volumes/flac/Del_Amitri/Waking_Hours_2014_Qobuz_Re_Presents,Waking Hours [2014 Qobuz (Re-Presents)],Waking Hours,2014 Qobuz (Re-Presents)
+/Volumes/flac/Del_Amitri/Change_Everything_2014_Qobuz,Change Everything [2014 Qobuz],Change Everything,2014 Qobuz
+/Volumes/flac/Del_Amitri/Twisted_2014_Qobuz,Twisted [2014 Qobuz],Twisted,2014 Qobuz
+/Volumes/flac/Del_Amitri/Fatal_Mistakes_2021_CD,Fatal Mistakes [2021 CD],Fatal Mistakes,2021 CD
+/Volumes/flac/Dennis_DeYoung/26_East_Vol_1_2020_CD,"26 East, Vol. 1 [2020 CD]","26 East, Vol. 1",2020 CD
+/Volumes/flac/Dennis_DeYoung/Desert_Moon_1984_CD,Desert Moon [1984 CD],Desert Moon,1984 CD
+/Volumes/flac/Dennis_DeYoung/26_East_Vol_2_2021_CD,"26 East, Vol. 2 [2021 CD]","26 East, Vol. 2",2021 CD
+/Volumes/flac/Dido/Greatest_Hits_2013_CD,Greatest Hits [2013 CD],Greatest Hits,2013 CD
+/Volumes/flac/Die_Crackers/B_R_D_igung_1993_CD,B R D igung [1993 CD],B R D igung,1993 CD
+/Volumes/flac/Dion/Yo_Frankie_1989_CD,Yo Frankie [1989 CD],Yo Frankie,1989 CD
+/Volumes/flac/Dire_Straits/Live_1978_1992_2024_CD,Live 1978-1992 [2024 CD],Live 1978-1992,2024 CD
+/Volumes/flac/Dire_Straits/Money_For_Nothing_1988_CD,Money For Nothing [1988 CD],Money For Nothing,1988 CD
+/Volumes/flac/Dire_Straits/Communique_2019_MFSL_SACD,Communiqué [2019 MFSL SACD],Communiqué,2019 MFSL SACD
+/Volumes/flac/Dire_Straits/Love_Over_Gold_1983_CD,Love Over Gold [1983 CD],Love Over Gold,1983 CD
+/Volumes/flac/Dire_Straits/On_Every_Street_2024_MFSL_SACD,On Every Street [2024 MFSL SACD],On Every Street,2024 MFSL SACD
+/Volumes/flac/Dire_Straits/ExtendeDancEPlay_1982_Qobuz,ExtendeDancEPlay [1982 Qobuz],ExtendeDancEPlay,1982 Qobuz
+/Volumes/flac/Dire_Straits/Love_Over_Gold_2019_MFSL_SACD,Love Over Gold [2019 MFSL SACD],Love Over Gold,2019 MFSL SACD
+/Volumes/flac/Dire_Straits/Brothers_In_Arms_2013_MFSL_SACD,Brothers In Arms [2013 MFSL SACD],Brothers In Arms,2013 MFSL SACD
+/Volumes/flac/Dire_Straits/Communique_1984_CD,Communiqué [1984 CD],Communiqué,1984 CD
+/Volumes/flac/Dire_Straits/Dire_Straits_2019_MFSL_SACD,Dire Straits [2019 MFSL SACD],Dire Straits,2019 MFSL SACD
+/Volumes/flac/Dire_Straits/Making_Movies_2019_MFSL_SACD,Making Movies [2019 MFSL SACD],Making Movies,2019 MFSL SACD
+/Volumes/flac/Dire_Straits/Brothers_In_Arms_2025_Blu_ray_40th_Anniversary_Edition,Brothers In Arms [2025 Blu-ray (40th Anniversary Edition)],Brothers In Arms,2025 Blu-ray (40th Anniversary Edition)
+/Volumes/flac/Don_Henley/Building_The_Perfect_Beast_1984_CD,Building The Perfect Beast [1984 CD],Building The Perfect Beast,1984 CD
+/Volumes/flac/Don_Henley/The_End_Of_The_Innocence_1998_MFSL_UDCD,The End Of The Innocence [1998 MFSL UDCD],The End Of The Innocence,1998 MFSL UDCD
+/Volumes/flac/Don_Henley/I_Can_t_Stand_Still_1988_CD,I Can't Stand Still [1988 CD],I Can't Stand Still,1988 CD
+/Volumes/flac/Eagles/Hotel_California_2023_MFSL_SACD,Hotel California [2023 MFSL SACD],Hotel California,2023 MFSL SACD
+/Volumes/flac/Eagles/Hotel_California_1992_DCC_24_KT_Gold_Disc,Hotel California [1992 DCC 24 KT Gold Disc],Hotel California,1992 DCC 24 KT Gold Disc
+/Volumes/flac/Eagles/Hell_Freezes_Over_1998_DVD_Audio,Hell Freezes Over [1998 DVD-Audio],Hell Freezes Over,1998 DVD-Audio
+/Volumes/flac/Eagles/The_Long_Run_2023_MFSL_SACD,The Long Run [2023 MFSL SACD],The Long Run,2023 MFSL SACD
+/Volumes/flac/Eagles/Hell_Freezes_Over_2012_K2HD_CD,Hell Freezes Over [2012 K2HD CD],Hell Freezes Over,2012 K2HD CD
+/Volumes/flac/Eagles/Eagles_2021_MFSL_SACD,Eagles [2021 MFSL SACD],Eagles,2021 MFSL SACD
+/Volumes/flac/Eagles/One_Of_These_Nights_2013_Qobuz,One Of These Nights [2013 Qobuz],One Of These Nights,2013 Qobuz
+/Volumes/flac/Eagles/Desperado_2014_Qobuz,Desperado [2014 Qobuz],Desperado,2014 Qobuz
+/Volumes/flac/Eagles/Their_Greatest_Hits_1971_1975_1976_DCC_24_KT_Gold_Disc,Their Greatest Hits 1971-1975 [1976 DCC 24 KT Gold Disc],Their Greatest Hits 1971-1975,1976 DCC 24 KT Gold Disc
+/Volumes/flac/Eagles/Eagles_Live_1989_CD,Eagles Live [1989 CD],Eagles Live,1989 CD
+/Volumes/flac/Eagles/Hotel_California_2017_Blu_ray,Hotel California [2017 Blu-ray],Hotel California,2017 Blu-ray
+/Volumes/flac/Earforce/My_Point_Of_You_Quicksand_1982_CD,My Point Of You / Quicksand [1982 CD],My Point Of You / Quicksand,1982 CD
+/Volumes/flac/Eddi_Reader/Eddi_Reader_1994_Qobuz,Eddi Reader [1994 Qobuz],Eddi Reader,1994 Qobuz
+/Volumes/flac/Eddie_Money/Greatest_Hits_Sound_Of_Money_1989_CD,Greatest Hits - Sound Of Money [1989 CD],Greatest Hits - Sound Of Money,1989 CD
+/Volumes/flac/Edie_Brickell_New_Bohemians/Shooting_Rubberbands_At_The_Stars_1988_CD,Shooting Rubberbands At The Stars [1988 CD],Shooting Rubberbands At The Stars,1988 CD
+/Volumes/flac/Eleanor_McEvoy/Naked_Music_2015_CD,Naked Music [2015 CD],Naked Music,2015 CD
+/Volumes/flac/Eleanor_McEvoy/I_d_Rather_Go_Blonde_2010_SACD,I'd Rather Go Blonde [2010 SACD],I'd Rather Go Blonde,2010 SACD
+/Volumes/flac/Eleanor_McEvoy/Yola_2001_SACD,Yola [2001 SACD],Yola,2001 SACD
+/Volumes/flac/Eleanor_McEvoy/Early_Hours_2004_SACD,Early Hours [2004 SACD],Early Hours,2004 SACD
+/Volumes/flac/Eleanor_McEvoy/Snapshots_2009_SACD,Snapshots [2009 SACD],Snapshots,2009 SACD
+/Volumes/flac/Eleanor_McEvoy/Gimme_Some_Wine_2021_Tidal,Gimme Some Wine [2021 Tidal],Gimme Some Wine,2021 Tidal
+/Volumes/flac/Eleanor_McEvoy/If_You_Leave_2013_HDTracks,If You Leave... [2013 HDTracks],If You Leave...,2013 HDTracks
+/Volumes/flac/Eleanor_McEvoy/Eleanor_McEvoy_2003_CD,Eleanor McEvoy [2003 CD],Eleanor McEvoy,2003 CD
+/Volumes/flac/Eleanor_McEvoy/The_Thomas_Moore_Project_2017_CD,The Thomas Moore Project [2017 CD],The Thomas Moore Project,2017 CD
+/Volumes/flac/Eleanor_McEvoy/Alone_2011_HDTracks,Alone [2011 HDTracks],Alone,2011 HDTracks
+/Volumes/flac/Eleanor_McEvoy_James_Cramer/Snowflakes_Fall_2014_CD,Snowflakes Fall [2014 CD],Snowflakes Fall,2014 CD
+/Volumes/flac/Electric_Light_Orchestra/Eldorado_A_Symphony_By_The_Electric_Light_Orchestra_2022_MFSL_SACD,Eldorado - A Symphony By The Electric Light Orchestra [2022 MFSL SACD],Eldorado - A Symphony By The Electric Light Orchestra,2022 MFSL SACD
+/Volumes/flac/Electric_Light_Orchestra/Discovery_1993_MasterSound_24_KT_Gold_Disc,Discovery [1993 MasterSound 24 KT Gold Disc],Discovery,1993 MasterSound 24 KT Gold Disc
+/Volumes/flac/Electric_Light_Orchestra/Out_Of_The_Blue_1986_CD,Out Of The Blue [1986 CD],Out Of The Blue,1986 CD
+/Volumes/flac/Electric_Light_Orchestra/Discovery_Time_1989_CD,Discovery + Time [1989 CD],Discovery + Time,1989 CD
+/Volumes/flac/Electric_Light_Orchestra/Eldorado_A_Symphony_By_The_Electric_Light_Orchestra_1993_DCC_24_KT_Gold_Disc,Eldorado - A Symphony By The Electric Light Orchestra [1993 DCC 24 KT Gold Disc],Eldorado - A Symphony By The Electric Light Orchestra,1993 DCC 24 KT Gold Disc
+/Volumes/flac/Electric_Light_Orchestra/A_New_World_Record_1986_CD,A New World Record [1986 CD],A New World Record,1986 CD
+/Volumes/flac/Electric_Light_Orchestra/Flashback_2010_CD,Flashback [2010 CD],Flashback,2010 CD
+/Volumes/flac/Electric_Light_Orchestra/Wembley_Or_Bust_2017_Tidal,Wembley Or Bust [2017 Tidal],Wembley Or Bust,2017 Tidal
+/Volumes/flac/Electric_Light_Orchestra/The_Electric_Light_Orchestra_1990_CD,The Electric Light Orchestra [1990 CD],The Electric Light Orchestra,1990 CD
+/Volumes/flac/Electric_Light_Orchestra/ELO_2_2006_CD,ELO 2 [2006 CD],ELO 2,2006 CD
+/Volumes/flac/Electric_Light_Orchestra/Time_1989_CD,Time [1989 CD],Time,1989 CD
+/Volumes/flac/Electric_Light_Orchestra/Face_The_Music_1993_MasterSound_24KT_Gold_Disc,Face The Music [1993 MasterSound 24KT Gold Disc],Face The Music,1993 MasterSound 24KT Gold Disc
+/Volumes/flac/Electric_Light_Orchestra/Balance_Of_Power_1986_CD,Balance Of Power [1986 CD],Balance Of Power,1986 CD
+/Volumes/flac/Electric_Light_Orchestra/On_The_Third_Day_1987_CD,On The Third Day [1987 CD],On The Third Day,1987 CD
+/Volumes/flac/Electric_Light_Orchestra/Secret_Messages_2001_CD,Secret Messages [2001 CD],Secret Messages,2001 CD
+/Volumes/flac/Electric_Light_Orchestra/Time_2015_HDTracks,Time [2015 HDTracks],Time,2015 HDTracks
+/Volumes/flac/Electric_Light_Orchestra/Mr_Blue_Sky_The_Very_Best_Of_Electric_Light_Orchestra_2012_Qobuz,Mr. Blue Sky (The Very Best Of Electric Light Orchestra) [2012 Qobuz],Mr. Blue Sky (The Very Best Of Electric Light Orchestra),2012 Qobuz
+/Volumes/flac/Electric_Light_Orchestra/A_New_World_Record_2006_CD_30th_Anniversary_Edition,A New World Record [2006 CD (30th Anniversary Edition)],A New World Record,2006 CD (30th Anniversary Edition)
+/Volumes/flac/Electric_Light_Orchestra_Olivia_Newton_John/Xanadu_From_The_Original_Motion_Picture_Soundtrack_1980_CD,Xanadu (From The Original Motion Picture Soundtrack) [1980 CD],Xanadu (From The Original Motion Picture Soundtrack),1980 CD
+/Volumes/flac/Elton_John/Too_Low_For_Zero_1983_CD,Too Low For Zero [1983 CD],Too Low For Zero,1983 CD
+/Volumes/flac/Elton_John/Greatest_Hits_1994_DCC_24_KT_Gold_Disc,Greatest Hits [1994 DCC 24 KT Gold Disc],Greatest Hits,1994 DCC 24 KT Gold Disc
+/Volumes/flac/Elton_John/Goodbye_Yellow_Brick_Road_2010_SHM_SACD,Goodbye Yellow Brick Road [2010 SHM-SACD],Goodbye Yellow Brick Road,2010 SHM-SACD
+/Volumes/flac/Elton_John/The_Very_Best_Of_Elton_John_2001_CD,The Very Best Of Elton John [2001 CD],The Very Best Of Elton John,2001 CD
+/Volumes/flac/Emerson_Lake_Palmer/Works_Volume_1_2017_Qobuz,Works (Volume 1) [2017 Qobuz],Works (Volume 1),2017 Qobuz
+/Volumes/flac/Enya/Shepherd_Moons_1992_CD,Shepherd Moons [1992 CD],Shepherd Moons,1992 CD
+/Volumes/flac/Enya/Watermark_1988_CD,Watermark [1988 CD],Watermark,1988 CD
+/Volumes/flac/Enya/A_Day_Without_Rain_2000_CD,A Day Without Rain [2000 CD],A Day Without Rain,2000 CD
+/Volumes/flac/Enya/Enya_2009_SHM_CD,Enya [2009 SHM-CD],Enya,2009 SHM-CD
+/Volumes/flac/Eric_Clapton/August_2012_Tidal,August [2012 Tidal],August,2012 Tidal
+/Volumes/flac/Eric_Clapton/Time_Pieces_The_Best_Of_Eric_Clapton_2014_SACD,Time Pieces - The Best Of Eric Clapton [2014 SACD],Time Pieces - The Best Of Eric Clapton,2014 SACD
+/Volumes/flac/Eurythmics/Peace_2018_Qobuz,Peace [2018 Qobuz],Peace,2018 Qobuz
+/Volumes/flac/Eurythmics/Be_Yourself_Tonight_1990_CD,Be Yourself Tonight [1990 CD],Be Yourself Tonight,1990 CD
+/Volumes/flac/Eurythmics/Touch_1989_CD,Touch [1989 CD],Touch,1989 CD
+/Volumes/flac/Eurythmics/Revenge_1986_CD,Revenge [1986 CD],Revenge,1986 CD
+/Volumes/flac/Eurythmics/Sweet_Dreams_Are_Made_Of_This_1987_CD,Sweet Dreams (Are Made Of This) [1987 CD],Sweet Dreams (Are Made Of This),1987 CD
+/Volumes/flac/Fairground_Attraction/The_First_Of_A_Million_Kisses_1993_CD,The First Of A Million Kisses [1993 CD],The First Of A Million Kisses,1993 CD
+/Volumes/flac/Feargal_Sharkey/Feargal_Sharkey_1985_CD,Feargal Sharkey [1985 CD],Feargal Sharkey,1985 CD
+/Volumes/flac/Fischer_Z/Red_Skies_Over_Paradise_1989_CD,Red Skies Over Paradise [1989 CD],Red Skies Over Paradise,1989 CD
+/Volumes/flac/Fish/Vigil_In_A_Wilderness_Of_Mirrors_1990_CD,Vigil In A Wilderness Of Mirrors [1990 CD],Vigil In A Wilderness Of Mirrors,1990 CD
+/Volumes/flac/Fish/Internal_Exile_2024_Qobuz_2024_Remix,Internal Exile [2024 Qobuz (2024 Remix)],Internal Exile,2024 Qobuz (2024 Remix)
+/Volumes/flac/Fleetwood_Mac/Tusk_2011_Qobuz,Tusk [2011 Qobuz],Tusk,2011 Qobuz
+/Volumes/flac/Fleetwood_Mac/Tango_In_The_Night_2025_MFSL_SACD,Tango In The Night [2025 MFSL SACD],Tango In The Night,2025 MFSL SACD
+/Volumes/flac/Fleetwood_Mac/Rumours_1986_CD,Rumours [1986 CD],Rumours,1986 CD
+/Volumes/flac/Fleetwood_Mac/Greatest_Hits_1988_CD,Greatest Hits [1988 CD],Greatest Hits,1988 CD
+/Volumes/flac/Fleetwood_Mac/Fleetwood_Mac_2026_MFSL_SACD,Fleetwood Mac [2026 MFSL SACD],Fleetwood Mac,2026 MFSL SACD
+/Volumes/flac/Fleetwood_Mac/Mirage_2025_MFSL_SACD,Mirage [2025 MFSL SACD],Mirage,2025 MFSL SACD
+/Volumes/flac/Fleetwood_Mac/Rumours_2011_SACD,Rumours [2011 SACD],Rumours,2011 SACD
+/Volumes/flac/Fleetwood_Mac/Rumours_2001_DVD_Audio,Rumours [2001 DVD-Audio],Rumours,2001 DVD-Audio
+/Volumes/flac/Fleetwood_Mac/Greatest_Hits_2026_Qobuz_Deluxe_Edition,Greatest Hits [2026 Qobuz (Deluxe Edition)],Greatest Hits,2026 Qobuz (Deluxe Edition)
+/Volumes/flac/Flim_The_BB_s/Tricycle_2000_SACD,Tricycle [2000 SACD],Tricycle,2000 SACD
+/Volumes/flac/Foreigner/The_Very_Best_Of_Foreigner_1992_CD,The Very Best Of Foreigner [1992 CD],The Very Best Of Foreigner,1992 CD
+/Volumes/flac/Foreigner/4_2001_DVD_Audio,4 [2001 DVD-Audio],4,2001 DVD-Audio
+/Volumes/flac/Foreigner/4_2013_MFSL_SACD,4 [2013 MFSL SACD],4,2013 MFSL SACD
+/Volumes/flac/Foreigner/4_2025_Blu_ray_2025_Remix,4 [2025 Blu-ray (2025 Remix)],4,2025 Blu-ray (2025 Remix)
+/Volumes/flac/Frankie_Goes_To_Hollywood/Welcome_To_The_Pleasuredome_1985_CD,Welcome To The Pleasuredome [1985 CD],Welcome To The Pleasuredome,1985 CD
+/Volumes/flac/Frankie_Goes_To_Hollywood/Twelve_Inches_2001_CD,Twelve Inches [2001 CD],Twelve Inches,2001 CD
+/Volumes/flac/Frankie_Goes_To_Hollywood/Rage_Hard_The_Sonic_Collection_2001_SACD,Rage Hard - The Sonic Collection [2001 SACD],Rage Hard - The Sonic Collection,2001 SACD
+/Volumes/flac/Frankie_Goes_To_Hollywood/Welcome_To_The_Pleasuredome_2025_Blu_ray,Welcome To The Pleasuredome [2025 Blu-ray],Welcome To The Pleasuredome,2025 Blu-ray
+/Volumes/flac/Frankie_Goes_To_Hollywood/Welcome_To_The_Pleasuredome_2010_CD,Welcome To The Pleasuredome [2010 CD],Welcome To The Pleasuredome,2010 CD
+/Volumes/flac/Frankie_Goes_To_Hollywood/Welcome_To_The_Pleasuredome_2025_CD_Super_Deluxe_Edition,Welcome To The Pleasuredome [2025 CD (Super Deluxe Edition)],Welcome To The Pleasuredome,2025 CD (Super Deluxe Edition)
+/Volumes/flac/Freudiana/Freudiana_1990_CD,Freudiana [1990 CD],Freudiana,1990 CD
+/Volumes/flac/Gary_Kemp/This_Destination_2025_CD_Deluxe_Edition,This Destination [2025 CD (Deluxe Edition)],This Destination,2025 CD (Deluxe Edition)
+/Volumes/flac/Genesis/Genesis_1984_CD,Genesis [1984 CD],Genesis,1984 CD
+/Volumes/flac/Genesis/Invisible_Touch_1986_CD,Invisible Touch [1986 CD],Invisible Touch,1986 CD
+/Volumes/flac/Genesis/Seconds_Out_1987_CD,Seconds Out [1987 CD],Seconds Out,1987 CD
+/Volumes/flac/Genesis/Three_Sides_Live_1984_CD,Three Sides Live [1984 CD],Three Sides Live,1984 CD
+/Volumes/flac/Genesis/We_Can_t_Dance_2007_SACD,We Can't Dance [2007 SACD],We Can't Dance,2007 SACD
+/Volumes/flac/Genesis/And_Then_There_Were_Three_1994_CD,...And Then There Were Three... [1994 CD],...And Then There Were Three...,1994 CD
+/Volumes/flac/Genesis/Genesis_2026_SACD,Genesis [2026 SACD],Genesis,2026 SACD
+/Volumes/flac/Genesis/Duke_1999_CD,Duke [1999 CD],Duke,1999 CD
+/Volumes/flac/George_Harrison/Cloud_Nine_1987_CD,Cloud Nine [1987 CD],Cloud Nine,1987 CD
+/Volumes/flac/George_Martin/In_My_Life_1998_CD,In My Life [1998 CD],In My Life,1998 CD
+/Volumes/flac/George_Michael/Symphonica_2014_Blu_ray,Symphonica [2014 Blu-ray],Symphonica,2014 Blu-ray
+/Volumes/flac/George_Michael/Careless_Whisper_2024_Qobuz,Careless Whisper [2024 Qobuz],Careless Whisper,2024 Qobuz
+/Volumes/flac/George_Michael/Listen_Without_Prejudice_Vol_1_1990_CD,Listen Without Prejudice Vol. 1 [1990 CD],Listen Without Prejudice Vol. 1,1990 CD
+/Volumes/flac/George_Michael/Faith_1987_CD,Faith [1987 CD],Faith,1987 CD
+/Volumes/flac/George_Michael/Older_1996_CD,Older [1996 CD],Older,1996 CD
+/Volumes/flac/Gillan_Glover/Accidentally_On_Purpose_1988_CD,Accidentally On Purpose [1988 CD],Accidentally On Purpose,1988 CD
+/Volumes/flac/Glass_Tiger/Air_Time_The_Best_Of_Glass_Tiger_1993_CD,Air Time - The Best Of Glass Tiger [1993 CD],Air Time - The Best Of Glass Tiger,1993 CD
+/Volumes/flac/Heart/Heart_1994_MFSL_UDCD,Heart [1994 MFSL UDCD],Heart,1994 MFSL UDCD
+/Volumes/flac/Heart/Bad_Animals_1987_CD,Bad Animals [1987 CD],Bad Animals,1987 CD
+/Volumes/flac/Heart_With_The_Royal_Philharmonic_Orchestra/Live_At_The_Royal_Albert_Hall_2016_CD,Live At The Royal Albert Hall [2016 CD],Live At The Royal Albert Hall,2016 CD
+/Volumes/flac/Heinz_Rudolf_Kunze_Annett_Louisan/Dein_Ist_Mein_Ganzes_Herz_Duett_2025_2025_CD,Dein Ist Mein Ganzes Herz (Duett 2025) [2025 CD],Dein Ist Mein Ganzes Herz (Duett 2025),2025 CD
+/Volumes/flac/Herbert_Gronemeyer/4630_Bochum_1984_CD,4630 Bochum [1984 CD],4630 Bochum,1984 CD
+/Volumes/flac/Herbert_Gronemeyer/O_1988_CD,Ö [1988 CD],Ö,1988 CD
+/Volumes/flac/Herbert_Gronemeyer/4630_Bochum_2024_Qobuz,4630 Bochum [2024 Qobuz],4630 Bochum,2024 Qobuz
+/Volumes/flac/Hothouse_Flowers/People_1988_CD,People [1988 CD],People,1988 CD
+/Volumes/flac/Hothouse_Flowers/Songs_From_The_Rain_1993_CD,Songs From The Rain [1993 CD],Songs From The Rain,1993 CD
+/Volumes/flac/Hothouse_Flowers/Home_1990_CD,Home [1990 CD],Home,1990 CD
+/Volumes/flac/Howard_Jones/One_To_One_2020_Qobuz,One To One [2020 Qobuz],One To One,2020 Qobuz
+/Volumes/flac/Howard_Jones/Human_s_Lib_2024_Blu_ray,Human's Lib [2024 Blu-ray],Human's Lib,2024 Blu-ray
+/Volumes/flac/Howard_Jones/Dream_Into_Action_2024_Blu_ray,Dream Into Action [2024 Blu-ray],Dream Into Action,2024 Blu-ray
+/Volumes/flac/Huey_Lewis_Gwyneth_Paltrow/Cruisin_2000_CD,Cruisin [2000 CD],Cruisin,2000 CD
+/Volumes/flac/Huey_Lewis_and_the_News/Four_Chords_Several_Years_Ago_1994_CD,Four Chords & Several Years Ago [1994 CD],Four Chords & Several Years Ago,1994 CD
+/Volumes/flac/Huey_Lewis_and_the_News/Sports_1988_MFSL_UDCD,Sports [1988 MFSL UDCD],Sports,1988 MFSL UDCD
+/Volumes/flac/Huey_Lewis_and_the_News/Picture_This_1982_CD,Picture This [1982 CD],Picture This,1982 CD
+/Volumes/flac/Huey_Lewis_and_the_News/Fore_2023_UHQCD,Fore! [2023 UHQCD],Fore!,2023 UHQCD
+/Volumes/flac/Huey_Lewis_and_the_News/Hard_At_Play_1991_CD,Hard At Play [1991 CD],Hard At Play,1991 CD
+/Volumes/flac/Huey_Lewis_and_the_News/Huey_Lewis_And_The_News_1986_CD,Huey Lewis And The News [1986 CD],Huey Lewis And The News,1986 CD
+/Volumes/flac/Huey_Lewis_and_the_News/Small_World_2023_UHQCD,Small World [2023 UHQCD],Small World,2023 UHQCD
+/Volumes/flac/Huey_Lewis_and_the_News/Stuck_With_You_1986_Vinyl_EP,Stuck With You [1986 Vinyl EP],Stuck With You,1986 Vinyl EP
+/Volumes/flac/Huey_Lewis_and_the_News/Live_At_25_2005_CD,Live At 25 [2005 CD],Live At 25,2005 CD
+/Volumes/flac/Huey_Lewis_and_the_News/The_Power_Of_Love_1985_Vinyl_EP,The Power Of Love [1985 Vinyl EP],The Power Of Love,1985 Vinyl EP
+/Volumes/flac/Huey_Lewis_and_the_News/Fore_1986_CD,Fore! [1986 CD],Fore!,1986 CD
+/Volumes/flac/Huey_Lewis_and_the_News/The_Heart_Of_Rock_Roll_The_Best_Of_Huey_Lewis_And_The_News_1992_CD,The Heart Of Rock & Roll (The Best Of Huey Lewis And The News) [1992 CD],The Heart Of Rock & Roll (The Best Of Huey Lewis And The News),1992 CD
+/Volumes/flac/Iain_Matthews/Pure_And_Crooked_1990_CD,Pure And Crooked [1990 CD],Pure And Crooked,1990 CD
+/Volumes/flac/Jackson_Browne/For_Everyman_1999_CD,For Everyman [1999 CD],For Everyman,1999 CD
+/Volumes/flac/Jackson_Browne/Solo_Acoustic_Vol_1_2005_CD,Solo Acoustic Vol.1 [2005 CD],Solo Acoustic Vol.1,2005 CD
+/Volumes/flac/Jackson_Browne/Running_On_Empty_1988_CD,Running On Empty [1988 CD],Running On Empty,1988 CD
+/Volumes/flac/Jackson_Browne/Lawyers_In_Love_1983_CD,Lawyers In Love [1983 CD],Lawyers In Love,1983 CD
+/Volumes/flac/Jackson_Browne/The_Pretender_1993_DCC_24_KT_Gold_Disc,The Pretender [1993 DCC 24 KT Gold Disc],The Pretender,1993 DCC 24 KT Gold Disc
+/Volumes/flac/Jackson_Browne/Lives_In_The_Balance_1986_CD,Lives In The Balance [1986 CD],Lives In The Balance,1986 CD
+/Volumes/flac/Jackson_Browne/Running_On_Empty_2005_DVD_Audio,Running On Empty [2005 DVD-Audio],Running On Empty,2005 DVD-Audio
+/Volumes/flac/Jackson_Browne/Solo_Acoustic_Vol_2_2008_CD,Solo Acoustic Vol. 2 [2008 CD],Solo Acoustic Vol. 2,2008 CD
+/Volumes/flac/Jackson_Browne/Late_For_The_Sky_1993_DCC_24_KT_Gold_Disc,Late For The Sky [1993 DCC 24 KT Gold Disc],Late For The Sky,1993 DCC 24 KT Gold Disc
+/Volumes/flac/Jackson_Browne/World_In_Motion_1989_CD,World In Motion [1989 CD],World In Motion,1989 CD
+/Volumes/flac/Jackson_Browne/Jackson_Browne_1972_CD,Jackson Browne [1972 CD],Jackson Browne,1972 CD
+/Volumes/flac/Jackson_Browne/The_Road_East_Live_In_Japan_2017_Qobuz,The Road East - Live In Japan [2017 Qobuz],The Road East - Live In Japan,2017 Qobuz
+/Volumes/flac/Jackson_Browne_David_Lindley/Love_Is_Strange_2010_CD,Love Is Strange [2010 CD],Love Is Strange,2010 CD
+/Volumes/flac/James_Taylor/One_Man_Band_2007_CD,One Man Band [2007 CD],One Man Band,2007 CD
+/Volumes/flac/James_Taylor/Greatest_Hits_2020_Qobuz,Greatest Hits [2020 Qobuz],Greatest Hits,2020 Qobuz
+/Volumes/flac/James_Taylor/Mud_Slide_Slim_And_The_Blue_Horizon_2012_Audio_Fidelity_24_KT_Gold_Disc,Mud Slide Slim And The Blue Horizon [2012 Audio Fidelity 24 KT + Gold Disc],Mud Slide Slim And The Blue Horizon,2012 Audio Fidelity 24 KT + Gold Disc
+/Volumes/flac/James_Taylor/Live_1993_CD,(Live) [1993 CD],(Live),1993 CD
+/Volumes/flac/Jeff_Lynne/Armchair_Theatre_1990_CD,Armchair Theatre [1990 CD],Armchair Theatre,1990 CD
+/Volumes/flac/Joe_Cocker/Definite_1964_1986_His_Greatest_Songs_1987_CD,Definite. 1964 ~ 1986 (His Greatest Songs) [1987 CD],Definite. 1964 ~ 1986 (His Greatest Songs),1987 CD
+/Volumes/flac/Joe_Jackson/Look_Sharp_1991_CD,Look Sharp! [1991 CD],Look Sharp!,1991 CD
+/Volumes/flac/Joe_Jackson/Rain_2007_CD,Rain [2007 CD],Rain,2007 CD
+/Volumes/flac/Joe_Jackson/Body_And_Soul_1993_CD,Body And Soul [1993 CD],Body And Soul,1993 CD
+/Volumes/flac/Joe_Jackson/Fool_2019_HDTracks,Fool [2019 HDTracks],Fool,2019 HDTracks
+/Volumes/flac/Joe_Jackson/Laughter_Lust_1991_CD,Laughter & Lust [1991 CD],Laughter & Lust,1991 CD
+/Volumes/flac/Joe_Jackson/The_Ultimate_Collection_2003_CD,The Ultimate Collection [2003 CD],The Ultimate Collection,2003 CD
+/Volumes/flac/Joe_Jackson/Night_And_Day_1990_MFSL_UDCD,Night And Day [1990 MFSL UDCD],Night And Day,1990 MFSL UDCD
+/Volumes/flac/Joe_Jackson/Live_1980_86_1988_CD,Live 1980/86 [1988 CD],Live 1980/86,1988 CD
+/Volumes/flac/Joe_Jackson/At_The_BBC_2009_CD,At The BBC [2009 CD],At The BBC,2009 CD
+/Volumes/flac/Joe_Jackson/Blaze_Of_Glory_1989_CD,Blaze Of Glory [1989 CD],Blaze Of Glory,1989 CD
+/Volumes/flac/Joe_Jackson/Body_And_Soul_2020_SACD,Body And Soul [2020 SACD],Body And Soul,2020 SACD
+/Volumes/flac/Joe_Jackson/I_m_The_Man_1986_CD,I'm The Man [1986 CD],I'm The Man,1986 CD
+/Volumes/flac/Joe_Jackson/Night_And_Day_1982_CD,Night And Day [1982 CD],Night And Day,1982 CD
+/Volumes/flac/Joe_Jackson/Big_World_1986_CD,Big World [1986 CD],Big World,1986 CD
+/Volumes/flac/Joe_Jackson/Night_And_Day_II_2000_CD,Night And Day II [2000 CD],Night And Day II,2000 CD
+/Volumes/flac/Joe_Jackson/Fast_Forward_2015_CD,Fast Forward [2015 CD],Fast Forward,2015 CD
+/Volumes/flac/Joe_Jackson/Night_And_Day_2003_CD_Deluxe_Edition,Night And Day [2003 CD (Deluxe Edition)],Night And Day,2003 CD (Deluxe Edition)
+/Volumes/flac/Joe_Jackson/Two_Rainy_Nights_Live_In_The_Northwest_The_Official_Bootleg_2004_CD,Two Rainy Nights (Live In The Northwest - The Official Bootleg) [2004 CD],Two Rainy Nights (Live In The Northwest - The Official Bootleg),2004 CD
+/Volumes/flac/Joe_Jackson_Band/Volume_4_2003_CD,Volume 4 [2003 CD],Volume 4,2003 CD
+/Volumes/flac/Joe_Jackson_Band/Afterlife_2004_Qobuz,Afterlife [2004 Qobuz],Afterlife,2004 Qobuz
+/Volumes/flac/Joe_Jackson_Graham_Maby_Gary_Burke/Summer_In_The_City_Live_In_New_York_2022_SACD,Summer In The City (Live In New York) [2022 SACD],Summer In The City (Live In New York),2022 SACD
+/Volumes/flac/Joe_Jackson_Todd_Rundgren_Ethel/State_Theater_New_Jersey_2005_2021_CD,State Theater New Jersey 2005 [2021 CD],State Theater New Jersey 2005,2021 CD
+/Volumes/flac/Johann_Sebastian_Bach_The_English_Baroque_Soloists_Kati_Debretzeni_John_Eliot_Gardiner/Brandenburg_Concertos_2009_CD,Brandenburg Concertos [2009 CD],Brandenburg Concertos,2009 CD
+/Volumes/flac/John_Cougar_Mellencamp/Uh_Huh_1983_CD,Uh-Huh [1983 CD],Uh-Huh,1983 CD
+/Volumes/flac/John_Cougar_Mellencamp/Scarecrow_1985_CD,Scarecrow [1985 CD],Scarecrow,1985 CD
+/Volumes/flac/John_Cougar_Mellencamp/American_Fool_1990_CD,American Fool [1990 CD],American Fool,1990 CD
+/Volumes/flac/John_Cougar_Mellencamp/Scarecrow_1994_MFSL_UDCD,Scarecrow [1994 MFSL UDCD],Scarecrow,1994 MFSL UDCD
+/Volumes/flac/John_Denver/The_Essential_John_Denver_2007_CD,The Essential John Denver [2007 CD],The Essential John Denver,2007 CD
+/Volumes/flac/John_Denver/The_Wildlife_Concert_1995_CD,The Wildlife Concert [1995 CD],The Wildlife Concert,1995 CD
+/Volumes/flac/John_Denver/The_Best_Of_John_Denver_Live_1997_SACD,The Best Of John Denver Live [1997 SACD],The Best Of John Denver Live,1997 SACD
+/Volumes/flac/John_Denver/An_Evening_With_John_Denver_2020_CD,An Evening With John Denver [2020 CD],An Evening With John Denver,2020 CD
+/Volumes/flac/John_Hiatt/Stolen_Moments_1990_CD,Stolen Moments [1990 CD],Stolen Moments,1990 CD
+/Volumes/flac/John_Hiatt/Perfectly_Good_Guitar_1993_CD,Perfectly Good Guitar [1993 CD],Perfectly Good Guitar,1993 CD
+/Volumes/flac/John_Hiatt/Bring_The_Family_1994_MFSL_UDCD,Bring The Family [1994 MFSL UDCD],Bring The Family,1994 MFSL UDCD
+/Volumes/flac/John_Hiatt_The_Guilty_Dogs/Hiatt_Comes_Alive_At_Budokan_1994_CD,Hiatt Comes Alive At Budokan? [1994 CD],Hiatt Comes Alive At Budokan?,1994 CD
+/Volumes/flac/John_Lennon/Imagine_2003_MFSL_UDCD,Imagine [2003 MFSL UDCD],Imagine,2003 MFSL UDCD
+/Volumes/flac/John_Lennon/Working_Class_Hero_The_Definitive_Lennon_2005_CD,Working Class Hero - The Definitive Lennon [2005 CD],Working Class Hero - The Definitive Lennon,2005 CD
+/Volumes/flac/John_Lennon_Yoko_Ono/Double_Fantasy_1994_MFSL_UDCD,Double Fantasy [1994 MFSL UDCD],Double Fantasy,1994 MFSL UDCD
+/Volumes/flac/John_Waite/No_Brakes_1986_CD,No Brakes [1986 CD],No Brakes,1986 CD
+/Volumes/flac/Jon_Vangelis/The_Best_Of_Jon_And_Vangelis_1984_CD,The Best Of Jon And Vangelis [1984 CD],The Best Of Jon And Vangelis,1984 CD
+/Volumes/flac/Journey/Escape_1981_CD,Escape [1981 CD],Escape,1981 CD
+/Volumes/flac/Journey/Frontiers_1983_CD,Frontiers [1983 CD],Frontiers,1983 CD
+/Volumes/flac/Justin_Currie/What_Is_Love_For_2007_CD,What Is Love For [2007 CD],What Is Love For,2007 CD
+/Volumes/flac/Justin_Currie/This_Is_My_Kingdom_Now_2017_CD,This Is My Kingdom Now [2017 CD],This Is My Kingdom Now,2017 CD
+/Volumes/flac/Justin_Currie/The_Great_War_2010_Qobuz,The Great War [2010 Qobuz],The Great War,2010 Qobuz
+/Volumes/flac/Justin_Currie/Lower_Reaches_2013_CD,Lower Reaches [2013 CD],Lower Reaches,2013 CD
+/Volumes/flac/Kate_Bush/The_Whole_Story_1986_Qobuz,The Whole Story [1986 Qobuz],The Whole Story,1986 Qobuz
+/Volumes/flac/Keith_Jarrett/The_Koln_Concert_2023_Qobuz,The Köln Concert [2023 Qobuz],The Köln Concert,2023 Qobuz
+/Volumes/flac/Kenny_Rogers/Eyes_That_See_In_The_Dark_1983_CD,Eyes That See In The Dark [1983 CD],Eyes That See In The Dark,1983 CD
+/Volumes/flac/Kenny_Rogers/The_Best_Of_2005_CD,The Best Of [2005 CD],The Best Of,2005 CD
+/Volumes/flac/Kiefer_Sutherland/Reckless_Me_2019_CD,Reckless & Me [2019 CD],Reckless & Me,2019 CD
+/Volumes/flac/Kraftwerk/Die_Mensch_Maschine_1986_CD,Die Mensch•Maschine [1986 CD],Die Mensch•Maschine,1986 CD
+/Volumes/flac/Kraftwerk/Computerwelt_1986_CD,Computerwelt [1986 CD],Computerwelt,1986 CD
+/Volumes/flac/Level_42/Level_Best_A_Collection_Of_Their_Greatest_Hits_1989_CD,Level Best (A Collection Of Their Greatest Hits) [1989 CD],Level Best (A Collection Of Their Greatest Hits),1989 CD
+/Volumes/flac/Lightning_Seeds/Cloudcuckooland_1989_CD,Cloudcuckooland [1989 CD],Cloudcuckooland,1989 CD
+/Volumes/flac/Linda_Ronstadt/The_Very_Best_Of_Linda_Ronstadt_2002_CD,The Very Best Of Linda Ronstadt [2002 CD],The Very Best Of Linda Ronstadt,2002 CD
+/Volumes/flac/Lionel_Richie/Can_t_Slow_Down_2013_Qobuz,Can't Slow Down [2013 Qobuz],Can't Slow Down,2013 Qobuz
+/Volumes/flac/Little_River_Band/Greatest_Hits_1984_CD,Greatest Hits [1984 CD],Greatest Hits,1984 CD
+/Volumes/flac/Little_River_Band/Monsoon_1988_Qobuz,Monsoon [1988 Qobuz],Monsoon,1988 Qobuz
+/Volumes/flac/Madonna/You_Can_Dance_1987_CD,You Can Dance [1987 CD],You Can Dance,1987 CD
+/Volumes/flac/Madonna/Madonna_2012_HDTracks,Madonna [2012 HDTracks],Madonna,2012 HDTracks
+/Volumes/flac/Madonna/Like_A_Virgin_2012_HDTracks,Like A Virgin [2012 HDTracks],Like A Virgin,2012 HDTracks
+/Volumes/flac/Madonna/True_Blue_2012_HDTracks,True Blue [2012 HDTracks],True Blue,2012 HDTracks
+/Volumes/flac/Manfred_Mann_s_Earth_Band/Budapest_Live_2005_CD_Live,Budapest (Live) [2005 CD (Live)],Budapest (Live),2005 CD
+/Volumes/flac/Manfred_Mann_s_Earth_Band/20_Years_Of_Manfred_Manns_Earthband_1971_1991_1990_CD,20 Years Of Manfred Manns Earthband 1971-1991 [1990 CD],20 Years Of Manfred Manns Earthband 1971-1991,1990 CD
+/Volumes/flac/Marc_Cohn/Marc_Cohn_2007_MFSL_UDCD,Marc Cohn [2007 MFSL UDCD],Marc Cohn,2007 MFSL UDCD
+/Volumes/flac/Marillion/Misplaced_Childhood_1985_CD,Misplaced Childhood [1985 CD],Misplaced Childhood,1985 CD
+/Volumes/flac/Mark_Knopfler/One_Deep_River_2024_Qobuz,One Deep River [2024 Qobuz],One Deep River,2024 Qobuz
+/Volumes/flac/Mark_Knopfler/The_Princess_Bride_1987_CD,The Princess Bride [1987 CD],The Princess Bride,1987 CD
+/Volumes/flac/Mark_Knopfler/Local_Hero_2022_MFSL_SACD,Local Hero [2022 MFSL SACD],Local Hero,2022 MFSL SACD
+/Volumes/flac/Mark_Knopfler/Music_By_Mark_Knopfler_From_The_Film_Cal_1984_CD,Music By Mark Knopfler From The Film Cal [1984 CD],Music By Mark Knopfler From The Film Cal,1984 CD
+/Volumes/flac/Mark_Knopfler/Sailing_To_Philadelphia_2025_Blu_ray_25th_Anniversary_Edition,Sailing To Philadelphia [2025 Blu-ray (25th Anniversary Edition)],Sailing To Philadelphia,2025 Blu-ray (25th Anniversary Edition)
+/Volumes/flac/Mark_Knopfler_s_Guitar_Heroes/Going_Home_Theme_From_Local_Hero_2024_Qobuz,Going Home (Theme From Local Hero) [2024 Qobuz],Going Home (Theme From Local Hero),2024 Qobuz
+/Volumes/flac/Mary_Black/Twenty_Five_Years_Twenty_Five_Songs_2008_CD,"Twenty-Five Years, Twenty-Five Songs [2008 CD]","Twenty-Five Years, Twenty-Five Songs",2008 CD
+/Volumes/flac/Mary_Black/The_Holy_Ground_1993_CD,The Holy Ground [1993 CD],The Holy Ground,1993 CD
+/Volumes/flac/Meat_Loaf/Bat_Out_Of_Hell_1994_MasterSound_24_KT_Gold_Disc,Bat Out Of Hell [1994 MasterSound 24 KT Gold Disc],Bat Out Of Hell,1994 MasterSound 24 KT Gold Disc
+/Volumes/flac/Melissa_Etheridge/Melissa_Etheridge_1988_CD,Melissa Etheridge [1988 CD],Melissa Etheridge,1988 CD
+/Volumes/flac/Melissa_Etheridge/Fearless_Love_2010_CD,Fearless Love [2010 CD],Fearless Love,2010 CD
+/Volumes/flac/Men_At_Work/Business_As_Usual_1981_CD,Business As Usual [1981 CD],Business As Usual,1981 CD
+/Volumes/flac/Men_At_Work/Cargo_1993_CD,Cargo [1993 CD],Cargo,1993 CD
+/Volumes/flac/Michael_Bolton/Soul_Provider_1989_CD,Soul Provider [1989 CD],Soul Provider,1989 CD
+/Volumes/flac/Michael_Bolton/Time_Love_Tenderness_1991_CD,"Time, Love & Tenderness [1991 CD]","Time, Love & Tenderness",1991 CD
+/Volumes/flac/Michael_Jackson/Thriller_2022_MFSL_SACD,Thriller [2022 MFSL SACD],Thriller,2022 MFSL SACD
+/Volumes/flac/Michael_Jackson/Bad_1987_CD,Bad [1987 CD],Bad,1987 CD
+/Volumes/flac/Michael_Penn/March_1989_CD,March [1989 CD],March,1989 CD
+/Volumes/flac/Michelle_Shocked/Short_Sharp_Shocked_1988_CD,Short Sharp Shocked [1988 CD],Short Sharp Shocked,1988 CD
+/Volumes/flac/Mike_Batt/The_Hunting_Of_The_Snark_1986_CD,The Hunting Of The Snark [1986 CD],The Hunting Of The Snark,1986 CD
+/Volumes/flac/Mike_Oldfield/QE2_2000_HDCD,QE2 [2000 HDCD],QE2,2000 HDCD
+/Volumes/flac/Mike_Oldfield/Crises_1983_CD,Crises [1983 CD],Crises,1983 CD
+/Volumes/flac/Mike_Oldfield/Amarok_2000_HDCD,Amarok [2000 HDCD],Amarok,2000 HDCD
+/Volumes/flac/Mike_Oldfield/Tubular_Bells_2011_SHM_SACD,Tubular Bells [2011 SHM-SACD],Tubular Bells,2011 SHM-SACD
+/Volumes/flac/Mike_Oldfield/Five_Miles_Out_1983_CD,Five Miles Out [1983 CD],Five Miles Out,1983 CD
+/Volumes/flac/Mike_Oldfield/Discovery_1984_CD,Discovery [1984 CD],Discovery,1984 CD
+/Volumes/flac/Morrissey/Viva_Hate_1997_CD_Box_Set,Viva Hate [1997 CD (Box Set)],Viva Hate,1997 CD (Box Set)
+/Volumes/flac/Munchener_Freiheit/Ihre_Grossten_Hits_1992_CD,Ihre Grössten Hits [1992 CD],Ihre Grössten Hits,1992 CD
+/Volumes/flac/Munchener_Freiheit/Traumziel_1986_Qobuz,Traumziel [1986 Qobuz],Traumziel,1986 Qobuz
+/Volumes/flac/Natalie_Cole/Good_To_Be_Back_1989_CD,Good To Be Back [1989 CD],Good To Be Back,1989 CD
+/Volumes/flac/Natalie_Cole/Unforgettable_With_Love_2022_Qobuz,Unforgettable With Love [2022 Qobuz],Unforgettable With Love,2022 Qobuz
+/Volumes/flac/Neil_Young/Harvest_2014_CD_Original_Release_Series_04,Harvest [2014 CD (Original Release Series 04)],Harvest,2014 CD (Original Release Series 04)
+/Volumes/flac/Nik_Kershaw/Human_Racing_1984_CD,Human Racing [1984 CD],Human Racing,1984 CD
+/Volumes/flac/Nik_Kershaw/The_Riddle_1984_CD,The Riddle [1984 CD],The Riddle,1984 CD
+/Volumes/flac/Norah_Jones/Come_Away_With_Me_2012_SACD,Come Away With Me [2012 SACD],Come Away With Me,2012 SACD
+/Volumes/flac/Pat_Benatar/In_The_Heat_Of_The_Night_1994_DCC_24_KT_Gold_Disc,In The Heat Of The Night [1994 DCC 24 KT Gold Disc],In The Heat Of The Night,1994 DCC 24 KT Gold Disc
+/Volumes/flac/Pat_Benatar/Tropico_1985_CD,Tropico [1985 CD],Tropico,1985 CD
+/Volumes/flac/Pat_Benatar/Best_Shots_1987_CD,Best Shots [1987 CD],Best Shots,1987 CD
+/Volumes/flac/Pat_Benatar/Live_From_Earth_1984_CD,Live From Earth [1984 CD],Live From Earth,1984 CD
+/Volumes/flac/Patty_Smyth/Patty_Smyth_1992_CD,Patty Smyth [1992 CD],Patty Smyth,1992 CD
+/Volumes/flac/Paul_McCartney/Tripping_The_Live_Fantastic_1990_CD,Tripping The Live Fantastic [1990 CD],Tripping The Live Fantastic,1990 CD
+/Volumes/flac/Paul_McCartney/All_The_Best_1987_CD,All The Best ! [1987 CD],All The Best !,1987 CD
+/Volumes/flac/Paul_McCartney/Flowers_In_The_Dirt_2017_CD,Flowers In The Dirt [2017 CD],Flowers In The Dirt,2017 CD
+/Volumes/flac/Paul_Simon/Graceland_1986_CD,Graceland [1986 CD],Graceland,1986 CD
+/Volumes/flac/Paul_Young/No_Parlez_2024_Blu_ray,No Parlez [2024 Blu-ray],No Parlez,2024 Blu-ray
+/Volumes/flac/Paul_Young/From_Time_To_Time_The_Singles_Collection_1991_CD,From Time To Time  (The Singles Collection) [1991 CD],From Time To Time  (The Singles Collection),1991 CD
+/Volumes/flac/Pet_Shop_Boys/Discography_The_Complete_Singles_Collection_1991_CD,Discography (The Complete Singles Collection) [1991 CD],Discography (The Complete Singles Collection),1991 CD
+/Volumes/flac/Peter_Cetera/Solitude_Solitaire_1986_CD,Solitude / Solitaire [1986 CD],Solitude / Solitaire,1986 CD
+/Volumes/flac/Peter_Gabriel/Plays_Live_1988_CD,Plays Live [1988 CD],Plays Live,1988 CD
+/Volumes/flac/Peter_Gabriel/Secret_World_Live_2019_Qobuz,Secret World Live [2019 Qobuz],Secret World Live,2019 Qobuz
+/Volumes/flac/Peter_Gabriel/Shaking_The_Tree_Sixteen_Golden_Greats_2003_SACD,Shaking The Tree (Sixteen Golden Greats) [2003 SACD],Shaking The Tree (Sixteen Golden Greats),2003 SACD
+/Volumes/flac/Peter_Gabriel/So_2012_Download_25th_Anniversary_Edition,So [2012 Download (25th Anniversary Edition)],So,2012 Download (25th Anniversary Edition)
+/Volumes/flac/Peter_Gabriel/Peter_Gabriel_4_deutsches_album_2009_Qobuz,Peter Gabriel 4: deutsches album [2009 Qobuz],Peter Gabriel 4: deutsches album,2009 Qobuz
+/Volumes/flac/Peter_Gabriel/Peter_Gabriel_3_ein_deutsches_album_2019_Qobuz,Peter Gabriel 3: ein deutsches album [2019 Qobuz],Peter Gabriel 3: ein deutsches album,2019 Qobuz
+/Volumes/flac/Peter_Gabriel/Peter_Gabriel_1_Car_2003_SACD,Peter Gabriel 1: Car [2003 SACD],Peter Gabriel 1: Car,2003 SACD
+/Volumes/flac/Peter_Gabriel/Peter_Gabriel_2_Scratch_2003_SACD,Peter Gabriel 2: Scratch [2003 SACD],Peter Gabriel 2: Scratch,2003 SACD
+/Volumes/flac/Peter_Gabriel/Peter_Gabriel_3_Melt_2003_SACD,Peter Gabriel 3: Melt [2003 SACD],Peter Gabriel 3: Melt,2003 SACD
+/Volumes/flac/Peter_Gabriel/Peter_Ganriel_4_Security_2003_SACD,Peter Ganriel 4: Security [2003 SACD],Peter Ganriel 4: Security,2003 SACD
+/Volumes/flac/Peter_Maffay/MTV_Unplugged_2017_Qobuz,MTV Unplugged [2017 Qobuz],MTV Unplugged,2017 Qobuz
+/Volumes/flac/Phil_Collins/Testify_2016_Qobuz,Testify [2016 Qobuz],Testify,2016 Qobuz
+/Volumes/flac/Phil_Collins/No_Jacket_Required_2011_Audio_Fidelity_24_KT_Gold_Disc,No Jacket Required [2011 Audio Fidelity 24 KT + Gold Disc],No Jacket Required,2011 Audio Fidelity 24 KT + Gold Disc
+/Volumes/flac/Phil_Collins/But_Seriously_2012_Audio_Fidelity_24_KT_Gold_Disc,...But Seriously [2012 Audio Fidelity 24 KT + Gold Disc],...But Seriously,2012 Audio Fidelity 24 KT + Gold Disc
+/Volumes/flac/Phil_Collins/No_Jacket_Required_2025_Blu_ray,No Jacket Required [2025 Blu-ray],No Jacket Required,2025 Blu-ray
+/Volumes/flac/Phil_Collins/Face_Value_2010_Audio_Fidelity_24_KT_Gold_Disc,Face Value [2010 Audio Fidelity 24 KT + Gold Disc],Face Value,2010 Audio Fidelity 24 KT + Gold Disc
+/Volumes/flac/Phil_Collins/The_Story_So_Far_1993_CD,The Story So Far... [1993 CD],The Story So Far...,1993 CD
+/Volumes/flac/Phil_Collins/Hello_I_Must_Be_Going_2011_Audio_Fidelity_24_KT_Gold_Disc,"Hello, I Must Be Going! [2011 Audio Fidelity 24 KT + Gold Disc]","Hello, I Must Be Going!",2011 Audio Fidelity 24 KT + Gold Disc
+/Volumes/flac/Phil_Collins/Both_Sides_1993_CD,Both Sides [1993 CD],Both Sides,1993 CD
+/Volumes/flac/Phil_Collins/12_ers_1987_Qobuz,"12""ers [1987 Qobuz]","12""ers",1987 Qobuz
+/Volumes/flac/Phil_Collins/The_Singles_2016_CD,The Singles [2016 CD],The Singles,2016 CD
+/Volumes/flac/Philip_Bailey/Chinese_Wall_1984_CD,Chinese Wall [1984 CD],Chinese Wall,1984 CD
+/Volumes/flac/Pink_Floyd/The_Division_Bell_1994_CD,The Division Bell [1994 CD],The Division Bell,1994 CD
+/Volumes/flac/Pink_Floyd/The_Wall_1990_MFSL_UDCD,The Wall [1990 MFSL UDCD],The Wall,1990 MFSL UDCD
+/Volumes/flac/Pink_Floyd/The_Wall_1984_CD,The Wall [1984 CD],The Wall,1984 CD
+/Volumes/flac/Pink_Floyd/The_Dark_Side_Of_The_Moon_1984_Black_Triangle_CD,The Dark Side Of The Moon [1984 Black Triangle CD],The Dark Side Of The Moon,1984 Black Triangle CD
+/Volumes/flac/Pink_Floyd/The_Dark_Side_Of_The_Moon_1988_MFSL_UDCD,The Dark Side Of The Moon [1988 MFSL UDCD],The Dark Side Of The Moon,1988 MFSL UDCD
+/Volumes/flac/Pink_Floyd/Wish_You_Were_Here_1994_MasterSound_24_KT_Gold_Disc,Wish You Were Here [1994 MasterSound 24 KT Gold Disc],Wish You Were Here,1994 MasterSound 24 KT Gold Disc
+/Volumes/flac/Pink_Floyd/Wish_You_Were_Here_2025_CD,Wish You Were Here [2025 CD],Wish You Were Here,2025 CD
+/Volumes/flac/Poco/Legacy_1989_CD,Legacy [1989 CD],Legacy,1989 CD
+/Volumes/flac/Prince_And_The_Revolution/Purple_Rain_1984_CD,Purple Rain [1984 CD],Purple Rain,1984 CD
+/Volumes/flac/Prosecco_Socialist/This_Dog_s_Just_For_Christmas_Not_For_Life_2017_CD,This Dog's Just For Christmas (Not For Life) [2017 CD],This Dog's Just For Christmas (Not For Life),2017 CD
+/Volumes/flac/Pur/Live_1992_CD,Live [1992 CD],Live,1992 CD
+/Volumes/flac/Queen/Queen_II_2011_SHM_SACD,Queen II [2011 SHM-SACD],Queen II,2011 SHM-SACD
+/Volumes/flac/Queen/Innuendo_1991_CD,Innuendo [1991 CD],Innuendo,1991 CD
+/Volumes/flac/Queen/A_Kind_Of_Magic_1986_CD,A Kind Of Magic [1986 CD],A Kind Of Magic,1986 CD
+/Volumes/flac/Queen/The_Game_1994_MFSL_UDCD,The Game [1994 MFSL UDCD],The Game,1994 MFSL UDCD
+/Volumes/flac/Queen/A_Night_At_The_Opera_2000_DCC_24_KT_Gold_Disc,A Night At The Opera [2000 DCC 24 KT Gold Disc],A Night At The Opera,2000 DCC 24 KT Gold Disc
+/Volumes/flac/Queen/Hot_Space_1986_CD,Hot Space [1986 CD],Hot Space,1986 CD
+/Volumes/flac/Queen/News_Of_The_World_1987_CD,News Of The World [1987 CD],News Of The World,1987 CD
+/Volumes/flac/Queen/News_Of_The_World_1993_MFSL_UDCD,News Of The World [1993 MFSL UDCD],News Of The World,1993 MFSL UDCD
+/Volumes/flac/Queen/Queen_II_2026_CD,Queen II [2026 CD],Queen II,2026 CD
+/Volumes/flac/Queen/The_Miracle_1989_CD,The Miracle [1989 CD],The Miracle,1989 CD
+/Volumes/flac/Queen/Queen_2011_SHM_SACD,Queen [2011 SHM-SACD],Queen,2011 SHM-SACD
+/Volumes/flac/Queen/Live_Killers_1986_CD,Live Killers [1986 CD],Live Killers,1986 CD
+/Volumes/flac/Queen/Queen_2024_Qobuz,Queen [2024 Qobuz],Queen,2024 Qobuz
+/Volumes/flac/Queen/A_Day_At_The_Races_1996_MFSL_UDCD,A Day At The Races [1996 MFSL UDCD],A Day At The Races,1996 MFSL UDCD
+/Volumes/flac/Queen/Jazz_1989_CD,Jazz [1989 CD],Jazz,1989 CD
+/Volumes/flac/Queen/Made_In_Heaven_2012_SHM_SACD,Made In Heaven [2012 SHM-SACD],Made In Heaven,2012 SHM-SACD
+/Volumes/flac/Queen/The_Works_1984_CD,The Works [1984 CD],The Works,1984 CD
+/Volumes/flac/Queen/Rock_Montreal_2024_Blu_ray,Rock Montreal [2024 Blu-ray],Rock Montreal,2024 Blu-ray
+/Volumes/flac/Queen/Sheer_Heart_Attack_1989_CD,Sheer Heart Attack [1989 CD],Sheer Heart Attack,1989 CD
+/Volumes/flac/Queen/A_Day_At_The_Races_1987_CD,A Day At The Races [1987 CD],A Day At The Races,1987 CD
+/Volumes/flac/Queen/A_Night_At_The_Opera_1992_MFSL_UDCD,A Night At The Opera [1992 MFSL UDCD],A Night At The Opera,1992 MFSL UDCD
+/Volumes/flac/Queen/News_Of_The_World_2017_CD_40th_Anniversary_Edition,News Of The World [2017 CD (40th Anniversary Edition)],News Of The World,2017 CD (40th Anniversary Edition)
+/Volumes/flac/Queen/Flash_Gordon_Original_Soundtrack_Music_1986_CD,Flash Gordon (Original Soundtrack Music) [1986 CD],Flash Gordon (Original Soundtrack Music),1986 CD
+/Volumes/flac/REO_Speedwagon/Life_As_We_Know_It_1987_CD,Life As We Know It [1987 CD],Life As We Know It,1987 CD
+/Volumes/flac/REO_Speedwagon/Wheels_Are_Turnin_1984_CD,Wheels Are Turnin' [1984 CD],Wheels Are Turnin',1984 CD
+/Volumes/flac/REO_Speedwagon/Hi_Infidelity_2024_Qobuz,Hi Infidelity [2024 Qobuz],Hi Infidelity,2024 Qobuz
+/Volumes/flac/REO_Speedwagon/The_Hits_1988_CD,The Hits [1988 CD],The Hits,1988 CD
+/Volumes/flac/REO_Speedwagon/The_Earth_A_Small_Man_His_Dog_And_A_Chicken_1990_CD,"The Earth, A Small Man, His Dog And A Chicken [1990 CD]","The Earth, A Small Man, His Dog And A Chicken",1990 CD
+/Volumes/flac/REO_Speedwagon/Good_Trouble_1989_Qobuz,Good Trouble [1989 Qobuz],Good Trouble,1989 Qobuz
+/Volumes/flac/REO_Speedwagon/Hi_Infidelity_2011_Qobuz,Hi Infidelity [2011 Qobuz],Hi Infidelity,2011 Qobuz
+/Volumes/flac/R_E_M/Automatic_For_The_People_1992_CD,Automatic For The People [1992 CD],Automatic For The People,1992 CD
+/Volumes/flac/R_E_M/Out_Of_Time_1991_CD,Out Of Time [1991 CD],Out Of Time,1991 CD
+/Volumes/flac/Rainbirds/Rainbirds_1987_CD,Rainbirds [1987 CD],Rainbirds,1987 CD
+/Volumes/flac/Randy_Crawford/The_Ultimate_Collection_2005_CD,The Ultimate Collection [2005 CD],The Ultimate Collection,2005 CD
+/Volumes/flac/Randy_Newman/Land_Of_Dreams_1988_CD,Land Of Dreams [1988 CD],Land Of Dreams,1988 CD
+/Volumes/flac/Randy_Newman/Lonely_At_The_Top_The_Best_Of_Randy_Newman_1987_CD,Lonely At The Top - The Best Of Randy Newman [1987 CD],Lonely At The Top - The Best Of Randy Newman,1987 CD
+/Volumes/flac/Ray_Wilson/Unplugged_2002_CD,Unplugged [2002 CD],Unplugged,2002 CD
+/Volumes/flac/Red_Hot_Organization/Transa_Selects_2024_Bandcamp,Transa Selects [2024 Bandcamp],Transa Selects,2024 Bandcamp
+/Volumes/flac/Richard_Marx/Richard_Marx_1987_CD,Richard Marx [1987 CD],Richard Marx,1987 CD
+/Volumes/flac/Richard_Marx/Repeat_Offender_1989_CD,Repeat Offender [1989 CD],Repeat Offender,1989 CD
+/Volumes/flac/Rick_Springfield/Rick_Springfield_s_Greatest_Hits_1995_CD,Rick Springfield's Greatest Hits [1995 CD],Rick Springfield's Greatest Hits,1995 CD
+/Volumes/flac/Rick_Springfield/Hard_To_Hold_Soundtrack_Recording_1984_CD,Hard To Hold - Soundtrack Recording [1984 CD],Hard To Hold - Soundtrack Recording,1984 CD
+/Volumes/flac/Rickie_Lee_Jones/It_s_Like_This_2008_SACD,It's Like This [2008 SACD],It's Like This,2008 SACD
+/Volumes/flac/Roger_Hodgson/In_The_Eye_Of_The_Storm_1984_CD,In The Eye Of The Storm [1984 CD],In The Eye Of The Storm,1984 CD
+/Volumes/flac/Roger_Taylor/Roger_Taylor_s_Fun_In_Space_1996_CD,Roger Taylor's Fun In Space [1996 CD],Roger Taylor's Fun In Space,1996 CD
+/Volumes/flac/Roger_Waters/The_Lockdown_Sessions_2022_Qobuz,The Lockdown Sessions [2022 Qobuz],The Lockdown Sessions,2022 Qobuz
+/Volumes/flac/Roxy_Music/Avalon_2015_SACD,Avalon [2015 SACD],Avalon,2015 SACD
+/Volumes/flac/Roy_Orbison/A_Black_And_White_Night_Live_1989_CD,A Black And White Night Live [1989 CD],A Black And White Night Live,1989 CD
+/Volumes/flac/Roy_Orbison/Mystery_Girl_1992_MFSL_UDCD,Mystery Girl [1992 MFSL UDCD],Mystery Girl,1992 MFSL UDCD
+/Volumes/flac/Runrig/Amazing_Things_1993_CD,Amazing Things [1993 CD],Amazing Things,1993 CD
+/Volumes/flac/Runrig/Mara_1995_CD,Mara [1995 CD],Mara,1995 CD
+/Volumes/flac/Runrig/Once_In_A_Lifetime_Live_1988_CD,Once In A Lifetime (Live) [1988 CD],Once In A Lifetime (Live),1988 CD
+/Volumes/flac/Sade/Lovers_Rock_2000_CD,Lovers Rock [2000 CD],Lovers Rock,2000 CD
+/Volumes/flac/Sade/Promise_1985_CD,Promise [1985 CD],Promise,1985 CD
+/Volumes/flac/Sade/Diamond_Life_1984_CD,Diamond Life [1984 CD],Diamond Life,1984 CD
+/Volumes/flac/Sade/Stronger_Than_Pride_1988_CD,Stronger Than Pride [1988 CD],Stronger Than Pride,1988 CD
+/Volumes/flac/Sade/Love_Deluxe_1992_CD,Love Deluxe [1992 CD],Love Deluxe,1992 CD
+/Volumes/flac/Saga/Saga_1987_CD,Saga [1987 CD],Saga,1987 CD
+/Volumes/flac/Saga/Heads_Or_Tales_1988_CD,Heads Or Tales [1988 CD],Heads Or Tales,1988 CD
+/Volumes/flac/Saga/Worlds_Apart_1987_CD,Worlds Apart [1987 CD],Worlds Apart,1987 CD
+/Volumes/flac/Saga/In_Transit_1987_CD,In Transit [1987 CD],In Transit,1987 CD
+/Volumes/flac/Sam_Brown/April_Moon_1990_CD,April Moon [1990 CD],April Moon,1990 CD
+/Volumes/flac/Sam_Brown/Stop_1988_CD,Stop! [1988 CD],Stop!,1988 CD
+/Volumes/flac/Seal/Best_1991_2004_2004_Qobuz,Best | 1991 - 2004 [2004 Qobuz],Best | 1991 - 2004,2004 Qobuz
+/Volumes/flac/Sergei_Prokofiev_Sting_The_Chamber_Orchestra_Of_Europe_Claudio_Abbado/Peter_And_The_Wolf_Classical_Symphony_Overture_On_Hebrew_Themes_March_1990_CD,Peter And The Wolf - Classical Symphony - Overture On Hebrew Themes · March [1990 CD],Peter And The Wolf - Classical Symphony - Overture On Hebrew Themes · March,1990 CD
+/Volumes/flac/Shakespear_s_Sister/Hormonally_Yours_1992_CD,Hormonally Yours [1992 CD],Hormonally Yours,1992 CD
+/Volumes/flac/Simon_Garfunkel/Bridge_Over_Troubled_Water_2024_MFSL_SACD,Bridge Over Troubled Water [2024 MFSL SACD],Bridge Over Troubled Water,2024 MFSL SACD
+/Volumes/flac/Simon_Garfunkel/The_Concert_In_Central_Park_1990_CD,The Concert In Central Park [1990 CD],The Concert In Central Park,1990 CD
+/Volumes/flac/Simon_Garfunkel/Simon_And_Garfunkel_s_Greatest_Hits_2014_Qobuz,Simon And Garfunkel's Greatest Hits [2014 Qobuz],Simon And Garfunkel's Greatest Hits,2014 Qobuz
+/Volumes/flac/Simon_Garfunkel/Bookends_2024_MFSL_SACD,Bookends [2024 MFSL SACD],Bookends,2024 MFSL SACD
+/Volumes/flac/Simple_Minds/Acoustic_2016_CD,Acoustic [2016 CD],Acoustic,2016 CD
+/Volumes/flac/Simple_Minds/The_Best_Of_Simple_Minds_2001_SACD,The Best Of Simple Minds [2001 SACD],The Best Of Simple Minds,2001 SACD
+/Volumes/flac/Simply_Red/Men_And_Women_1987_CD,Men And Women [1987 CD],Men And Women,1987 CD
+/Volumes/flac/Simply_Red/Picture_Book_1985_CD,Picture Book [1985 CD],Picture Book,1985 CD
+/Volumes/flac/Simply_Red/A_New_Flame_1989_CD,A New Flame [1989 CD],A New Flame,1989 CD
+/Volumes/flac/Sinead_O_Connor/I_Do_Not_Want_What_I_Haven_t_Got_1990_CD,I Do Not Want What I Haven't Got [1990 CD],I Do Not Want What I Haven't Got,1990 CD
+/Volumes/flac/Spandau_Ballet/True_2008_Daily_Mail_HDCD,True [2008 Daily Mail HDCD],True,2008 Daily Mail HDCD
+/Volumes/flac/Spandau_Ballet/Through_The_Barricades_1986_CD,Through The Barricades [1986 CD],Through The Barricades,1986 CD
+/Volumes/flac/Spandau_Ballet/Through_The_Barricades_2017_Qobuz,Through The Barricades [2017 Qobuz],Through The Barricades,2017 Qobuz
+/Volumes/flac/Spandau_Ballet/Once_More_2009_CD,Once More [2009 CD],Once More,2009 CD
+/Volumes/flac/Spandau_Ballet/Parade_1996_CD,Parade [1996 CD],Parade,1996 CD
+/Volumes/flac/Starship/Knee_Deep_In_The_Hoopla_1985_CD,Knee Deep In The Hoopla [1985 CD],Knee Deep In The Hoopla,1985 CD
+/Volumes/flac/Steve_Perry/Street_Talk_1984_CD,Street Talk [1984 CD],Street Talk,1984 CD
+/Volumes/flac/Steve_Winwood/Arc_Of_A_Diver_1993_MFSL_UDCD,Arc Of A Diver [1993 MFSL UDCD],Arc Of A Diver,1993 MFSL UDCD
+/Volumes/flac/Steve_Winwood/Talking_Back_To_The_Night_1996_MFSL_UDCD,Talking Back To The Night [1996 MFSL UDCD],Talking Back To The Night,1996 MFSL UDCD
+/Volumes/flac/Steve_Winwood/Back_In_The_High_Life_1994_MFSL_UDCD,Back In The High Life [1994 MFSL UDCD],Back In The High Life,1994 MFSL UDCD
+/Volumes/flac/Stevie_Nicks/The_Wild_Heart_1983_CD,The Wild Heart [1983 CD],The Wild Heart,1983 CD
+/Volumes/flac/Stevie_Nicks/Timespace_The_Best_Of_Stevie_Nicks_1991_Qobuz,Timespace - The  Best Of Stevie Nicks [1991 Qobuz],Timespace - The  Best Of Stevie Nicks,1991 Qobuz
+/Volumes/flac/Stevie_Nicks/Bella_Donna_2026_MFSL_SACD,Bella Donna [2026 MFSL SACD],Bella Donna,2026 MFSL SACD
+/Volumes/flac/Sting/Brand_New_Day_1999_DTS_CD,Brand New Day [1999 DTS-CD],Brand New Day,1999 DTS-CD
+/Volumes/flac/Sting/Brand_New_Day_2004_SACD,Brand New Day [2004 SACD],Brand New Day,2004 SACD
+/Volumes/flac/Sting/The_Dream_Of_The_Blue_Turtles_1993_MFSL_UDCD,The Dream Of The Blue Turtles [1993 MFSL UDCD],The Dream Of The Blue Turtles,1993 MFSL UDCD
+/Volumes/flac/Sting/Ten_Summoner_s_Tales_1993_CD,Ten Summoner's Tales [1993 CD],Ten Summoner's Tales,1993 CD
+/Volumes/flac/Sting/Bring_On_The_Night_1986_CD,Bring On The Night [1986 CD],Bring On The Night,1986 CD
+/Volumes/flac/Sting/Ten_Summoner_s_Tales_1999_DTS_CD,Ten Summoner's Tales [1999 DTS-CD],Ten Summoner's Tales,1999 DTS-CD
+/Volumes/flac/Sting/My_Songs_2019_CD,My Songs [2019 CD],My Songs,2019 CD
+/Volumes/flac/Sting/The_Soul_Cages_1991_CD,The Soul Cages [1991 CD],The Soul Cages,1991 CD
+/Volumes/flac/Sting/Nothing_Like_The_Sun_1991_MFSL_UDCD,...Nothing Like The Sun [1991 MFSL UDCD],...Nothing Like The Sun,1991 MFSL UDCD
+/Volumes/flac/Sting/The_Night_Watch_Live_At_The_Rijksmuseum_2026_Qobuz,The Night Watch (Live At The Rijksmuseum) [2026 Qobuz],The Night Watch (Live At The Rijksmuseum),2026 Qobuz
+/Volumes/flac/Sting/Live_In_Berlin_2010_Tidal,Live In Berlin [2010 Tidal],Live In Berlin,2010 Tidal
+/Volumes/flac/Styx/Edge_Of_The_Century_1990_CD,Edge Of The Century [1990 CD],Edge Of The Century,1990 CD
+/Volumes/flac/Styx/Kilroy_Was_Here_1983_CD,Kilroy Was Here [1983 CD],Kilroy Was Here,1983 CD
+/Volumes/flac/Styx/Crystal_Ball_1988_CD,Crystal Ball [1988 CD],Crystal Ball,1988 CD
+/Volumes/flac/Styx/Caught_In_The_Act_Live_2018_CD,Caught In The Act Live [2018 CD],Caught In The Act Live,2018 CD
+/Volumes/flac/Styx/Paradise_Theatre_2024_Qobuz,Paradise Theatre [2024 Qobuz],Paradise Theatre,2024 Qobuz
+/Volumes/flac/Styx/Paradise_Theatre_1981_A_M_Audiophile_Vinyl,Paradise Theatre [1981 A&M Audiophile Vinyl],Paradise Theatre,1981 A&M Audiophile Vinyl
+/Volumes/flac/Styx/Equinox_1987_CD,Equinox [1987 CD],Equinox,1987 CD
+/Volumes/flac/Styx/Cornerstone_1979_A_M_Audiophile_Vinyl,Cornerstone [1979 A&M Audiophile Vinyl],Cornerstone,1979 A&M Audiophile Vinyl
+/Volumes/flac/Styx/Cornerstone_2009_SHM_CD,Cornerstone [2009 SHM-CD],Cornerstone,2009 SHM-CD
+/Volumes/flac/Styx/The_Grand_Illusion_2010_Audio_Fidelity_24_KT_Gold_HDCD,The Grand Illusion [2010 Audio Fidelity 24 KT + Gold HDCD],The Grand Illusion,2010 Audio Fidelity 24 KT + Gold HDCD
+/Volumes/flac/Styx/Return_To_Paradise_1997_CD,Return To Paradise [1997 CD],Return To Paradise,1997 CD
+/Volumes/flac/Styx/Styx_II_2016_SHM_CD,Styx II [2016 SHM-CD],Styx II,2016 SHM-CD
+/Volumes/flac/Styx/Brave_New_World_1999_CD,Brave New World [1999 CD],Brave New World,1999 CD
+/Volumes/flac/Styx/Paradise_Theatre_2014_Audio_Fidelity_SACD,Paradise Theatre [2014 Audio Fidelity SACD],Paradise Theatre,2014 Audio Fidelity SACD
+/Volumes/flac/Styx_REO_Speedwagon/Arch_Allies_2000_Qobuz,Arch Allies [2000 Qobuz],Arch Allies,2000 Qobuz
+/Volumes/flac/Supertramp/Famous_Last_Words_1986_CD,"""...Famous Last Words..."" [1986 CD]","""...Famous Last Words...""",1986 CD
+/Volumes/flac/Supertramp/Paris_1985_CD,Paris [1985 CD],Paris,1985 CD
+/Volumes/flac/Supertramp/Breakfast_In_America_2018_MFSL_SACD,Breakfast In America [2018 MFSL SACD],Breakfast In America,2018 MFSL SACD
+/Volumes/flac/Supertramp/Even_In_The_Quietest_Moments_1986_CD,Even In The Quietest Moments... [1986 CD],Even In The Quietest Moments...,1986 CD
+/Volumes/flac/Supertramp/Crisis_What_Crisis_1988_CD,Crisis? What Crisis? [1988 CD],Crisis? What Crisis?,1988 CD
+/Volumes/flac/Supertramp/Crime_Of_The_Century_1987_MFSL_UDCD,Crime Of The Century [1987 MFSL UDCD],Crime Of The Century,1987 MFSL UDCD
+/Volumes/flac/Supertramp/Crime_Of_The_Century_1999_Speakers_Corner_Vinyl,Crime Of The Century [1999 Speakers Corner Vinyl],Crime Of The Century,1999 Speakers Corner Vinyl
+/Volumes/flac/Supertramp/Live_In_Paris_79_2012_Blu_ray,Live In Paris '79 [2012 Blu-ray],Live In Paris '79,2012 Blu-ray
+/Volumes/flac/Survivor/Vital_Signs_1984_CD,Vital Signs [1984 CD],Vital Signs,1984 CD
+/Volumes/flac/Susanna_Hoffs/When_You_re_A_Boy_1991_CD,When You're A Boy [1991 CD],When You're A Boy,1991 CD
+/Volumes/flac/Suzanne_Vega/Solitude_Standing_1987_CD,Solitude Standing [1987 CD],Solitude Standing,1987 CD
+/Volumes/flac/Suzanne_Vega/Suzanne_Vega_1985_CD,Suzanne Vega [1985 CD],Suzanne Vega,1985 CD
+/Volumes/flac/T_Pau/Bridge_Of_Spies_1987_CD,Bridge Of Spies [1987 CD],Bridge Of Spies,1987 CD
+/Volumes/flac/Talk_Talk/The_Very_Best_Of_Talk_Talk_1997_CD,The Very Best Of Talk Talk [1997 CD],The Very Best Of Talk Talk,1997 CD
+/Volumes/flac/Talking_Heads/12x12_Original_Remixes_2001_CD,12x12 Original Remixes [2001 CD],12x12 Original Remixes,2001 CD
+/Volumes/flac/Talking_Heads/Little_Creatures_1985_CD,Little Creatures [1985 CD],Little Creatures,1985 CD
+/Volumes/flac/Tanita_Tikaram/Ancient_Heart_1988_CD,Ancient Heart [1988 CD],Ancient Heart,1988 CD
+/Volumes/flac/Tanita_Tikaram/Everybody_s_Angel_1991_CD,Everybody's Angel [1991 CD],Everybody's Angel,1991 CD
+/Volumes/flac/Taylor_Swift/Reputation_2017_CD,Reputation [2017 CD],Reputation,2017 CD
+/Volumes/flac/Taylor_Swift/Midnights_2022_CD,Midnights [2022 CD],Midnights,2022 CD
+/Volumes/flac/Taylor_Swift/Taylor_Swift_2008_CD,Taylor Swift [2008 CD],Taylor Swift,2008 CD
+/Volumes/flac/Taylor_Swift/Folklore_2020_CD,Folklore [2020 CD],Folklore,2020 CD
+/Volumes/flac/Taylor_Swift/The_Tortured_Poets_Department_2024_CD,The Tortured Poets Department [2024 CD],The Tortured Poets Department,2024 CD
+/Volumes/flac/Taylor_Swift/Evermore_2020_CD,Evermore [2020 CD],Evermore,2020 CD
+/Volumes/flac/Taylor_Swift/Lover_2019_CD,Lover [2019 CD],Lover,2019 CD
+/Volumes/flac/Taylor_Swift/1989_Taylor_s_Version_2023_CD,1989 (Taylor's Version) [2023 CD],1989 (Taylor's Version),2023 CD
+/Volumes/flac/Taylor_Swift/Speak_Now_Taylor_s_Version_2023_CD,Speak Now (Taylor's Version) [2023 CD],Speak Now (Taylor's Version),2023 CD
+/Volumes/flac/Taylor_Swift/Fearless_Taylor_s_Version_2021_CD,Fearless (Taylor's Version) [2021 CD],Fearless (Taylor's Version),2021 CD
+/Volumes/flac/Taylor_Swift/Red_Taylor_s_Version_2021_CD,Red (Taylor's Version) [2021 CD],Red (Taylor's Version),2021 CD
+/Volumes/flac/Tears_For_Fears/The_Seeds_Of_Love_1989_CD,The Seeds Of Love [1989 CD],The Seeds Of Love,1989 CD
+/Volumes/flac/Tears_For_Fears/Songs_From_The_Big_Chair_1998_MFSL_UDCD,Songs From The Big Chair [1998 MFSL UDCD],Songs From The Big Chair,1998 MFSL UDCD
+/Volumes/flac/Tears_For_Fears/The_Hurting_1983_CD,The Hurting [1983 CD],The Hurting,1983 CD
+/Volumes/flac/The_Alan_Parsons_Project/I_Robot_2025_CD,I Robot [2025 CD],I Robot,2025 CD
+/Volumes/flac/The_Alan_Parsons_Project/I_Robot_2016_MFSL_SACD,I Robot [2016 MFSL SACD],I Robot,2016 MFSL SACD
+/Volumes/flac/The_Alan_Parsons_Project/Vulture_Culture_2009_SHM_CD,Vulture Culture [2009 SHM-CD],Vulture Culture,2009 SHM-CD
+/Volumes/flac/The_Alan_Parsons_Project/Pyramid_1988_CD,Pyramid [1988 CD],Pyramid,1988 CD
+/Volumes/flac/The_Alan_Parsons_Project/The_Turn_Of_A_Friendly_Card_2005_HDAD,The Turn Of A Friendly Card [2005 HDAD],The Turn Of A Friendly Card,2005 HDAD
+/Volumes/flac/The_Alan_Parsons_Project/Tales_Of_Mystery_And_Imagination_Edgar_Allan_Poe_1994_MFSL_UDCD,Tales Of Mystery And Imagination - Edgar Allan Poe [1994 MFSL UDCD],Tales Of Mystery And Imagination - Edgar Allan Poe,1994 MFSL UDCD
+/Volumes/flac/The_Alan_Parsons_Project/Tales_Of_Mystery_And_Imagination_Edgar_Allan_Poe_2016_Blu_ray,Tales Of Mystery And Imagination - Edgar Allan Poe [2016 Blu-ray],Tales Of Mystery And Imagination - Edgar Allan Poe,2016 Blu-ray
+/Volumes/flac/The_Alan_Parsons_Project/Eve_1995_CD,Eve [1995 CD],Eve,1995 CD
+/Volumes/flac/The_Alan_Parsons_Project/I_Robot_2025_Blu_ray,I Robot [2025 Blu-ray],I Robot,2025 Blu-ray
+/Volumes/flac/The_Alan_Parsons_Project/Eye_In_The_Sky_1987_CD,Eye In The Sky [1987 CD],Eye In The Sky,1987 CD
+/Volumes/flac/The_Alan_Parsons_Project/Vulture_Culture_2024_HDTracks,Vulture Culture [2024 HDTracks],Vulture Culture,2024 HDTracks
+/Volumes/flac/The_Alan_Parsons_Project/Eye_In_The_Sky_2021_MFSL_SACD,Eye In The Sky [2021 MFSL SACD],Eye In The Sky,2021 MFSL SACD
+/Volumes/flac/The_Alan_Parsons_Project/I_Robot_2005_HDAD,I Robot [2005 HDAD],I Robot,2005 HDAD
+/Volumes/flac/The_Alan_Parsons_Project/Ammonia_Avenue_1988_CD,Ammonia Avenue [1988 CD],Ammonia Avenue,1988 CD
+/Volumes/flac/The_Alan_Parsons_Project/Eye_In_The_Sky_2005_HDAD,Eye In The Sky [2005 HDAD],Eye In The Sky,2005 HDAD
+/Volumes/flac/The_Alan_Parsons_Project/Eye_In_The_Sky_2026_Blu_ray,Eye In The Sky [2026 Blu-ray],Eye In The Sky,2026 Blu-ray
+/Volumes/flac/The_Alan_Parsons_Project/The_Turn_Of_A_Friendly_Card_2023_Blu_ray,The Turn Of A Friendly Card [2023 Blu-ray],The Turn Of A Friendly Card,2023 Blu-ray
+/Volumes/flac/The_Beatles/Magical_Mystery_Tour_1987_CD,Magical Mystery Tour [1987 CD],Magical Mystery Tour,1987 CD
+/Volumes/flac/The_Beatles/Sgt_Pepper_s_Lonely_Hearts_Club_Band_1987_CD,Sgt. Pepper's Lonely Hearts Club Band [1987 CD],Sgt. Pepper's Lonely Hearts Club Band,1987 CD
+/Volumes/flac/The_Beatles/1962_1966_1993_CD,1962-1966 [1993 CD],1962-1966,1993 CD
+/Volumes/flac/The_Beatles/Revolver_1987_CD,Revolver [1987 CD],Revolver,1987 CD
+/Volumes/flac/The_Beatles/Let_It_Be_1987_CD,Let It Be [1987 CD],Let It Be,1987 CD
+/Volumes/flac/The_Beatles/The_Beatles_1987_CD,The Beatles [1987 CD],The Beatles,1987 CD
+/Volumes/flac/The_Beatles/1967_1970_1993_CD,1967-1970 [1993 CD],1967-1970,1993 CD
+/Volumes/flac/The_Beatles/Love_2006_DVD_Audio,Love [2006 DVD-Audio],Love,2006 DVD-Audio
+/Volumes/flac/The_Beatles/Get_Back_The_Rooftop_Performance_2022_Qobuz,Get Back - The Rooftop Performance [2022 Qobuz],Get Back - The Rooftop Performance,2022 Qobuz
+/Volumes/flac/The_Beatles/1_2011_CD,1 [2011 CD],1,2011 CD
+/Volumes/flac/The_Beatles/Rubber_Soul_1987_CD,Rubber Soul [1987 CD],Rubber Soul,1987 CD
+/Volumes/flac/The_Beatles/Abbey_Road_1983_Toshiba_Black_Triangle_CD,Abbey Road [1983 Toshiba Black Triangle CD],Abbey Road,1983 Toshiba Black Triangle CD
+/Volumes/flac/The_Beatles/Let_It_Be_Naked_2003_CD,Let It Be... Naked [2003 CD],Let It Be... Naked,2003 CD
+/Volumes/flac/The_Beatles/Abbey_Road_2019_Qobuz_Super_Deluxe_Edition,Abbey Road [2019 Qobuz (Super Deluxe Edition)],Abbey Road,2019 Qobuz (Super Deluxe Edition)
+/Volumes/flac/The_Beatles/Sgt_Pepper_s_Lonely_Hearts_Club_Band_1982_Vinyl_Red_Wax_Mono_Pressing,Sgt. Pepper's Lonely Hearts Club Band [1982 Vinyl (Red Wax Mono Pressing)],Sgt. Pepper's Lonely Hearts Club Band,1982 Vinyl (Red Wax Mono Pressing)
+/Volumes/flac/The_Beatles/Sgt_Pepper_s_Lonely_Hearts_Club_Band_1983_Vinyl_Parlophone_AUDIO_5,Sgt. Pepper's Lonely Hearts Club Band [1983 Vinyl (Parlophone AUDIO-5)],Sgt. Pepper's Lonely Hearts Club Band,1983 Vinyl (Parlophone AUDIO-5)
+/Volumes/flac/The_Beautiful_South/Blue_Is_The_Colour_1996_CD,Blue Is The Colour [1996 CD],Blue Is The Colour,1996 CD
+/Volumes/flac/The_Beautiful_South/Welcome_To_The_Beautiful_South_1989_CD,Welcome To The Beautiful South [1989 CD],Welcome To The Beautiful South,1989 CD
+/Volumes/flac/The_Cars/Heartbeat_City_2009_Audio_Fidelity_24_KT_Gold_HDCD,Heartbeat City [2009 Audio Fidelity 24 KT + Gold HDCD],Heartbeat City,2009 Audio Fidelity 24 KT + Gold HDCD
+/Volumes/flac/The_Chieftains/The_Long_Black_Veil_1995_CD,The Long Black Veil [1995 CD],The Long Black Veil,1995 CD
+/Volumes/flac/The_Cranberries/No_Need_To_Argue_1994_CD,No Need To Argue [1994 CD],No Need To Argue,1994 CD
+/Volumes/flac/The_Cranberries/MTV_Unplugged_2025_HDTracks,MTV Unplugged [2025 HDTracks],MTV Unplugged,2025 HDTracks
+/Volumes/flac/The_Cranberries/Everybody_Else_Is_Doing_It_So_Why_Can_t_We_1993_CD,"Everybody Else Is Doing It, So Why Can't We? [1993 CD]","Everybody Else Is Doing It, So Why Can't We?",1993 CD
+/Volumes/flac/The_Cure/Acoustic_Hits_2018_CD,Acoustic Hits [2018 CD],Acoustic Hits,2018 CD
+/Volumes/flac/The_Cure/Standing_On_A_Beach_The_Singles_1986_CD,Standing On A Beach • The Singles [1986 CD],Standing On A Beach • The Singles,1986 CD
+/Volumes/flac/The_Cure/Mixed_Up_1990_CD,Mixed Up [1990 CD],Mixed Up,1990 CD
+/Volumes/flac/The_Cure/Disintegration_1989_CD,Disintegration [1989 CD],Disintegration,1989 CD
+/Volumes/flac/The_Dream_Academy/Life_In_A_Northern_Town_1985_Vinyl,Life In A Northern Town [1985 Vinyl],Life In A Northern Town,1985 Vinyl
+/Volumes/flac/The_Heights/Music_From_The_Television_Show_The_Heights_1992_CD,"Music From The Television Show ""The Heights"" [1992 CD]","Music From The Television Show ""The Heights""",1992 CD
+/Volumes/flac/The_Housemartins/London_0_Hull_4_1986_CD,London 0 Hull 4 [1986 CD],London 0 Hull 4,1986 CD
+/Volumes/flac/The_Housemartins/Now_That_s_What_I_Call_Quite_Good_1988_CD,Now That's What I Call Quite Good [1988 CD],Now That's What I Call Quite Good,1988 CD
+/Volumes/flac/The_Human_League/Greatest_Hits_1988_CD,Greatest Hits [1988 CD],Greatest Hits,1988 CD
+/Volumes/flac/The_Killers_Featuring_Bruce_Springsteen/Dustland_2021_Qobuz,Dustland [2021 Qobuz],Dustland,2021 Qobuz
+/Volumes/flac/The_Moody_Blues/The_Other_Side_Of_Life_1986_CD,The Other Side Of Life [1986 CD],The Other Side Of Life,1986 CD
+/Volumes/flac/The_Notting_Hillbillies/Missing_Presumed_Having_A_Good_Time_1990_CD,Missing... Presumed Having A Good Time [1990 CD],Missing... Presumed Having A Good Time,1990 CD
+/Volumes/flac/The_Police/Synchronicity_1992_MFSL_UDCD,Synchronicity [1992 MFSL UDCD],Synchronicity,1992 MFSL UDCD
+/Volumes/flac/The_Police/Every_Breath_You_Take_The_Singles_1986_CD,Every Breath You Take (The Singles) [1986 CD],Every Breath You Take (The Singles),1986 CD
+/Volumes/flac/The_Smiths/Best_II_2026_Qobuz,...Best II [2026 Qobuz],...Best II,2026 Qobuz
+/Volumes/flac/The_Smiths/The_World_Won_t_Listen_1987_CD,The World Won't Listen [1987 CD],The World Won't Listen,1987 CD
+/Volumes/flac/The_Smiths/Best_I_2026_Qobuz,Best... I [2026 Qobuz],Best... I,2026 Qobuz
+/Volumes/flac/The_Style_Council/The_Singular_Adventures_Of_The_Style_Council_Greatest_Hits_Vol_1_1989_CD,The Singular Adventures Of The Style Council (Greatest Hits Vol. 1) [1989 CD],The Singular Adventures Of The Style Council (Greatest Hits Vol. 1),1989 CD
+/Volumes/flac/The_The/Mind_Bomb_1989_CD,Mind Bomb [1989 CD],Mind Bomb,1989 CD
+/Volumes/flac/The_The/The_Comeback_Special_Live_At_The_Royal_Albert_Hall_2021_Qobuz,The Comeback Special (Live At The Royal Albert Hall) [2021 Qobuz],The Comeback Special (Live At The Royal Albert Hall),2021 Qobuz
+/Volumes/flac/The_The/Ensoulment_2024_Qobuz,Ensoulment [2024 Qobuz],Ensoulment,2024 Qobuz
+/Volumes/flac/The_The/Infected_1986_CD,Infected [1986 CD],Infected,1986 CD
+/Volumes/flac/The_The/Soul_Mining_1986_CD,Soul Mining [1986 CD],Soul Mining,1986 CD
+/Volumes/flac/The_Waterboys/The_Best_Of_The_Waterboys_81_90_1991_CD,The Best Of The Waterboys '81 - '90 [1991 CD],The Best Of The Waterboys '81 - '90,1991 CD
+/Volumes/flac/Tina_Turner/Foreign_Affair_1989_CD,Foreign Affair [1989 CD],Foreign Affair,1989 CD
+/Volumes/flac/Tina_Turner/Private_Dancer_1984_CD_Black_Triangle,Private Dancer [1984 CD (Black Triangle)],Private Dancer,1984 CD (Black Triangle)
+/Volumes/flac/Tom_Odell/Wrong_Crowd_2016_Qobuz_Expanded_Edition,Wrong Crowd [2016 Qobuz (Expanded Edition)],Wrong Crowd,2016 Qobuz (Expanded Edition)
+/Volumes/flac/Tom_Odell/Jubilee_Road_2018_Qobuz_Expanded_Edition,Jubilee Road [2018 Qobuz (Expanded Edition)],Jubilee Road,2018 Qobuz (Expanded Edition)
+/Volumes/flac/Tom_Odell/Long_Way_Down_2013_Qobuz_Expanded_Edition,Long Way Down [2013 Qobuz (Expanded Edition)],Long Way Down,2013 Qobuz (Expanded Edition)
+/Volumes/flac/Tommy_Shaw/Ambition_1987_Qobuz,Ambition [1987 Qobuz],Ambition,1987 Qobuz
+/Volumes/flac/Tommy_Shaw/Sing_For_The_Day_2018_Qobuz,Sing For The Day! [2018 Qobuz],Sing For The Day!,2018 Qobuz
+/Volumes/flac/Tony_Carey/The_Story_So_Far_1989_CD,The Story So Far [1989 CD],The Story So Far,1989 CD
+/Volumes/flac/Tori_Amos/Little_Earthquakes_1992_CD,Little Earthquakes [1992 CD],Little Earthquakes,1992 CD
+/Volumes/flac/Toto/Fahrenheit_1986_CD,Fahrenheit [1986 CD],Fahrenheit,1986 CD
+/Volumes/flac/Toto/40_Tours_Around_The_Sun_2019_HDTracks,40 Tours Around The Sun [2019 HDTracks],40 Tours Around The Sun,2019 HDTracks
+/Volumes/flac/Toto/Toto_IV_2003_SACD,Toto IV [2003 SACD],Toto IV,2003 SACD
+/Volumes/flac/Toto/The_Seventh_One_1988_CD,The Seventh One [1988 CD],The Seventh One,1988 CD
+/Volumes/flac/Toto/Toto_IV_1999_MFSL_UDCD,Toto IV [1999 MFSL UDCD],Toto IV,1999 MFSL UDCD
+/Volumes/flac/Toto/Toto_2011_CD_Original_Album_Classics,Toto [2011 CD (Original Album Classics)],Toto,2011 CD (Original Album Classics)
+/Volumes/flac/Toto/Hydra_2011_CD_Original_Album_Classics,Hydra [2011 CD (Original Album Classics)],Hydra,2011 CD (Original Album Classics)
+/Volumes/flac/Toto/Isolation_2011_CD_Original_Album_Classics,Isolation [2011 CD (Original Album Classics)],Isolation,2011 CD (Original Album Classics)
+/Volumes/flac/Toto/Turn_Back_2011_CD_Original_Album_Classics,Turn Back [2011 CD (Original Album Classics)],Turn Back,2011 CD (Original Album Classics)
+/Volumes/flac/Tracey_Ullman/You_Broke_My_Heart_In_17_Places_2007_CD,You Broke My Heart In 17 Places [2007 CD],You Broke My Heart In 17 Places,2007 CD
+/Volumes/flac/Tracy_Chapman/Tracy_Chapman_1988_CD,Tracy Chapman [1988 CD],Tracy Chapman,1988 CD
+/Volumes/flac/Traveling_Wilburys/Volume_One_1988_CD,Volume One [1988 CD],Volume One,1988 CD
+/Volumes/flac/Trevor_Horn/Echoes_Ancient_Modern_2023_Qobuz,Echoes - Ancient & Modern [2023 Qobuz],Echoes - Ancient & Modern,2023 Qobuz
+/Volumes/flac/Trevor_Rabin/90124_2003_CD,90124 [2003 CD],90124,2003 CD
+/Volumes/flac/Trisha_Yearwood/Songbook_A_Collection_Of_Hits_1997_HDCD,(Songbook) A Collection Of Hits [1997 HDCD],(Songbook) A Collection Of Hits,1997 HDCD
+/Volumes/flac/Tupelo/Push_On_2014_CD,Push On [2014 CD],Push On,2014 CD
+/Volumes/flac/U2/Achtung_Baby_1991_CD,Achtung Baby [1991 CD],Achtung Baby,1991 CD
+/Volumes/flac/U2/Rattle_And_Hum_1988_CD,Rattle And Hum [1988 CD],Rattle And Hum,1988 CD
+/Volumes/flac/U2/The_Unforgettable_Fire_1995_MFSL_UDCD,The Unforgettable Fire [1995 MFSL UDCD],The Unforgettable Fire,1995 MFSL UDCD
+/Volumes/flac/U2/The_Joshua_Tree_1996_MFSL_UDCD,The Joshua Tree [1996 MFSL UDCD],The Joshua Tree,1996 MFSL UDCD
+/Volumes/flac/U2/Live_Under_A_Blood_Red_Sky_1986_CD,"Live ""Under A Blood Red Sky"" [1986 CD]","Live ""Under A Blood Red Sky""",1986 CD
+/Volumes/flac/USA_For_Africa/We_Are_The_World_1985_Qobuz,We Are The World [1985 Qobuz],We Are The World,1985 Qobuz
+/Volumes/flac/Ultravox/Dancing_With_Tears_In_My_Eyes_1997_CD,Dancing With Tears In My Eyes [1997 CD],Dancing With Tears In My Eyes,1997 CD
+/Volumes/flac/Van_Morrison/Poetic_Champions_Compose_1987_CD,Poetic Champions Compose [1987 CD],Poetic Champions Compose,1987 CD
+/Volumes/flac/Van_Morrison/Enlightenment_1990_CD,Enlightenment [1990 CD],Enlightenment,1990 CD
+/Volumes/flac/Van_Morrison/Hymns_To_The_Silence_1991_CD,Hymns To The Silence [1991 CD],Hymns To The Silence,1991 CD
+/Volumes/flac/Van_Morrison/Days_Like_This_1995_CD,Days Like This [1995 CD],Days Like This,1995 CD
+/Volumes/flac/Various/The_Rocky_Horror_Picture_Show_1986_CD,The Rocky Horror Picture Show [1986 CD],The Rocky Horror Picture Show,1986 CD
+/Volumes/flac/Various/Buster_Original_Motion_Picture_Soundtrack_1988_CD,Buster - Original Motion Picture Soundtrack [1988 CD],Buster - Original Motion Picture Soundtrack,1988 CD
+/Volumes/flac/Various/White_Nights_Original_Motion_Picture_Soundtrack_1985_CD,White Nights: Original Motion Picture Soundtrack [1985 CD],White Nights: Original Motion Picture Soundtrack,1985 CD
+/Volumes/flac/Various/Tower_Of_Song_The_Songs_Of_Leonard_Cohen_1995_CD,Tower Of Song (The Songs Of Leonard Cohen) [1995 CD],Tower Of Song (The Songs Of Leonard Cohen),1995 CD
+/Volumes/flac/Various/Streets_Of_Fire_Music_From_The_Original_Motion_Picture_Soundtrack_1984_CD,Streets Of Fire (Music From The Original Motion Picture Soundtrack) [1984 CD],Streets Of Fire (Music From The Original Motion Picture Soundtrack),1984 CD
+/Volumes/flac/Various/Against_All_Odds_Music_From_The_Original_Motion_Picture_Soundtrack_1990_CD,Against All Odds (Music From The Original Motion Picture Soundtrack) [1990 CD],Against All Odds (Music From The Original Motion Picture Soundtrack),1990 CD
+/Volumes/flac/Various/Absolute_Beginners_The_Original_Motion_Picture_Soundtrack_1986_CD,Absolute Beginners (The Original Motion Picture Soundtrack) [1986 CD],Absolute Beginners (The Original Motion Picture Soundtrack),1986 CD
+/Volumes/flac/Various/Reality_Bites_Original_Motion_Picture_Soundtrack_1994_CD,Reality Bites (Original Motion Picture Soundtrack) [1994 CD],Reality Bites (Original Motion Picture Soundtrack),1994 CD
+/Volumes/flac/Various/Fame_The_Original_Soundtrack_From_The_Motion_Picture_2003_CD,Fame (The Original Soundtrack From The Motion Picture) [2003 CD],Fame (The Original Soundtrack From The Motion Picture),2003 CD
+/Volumes/flac/Various/Pretty_In_Pink_Original_Motion_Picture_Soundtrack_1986_CD,Pretty In Pink (Original Motion Picture Soundtrack) [1986 CD],Pretty In Pink (Original Motion Picture Soundtrack),1986 CD
+/Volumes/flac/Various/Music_And_Lyrics_Music_From_The_Motion_Picture_2007_CD,Music And Lyrics (Music From The Motion Picture) [2007 CD],Music And Lyrics (Music From The Motion Picture),2007 CD
+/Volumes/flac/Various/Footloose_Original_Motion_Picture_Soundtrack_1984_CD,Footloose (Original Motion Picture Soundtrack) [1984 CD],Footloose (Original Motion Picture Soundtrack),1984 CD
+/Volumes/flac/Various/Recorded_Highlights_Of_The_Prince_s_Trust_10th_Anniversary_Birthday_Party_1987_CD,Recorded Highlights Of The Prince's Trust 10th Anniversary Birthday Party [1987 CD],Recorded Highlights Of The Prince's Trust 10th Anniversary Birthday Party,1987 CD
+/Volumes/flac/Various/The_Prince_s_Trust_Concert_1987_1987_CD,The Prince's Trust Concert 1987 [1987 CD],The Prince's Trust Concert 1987,1987 CD
+/Volumes/flac/Vonda_Shepard/Songs_From_Ally_McBeal_1998_CD,Songs From Ally McBeal [1998 CD],Songs From Ally McBeal,1998 CD
+/Volumes/flac/Wet_Wet_Wet/Popped_In_Souled_Out_1987_CD,Popped In Souled Out [1987 CD],Popped In Souled Out,1987 CD
+/Volumes/flac/Wet_Wet_Wet/End_Of_Part_One_Their_Greatest_Hits_1994_CD,End Of Part One (Their Greatest Hits) [1994 CD],End Of Part One (Their Greatest Hits),1994 CD
+/Volumes/flac/Wham/Last_Christmas_Everything_She_Wants_1984_Vinyl,Last Christmas / Everything She Wants [1984 Vinyl],Last Christmas / Everything She Wants,1984 Vinyl
+/Volumes/flac/Wham/The_Final_1986_CD,The Final [1986 CD],The Final,1986 CD
+/Volumes/flac/Whitney_Houston/Whitney_2023_MFSL_SACD,Whitney [2023 MFSL SACD],Whitney,2023 MFSL SACD
+/Volumes/flac/Whitney_Houston/Whitney_Houston_2024_MFSL_SACD,Whitney Houston [2024 MFSL SACD],Whitney Houston,2024 MFSL SACD
+/Volumes/flac/William_Shatner/Has_Been_2004_CD,Has Been [2004 CD],Has Been,2004 CD
+/Volumes/flac/Wilson_Phillips/Wilson_Phillips_1990_CD,Wilson Phillips [1990 CD],Wilson Phillips,1990 CD
+/Volumes/flac/Wings/Wings_Greatest_1984_Black_Triangle_CD,Wings Greatest [1984 Black Triangle CD],Wings Greatest,1984 Black Triangle CD
+/Volumes/flac/Wise_Guys/Klartext_2003_CD,Klartext [2003 CD],Klartext,2003 CD
+/Volumes/flac/World_Party/Goodbye_Jumbo_1990_CD,Goodbye Jumbo [1990 CD],Goodbye Jumbo,1990 CD
+/Volumes/flac/Yazoo/You_And_Me_Both_1984_CD,You And Me Both [1984 CD],You And Me Both,1984 CD
+/Volumes/flac/Yazoo/Upstairs_At_Eric_s_1986_CD,Upstairs At Eric's [1986 CD],Upstairs At Eric's,1986 CD
+/Volumes/flac/Yes/90125_2009_Audio_Fidelity_24_KT_Gold_HDCD,90125 [2009 Audio Fidelity 24 KT + Gold HDCD],90125,2009 Audio Fidelity 24 KT + Gold HDCD
+/Volumes/flac/Yes/90125_2024_SACD,90125 [2024 SACD],90125,2024 SACD
+/Volumes/flac/Yes/Big_Generator_1987_CD,Big Generator [1987 CD],Big Generator,1987 CD
+/Volumes/flac/Yes/90125_2004_CD,90125 [2004 CD],90125,2004 CD
+/Volumes/flac/Youssou_N_Dour_Neneh_Cherry/7_Seconds_1994_CD,7 Seconds [1994 CD],7 Seconds,1994 CD
