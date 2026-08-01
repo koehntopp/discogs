@@ -813,16 +813,36 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 		}
 		if not row.get('DR'):
 			row['DR'] = raw.get('ALBUM DYNAMIC RANGE', [''])[0] or ''
-		if not row.get('Catalog'):
-			row['Catalog'] = (
-				raw.get('CATALOGNUMBER', [''])[0]
-				or raw.get('CATALOG NUMBER', [''])[0]
-				or raw.get('CATALOG_NUMBER', [''])[0]
-				or raw.get('CATALOGNO', [''])[0]
-				or ''
-			)
-		if not row.get('Version'):
-			row['Version'] = raw.get('VERSION', [''])[0] or raw.get('SUBTITLE', [''])[0] or ''
+
+		cat_val = (
+			raw.get('CATALOGNUMBER', [''])[0]
+			or raw.get('CATALOG NUMBER', [''])[0]
+			or raw.get('CATALOG_NUMBER', [''])[0]
+			or raw.get('CATALOGNO', [''])[0]
+			or ''
+		)
+		mb_val = (
+			raw.get('MUSICBRAINZ_ALBUMID', [''])[0]
+			or raw.get('MUSICBRAINZ ALBUM ID', [''])[0]
+			or raw.get('MUSICBRAINZ_RELEASEGROUPID', [''])[0]
+			or raw.get('MUSICBRAINZ RELEASE GROUP ID', [''])[0]
+			or ''
+		)
+		discogs_val = raw.get('DISCOGS_RELEASE_ID', [''])[0] or ''
+		edition_val = raw.get('ALBUM_EDITION', [''])[0] or ''
+		format_val = raw.get('ALBUM_FORMAT', [''])[0] or raw.get('SUBTITLE', [''])[0] or ''
+		version_val = raw.get('VERSION', [''])[0] or format_val
+
+		row['Catalog Number'] = cat_val
+		row['Catalog'] = cat_val
+		row['MusicBrainz Release Id'] = mb_val
+		row['MusicBrainz'] = mb_val
+		row['Discogs Release ID'] = discogs_val
+		row['Discogs'] = discogs_val
+		row['Edition'] = edition_val
+		row['Format'] = format_val
+		row['Version'] = version_val
+
 		artist_override = raw.get('ALBUM_ARTIST_OVERRIDE', [''])[0]
 		if artist_override:
 			row['Album Artist'] = artist_override
@@ -937,9 +957,10 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 			old_dirs = (
 				{str(e) for e in Path(artist_dir).iterdir() if e.is_dir()}
 				if Path(artist_dir).is_dir()
-				else set()
+				else {artist_dir}
 			)
-			_cache_update(rows, new_dirs | old_dirs)
+			_cache_update(rows, new_dirs | old_dirs | {artist_dir, new_artist_dir})
+			_cache_invalidate()
 			_refresh_done['pending'] = True
 		_clear_proc()
 
