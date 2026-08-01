@@ -468,9 +468,18 @@ def createMP3() -> None:
 							'2',
 							mp3filename,
 						]
-						ret = subprocess.run(flac2mp3, check=False)
+						ret = subprocess.run(flac2mp3, capture_output=True, text=True, check=False)
 						if ret.returncode == 0:
 							album_converted_count += 1
+						else:
+							err_msg = (
+								ret.stderr.strip() if ret.stderr else f'exit code {ret.returncode}'
+							)
+							display_album = salbumtitle or os.path.basename(album_dir)
+							track_name = os.path.basename(flacfilename)
+							logger.error(
+								f'MP3 transcoding failed for track {track_name} in album {display_album}: {err_msg}'
+							)
 				except Exception as e:  # noqa: BLE001
 					logger.error(f'Error creating MP3 {flacfilename}: {e}')
 					continue
