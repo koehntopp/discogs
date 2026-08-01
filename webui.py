@@ -85,6 +85,41 @@ def _config_dir() -> Path:
 	return p
 
 
+def _ensure_site_favicons() -> None:
+	"""Fetch and cache site favicons (discogs, musicbrainz, albumartexchange) into SCRIPTS_DIR / 'favicon'."""
+	favicon_dir = SCRIPTS_DIR / 'favicon'
+	favicon_dir.mkdir(parents=True, exist_ok=True)
+
+	import requests as _req
+
+	site_favicons = {
+		'discogs.png': ['https://www.discogs.com/favicon.ico', 'https://discogs.com/favicon.ico'],
+		'musicbrainz.png': [
+			'https://musicbrainz.org/static/images/favicons/favicon-32x32.png',
+			'https://musicbrainz.org/favicon.ico',
+		],
+		'albumartexchange.png': [
+			'https://www.albumartexchange.com/favicon.ico',
+			'https://albumartexchange.com/favicon.ico',
+		],
+	}
+
+	for filename, urls in site_favicons.items():
+		dest = favicon_dir / filename
+		if dest.exists() and dest.stat().st_size > 0:
+			continue
+		for url in urls:
+			try:
+				r = _req.get(url, timeout=5, headers={'User-Agent': 'Mozilla/5.0'})
+				if r.status_code == 200 and len(r.content) > 0:
+					dest.write_bytes(r.content)
+					logger.info(f'Cached site favicon {filename} from {url}')
+					break
+			except Exception as e:  # noqa: BLE001
+				logger.warning(f'Could not fetch favicon {filename} from {url}: {e}')
+
+
+_ensure_site_favicons()
 app = FastAPI()
 app.mount('/favicon', StaticFiles(directory=str(SCRIPTS_DIR / 'favicon')), name='favicon')
 
