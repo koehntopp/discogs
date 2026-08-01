@@ -1,4 +1,4 @@
-# ADR 0005: Library Organization, MP3 Mirror Sync, and Comparison Architecture
+# ADR 0005: Library Organization, MP3 Mirror Sync, and Pipeline Orchestration Architecture
 
 - **Status**: Accepted
 - **Date**: 2026-08-01 (Updated)
@@ -9,13 +9,14 @@
 The Discogs Music Library Manager includes core tools for managing, organizing, and auditing music collections across local and network storage volumes:
 1. **Library & File Organization (`bliss.py`)**: Reorganizes FLAC files into canonical directory structures and track filename patterns.
 2. **MP3 Mirror Sync (`bliss.py --mp3`)**: Transcodes FLAC tracks under `flacroot` to a mirrored MP3 tree under `mp3root` using `ffmpeg`.
-3. **Library Audit & Comparison (`compare_libraries.py`)**: Audits a reference/backup FLAC library against a target library to identify exact matches, renamed/moved directories, missing releases, and track count mismatches.
+3. **Pipeline Orchestration (`nzbfix.py`)**: Post-download enrichment pipeline for new album ingest.
+4. **Library Audit & Comparison (`compare_libraries.py`)**: Audits a reference/backup FLAC library against a target library to identify exact matches, renamed/moved directories, missing releases, and track count mismatches.
 
 ---
 
 ## Decision
 
-We establish the following architectural rules for library organization, MP3 mirror transcoding, and library comparison:
+We establish the following architectural rules for library organization, MP3 mirror transcoding, pipeline orchestration, and library comparison:
 
 ### 1. `bliss.py` File and Directory Organization Contract
 * **Canonical Destination Path**:
@@ -45,7 +46,19 @@ We establish the following architectural rules for library organization, MP3 mir
   * `--mp3`: Syncs MP3 mirror tree under `mp3root`.
   * Default (`bliss.py` with no flags): Quick scan of root-level files inside `flacroot`.
 
-### 2. MP3 Mirror Sync (`bliss.py --mp3`)
+### 2. Post-Download Pipeline Orchestration (`nzbfix.py`)
+* **Sequential 6-Step Processing Order**:
+  When `nzbfix.py <directory>` is executed (via CLI or Web UI reprocess button), it MUST execute the following 6 stages sequentially:
+  1. **`dot_clean`**: Strips macOS `._*` resource fork sidecar files.
+  2. **`calculate_dr.py`**: Computes track and album Dynamic Range scores (`DYNAMIC_RANGE`, `ALBUM_DR`).
+  3. **`rsgain`**: Computes EBU R 128 ReplayGain tags (`REPLAYGAIN_TRACK_GAIN`, `REPLAYGAIN_ALBUM_GAIN`, etc.) using a temporary `rsgain.ini` preset (`TagMode=i`).
+  4. **`calculate_fp.py`**: Computes AcoustID acoustic fingerprints (`ACOUSTID_FINGERPRINT`).
+  5. **`fixtags.py`**: Queries Discogs API, enriches metadata, and resizes embedded cover art (`cover_max_size`).
+  6. **`update_lyrics.py`**: Queries `lrclib.net` for synced/unsynced lyrics, embeds `LYRICS` tags, and exports sidecar files.
+* **Signal Handling & Temporary Cleanup**:
+  * Installs a `signal.SIGINT` (Ctrl+C) handler to terminate active `rsgain` child processes and unlink temporary `rsgain.ini` preset files on interrupt.
+
+### 3. MP3 Mirror Sync (`bliss.py --mp3`)
 * **Relative Path Resolution**: MP3 target paths MUST be resolved using `os.path.relpath(flacfilename, flacroot)` under `mp3root`.
 * **Explicit Parent Directory Creation**: `mp3_path.parent.mkdir(parents=True, exist_ok=True)` MUST be called immediately before invoking `ffmpeg`, guaranteeing output directories exist.
 * **Captured `ffmpeg` Stderr & Explicit Error Logging**:
@@ -55,7 +68,7 @@ We establish the following architectural rules for library organization, MP3 mir
   * Renders a Rich progress bar (`Progress(..., disable=not _is_tty)`) in TTY mode.
   * Emits `success(f'Transcoded {count} MP3 track(s) for album {album_name}')` upon completing each album.
 
-### 3. Multi-Copy Library Comparison (`compare_libraries.py`)
+### 4. Multi-Copy Library Comparison (`compare_libraries.py`)
 * **List-Based Key Mapping**:
   * `compare_libraries.py` MUST use `ref_by_key = defaultdict(list)` to store albums by key.
   * Multiple folders or reissues sharing the same `DISCOGS_RELEASE_ID` (or box sets) MUST NOT collapse or overwrite each other in dictionary comprehension.
@@ -69,6 +82,7 @@ We establish the following architectural rules for library organization, MP3 mir
 
 ### Positive
 * **Deterministic Disk Layout**: `bliss.py` guarantees uniform `<Artist>/<Album_Version>/<disc_zz>_<track_zz>_<Title>.flac` path structures across the entire library.
+* **Predictable 6-Step Ingest**: Every newly ingested album undergoes identical, deterministic enrichment (`dot_clean` $\rightarrow$ `DR` $\rightarrow$ `ReplayGain` $\rightarrow$ `AcoustID` $\rightarrow$ `Discogs` $\rightarrow$ `Lyrics`).
 * **HFS+ Unicode Safety**: NFD normalization prevents case-folding loops on macOS/HFS+ filesystems.
 * **100% Reliability for MP3 Mirror Sync**: Destination directories exist before `ffmpeg` runs.
 * **Accurate Multi-Copy Library Audits**: Accounts for box sets and duplicate pressings without key collisions.
