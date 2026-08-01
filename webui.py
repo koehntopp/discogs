@@ -329,7 +329,7 @@ def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
 	album_title = row.get('Album', '')
 	btn = (
 		(
-			f'<button class="btn-sm btn-reprocess" hx-post="/api/reprocess?directory={escape(album_dir)}" '
+			f'<button class="reprocess-btn" hx-post="/api/reprocess?directory={escape(album_dir)}" '
 			f'hx-target="#run-pipeline-logs" hx-swap="beforeend" '
 			f"hx-on::before-request=\"var el=document.getElementById('run-pipeline-logs'); if(el) el.scrollIntoView({{behavior:'smooth',block:'end'}});\" "
 			f'title="Run full enrichment pipeline on this album"><i class="fa-solid fa-arrows-rotate"></i></button>'
@@ -580,15 +580,15 @@ INDEX_HTML = """<!DOCTYPE html>
     td.icon-link { width: 20px; padding: 2px 4px; text-align: center; }
     td.icon-link img { display: block; margin: auto; opacity: 0.8; }
     td.icon-link a:hover img { opacity: 1; }
-    .reprocess-btn {
+    .reprocess-btn, .btn-reprocess {
       display: inline-flex; align-items: center; justify-content: center;
       width: 20px; height: 20px; border-radius: 50%;
       border: 1px solid #ccc; background: #f5f5f5;
       cursor: pointer; font-size: 10px; color: #666; padding: 0;
       line-height: 1;
     }
-    .reprocess-btn:hover { background: #e0e8ff; border-color: #99b; color: #339; }
-    .reprocess-btn.htmx-request { animation: spin 0.8s linear infinite; border-color: #99b; color: #339; }
+    .reprocess-btn:hover, .btn-reprocess:hover { background: #e0e8ff; border-color: #99b; color: #339; }
+    .reprocess-btn.htmx-request, .btn-reprocess.htmx-request { animation: spin 0.8s linear infinite; border-color: #99b; color: #339; }
     @keyframes spin { to { transform: rotate(360deg); } }
     #count { font-size: 12px; color: #666; margin-left: auto; }
     .about { padding: 24px; max-width: 640px; }
