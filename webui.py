@@ -316,24 +316,12 @@ def _cover_art_cell(row: dict) -> str:
 			{'fltr': 'ALL', 'sort': 'TITLE', 'q': f'{artist} {title}'.strip()}
 		)
 		aae_link = (
-			f'<a href="{url}" target="_blank" rel="noopener" title="Search Album Art Exchange" style="margin-left:4px;">'
-			f'<img src="/favicon/albumartexchange.png" width="12" height="12" style="vertical-align:middle;opacity:0.7;">'
+			f'<a href="{url}" target="_blank" rel="noopener" title="Search Album Art Exchange" style="margin-right:4px;">'
+			f'<img src="/favicon/albumartexchange.png" width="12" height="12" style="vertical-align:middle;opacity:0.8;">'
 			f'</a>'
 		)
 
-	album_dir = row.get('_DIRECTORY_PATH', '')
-	if not album_dir:
-		return f'{escape(cover)}{aae_link}'
-
-	from urllib.parse import quote
-
-	encoded_dir = quote(album_dir)
-	img_url = f'/api/cover-art?album_dir={encoded_dir}'
-	return (
-		f'<a href="{img_url}" target="_blank" rel="noopener" class="cover-art-link">'
-		f'<img src="{img_url}" class="cover-art-thumb" alt="{escape(cover)}" title="{escape(cover)} (click to view full image)" />'
-		f'</a>{aae_link}'
-	)
+	return f'{aae_link}{escape(cover)}'
 
 
 def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
