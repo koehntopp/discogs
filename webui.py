@@ -222,13 +222,13 @@ def _cache_update(new_rows: list[dict], drop_dirs: set[str]) -> None:
 COLUMNS = [
 	'Album Artist',
 	'Album',
+	'Format',
 	'Edition',
 	'Release Date',
 	'Original Date',
 	'DR',
 	'Catalog',
 	'Cover Art',
-	'Format',
 ]
 
 
@@ -302,34 +302,28 @@ def _artist_id(artist: str) -> str:
 
 
 def _cover_art_cell(row: dict) -> str:
-	dims = row.get('Cover Art', '')
+	cover = row.get('Cover Art', '')
 	artist = row.get('Album Artist', '')
 	title = row.get('Original Title', '') or row.get('Album', '')
-	if not dims:
-		return ''
+	if not cover:
+		return '<span class="no-art">-</span>'
+
+	aae_link = ''
 	if artist or title:
 		from urllib.parse import urlencode
 
 		url = 'https://www.albumartexchange.com/covers?' + urlencode(
 			{'fltr': 'ALL', 'sort': 'TITLE', 'q': f'{artist} {title}'.strip()}
 		)
-		icon = (
+		aae_link = (
 			f'<a href="{url}" target="_blank" rel="noopener" title="Search Album Art Exchange" style="margin-left:4px;">'
 			f'<img src="/favicon/albumartexchange.png" width="12" height="12" style="vertical-align:middle;opacity:0.7;">'
 			f'</a>'
 		)
-		return f'{escape(dims)}{icon}'
-	return escape(dims)
-
-
-def _cover_art_cell(row: dict) -> str:
-	cover = row.get('Cover Art', '')
-	if not cover:
-		return '<span class="no-art">-</span>'
 
 	album_dir = row.get('_DIRECTORY_PATH', '')
 	if not album_dir:
-		return escape(cover)
+		return f'{escape(cover)}{aae_link}'
 
 	from urllib.parse import quote
 
@@ -338,7 +332,7 @@ def _cover_art_cell(row: dict) -> str:
 	return (
 		f'<a href="{img_url}" target="_blank" rel="noopener" class="cover-art-link">'
 		f'<img src="{img_url}" class="cover-art-thumb" alt="{escape(cover)}" title="{escape(cover)} (click to view full image)" />'
-		f'</a>'
+		f'</a>{aae_link}'
 	)
 
 
@@ -363,9 +357,17 @@ def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
 		or row.get('DISCOGS_RELEASE_ID', '')
 	).strip()
 	mb_id = (
-		row.get('MusicBrainz', '')
+		row.get('MusicBrainz Release Id', '')
 		or row.get('MusicBrainz Release ID', '')
+		or row.get('MusicBrainz Album ID', '')
+		or row.get('MusicBrainz', '')
 		or row.get('MUSICBRAINZ_ALBUMID', '')
+	).strip()
+	cat_val = (
+		row.get('Catalog Number', '')
+		or row.get('Catalog', '')
+		or row.get('CATALOGNUMBER', '')
+		or row.get('CATALOG NUMBER', '')
 	).strip()
 
 	discogs_cell = _icon_cell(
@@ -405,7 +407,7 @@ def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
 		f'<td>{escape(row.get("Original Date", ""))}</td>'
 		f'<td class="dr {dr_class(row.get("DR", ""))}">{dr}{dr_btn}</td>'
 		f'{discogs_cell}{mb_cell}'
-		f'<td>{escape(row.get("Catalog", ""))}</td>'
+		f'<td>{escape(cat_val)}</td>'
 		f'<td class="cover-art">{_cover_art_cell(row)}</td>'
 		f'</tr>'
 	)
