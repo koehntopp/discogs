@@ -287,20 +287,52 @@ def _cover_art_cell(row: dict) -> str:
 	return escape(dims)
 
 
-def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
-	dr = escape(row.get('DR', ''))
-	album_title = row.get('Album', '')
-	artist_dir = escape(str(Path(row.get('Directory', '')).parent))
-	btn = (
-		f'<button class="reprocess-btn" title="Re-run fixtags + bliss for all {escape(row.get("Album Artist", ""))} albums" '
-		f'hx-get="/reprocess" hx-vals=\'{{"artist_dir":"{artist_dir}","artist_id":"{artist_id}"}}\' '
-		f'hx-target="#{artist_id}" hx-swap="outerHTML" '
-		f'onclick="document.getElementById(\'log-btn\')?.click()">'
-		f'<i class="fa-solid fa-arrows-rotate"></i>'
-		f'</button>'
+def _cover_art_cell(row: dict) -> str:
+	cover = row.get('Cover Art', '')
+	if not cover:
+		return '<span class="no-art">-</span>'
+
+	album_dir = row.get('_DIRECTORY_PATH', '')
+	if not album_dir:
+		return escape(cover)
+
+	from urllib.parse import quote
+
+	encoded_dir = quote(album_dir)
+	img_url = f'/api/cover-art?album_dir={encoded_dir}'
+	return (
+		f'<a href="{img_url}" target="_blank" rel="noopener" class="cover-art-link">'
+		f'<img src="{img_url}" class="cover-art-thumb" alt="{escape(cover)}" title="{escape(cover)} (click to view full image)" />'
+		f'</a>'
 	)
-	discogs_id = row.get('Discogs', '').strip()
-	mb_id = row.get('MusicBrainz', '').strip()
+
+
+def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
+	album_dir = row.get('_DIRECTORY_PATH', row.get('Directory', ''))
+	album_title = row.get('Album', '')
+	btn = (
+		(
+			f'<button class="btn-sm btn-reprocess" hx-post="/api/reprocess?directory={escape(album_dir)}" '
+			f'hx-target="#run-pipeline-logs" hx-swap="beforeend" '
+			f"hx-on::before-request=\"var el=document.getElementById('run-pipeline-logs'); if(el) el.scrollIntoView({{behavior:'smooth',block:'end'}});\" "
+			f'title="Run full enrichment pipeline on this album"><i class="fa-solid fa-arrows-rotate"></i></button>'
+		)
+		if album_dir
+		else ''
+	)
+	dr = escape(row.get('DR', ''))
+
+	discogs_id = (
+		row.get('Discogs', '')
+		or row.get('Discogs Release ID', '')
+		or row.get('DISCOGS_RELEASE_ID', '')
+	).strip()
+	mb_id = (
+		row.get('MusicBrainz', '')
+		or row.get('MusicBrainz Release ID', '')
+		or row.get('MUSICBRAINZ_ALBUMID', '')
+	).strip()
+
 	discogs_cell = _icon_cell(
 		f'https://www.discogs.com/release/{escape(discogs_id)}' if discogs_id else '',
 		'/favicon/discogs.png',
@@ -327,13 +359,12 @@ def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
 	)
 	fmt = escape(row.get('Format', ''))
 	ed = escape(row.get('Edition', ''))
-	if not fmt and not ed:
-		fmt = escape(row.get('Version', ''))
 	return (
 		f'<tr class="{"even" if row_index % 2 else "odd"}">'
 		f'<td class="reprocess">{btn}</td>'
 		f'<td class="artist">{escape(row.get("Album Artist", ""))}</td>'
 		f'<td class="album">{_album_link(row, album_title)}</td>'
+		f'<td class="format">{fmt}</td>'
 		f'<td class="edition">{ed}</td>'
 		f'<td>{escape(row.get("Release Date", ""))}</td>'
 		f'<td>{escape(row.get("Original Date", ""))}</td>'
@@ -341,7 +372,6 @@ def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
 		f'{discogs_cell}{mb_cell}'
 		f'<td>{escape(row.get("Catalog", ""))}</td>'
 		f'<td class="cover-art">{_cover_art_cell(row)}</td>'
-		f'<td class="format">{fmt}</td>'
 		f'</tr>'
 	)
 
@@ -758,6 +788,14 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 		}
 		if not row.get('DR'):
 			row['DR'] = raw.get('ALBUM DYNAMIC RANGE', [''])[0] or ''
+		if not row.get('Catalog'):
+			row['Catalog'] = (
+				raw.get('CATALOGNUMBER', [''])[0]
+				or raw.get('CATALOG NUMBER', [''])[0]
+				or raw.get('CATALOG_NUMBER', [''])[0]
+				or raw.get('CATALOGNO', [''])[0]
+				or ''
+			)
 		if not row.get('Version'):
 			row['Version'] = raw.get('VERSION', [''])[0] or raw.get('SUBTITLE', [''])[0] or ''
 		artist_override = raw.get('ALBUM_ARTIST_OVERRIDE', [''])[0]

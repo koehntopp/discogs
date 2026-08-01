@@ -48,7 +48,7 @@ tag names consistently:
 | `DATE` / `RELEASEDATE`  | fixtags       | album_list                       |
 | `ORIGINALDATE`          | fixtags       | album_list                       |
 | `ORIGINALRELEASEDATE`   | fixtags       | —                                |
-| `CATALOGNUMBER`         | ripping tool  | album_list                       |
+| `CATALOGNUMBER` / `CATALOG NUMBER` | Yate / ripping tool | album_list, webui |
 | `SUBTITLE`              | ripping tool  | fixtags (album description)      |
 | `DYNAMIC_RANGE`         | calculate_dr  | calculate_dr (replaces DYNAMIC RANGE) |
 | `ALBUM_DR`              | calculate_dr  | fixtags (replaces ALBUM DYNAMIC RANGE) |

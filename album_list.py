@@ -108,6 +108,14 @@ def read_album(directory: str) -> dict[str, str] | None:
 		)
 	if not album_result.get('ALBUM_DR'):
 		album_result['ALBUM_DR'] = tags.get('ALBUM DYNAMIC RANGE', [''])[0] or ''
+	if not album_result.get('CATALOGNUMBER'):
+		album_result['CATALOGNUMBER'] = (
+			tags.get('CATALOGNUMBER', [''])[0]
+			or tags.get('CATALOG NUMBER', [''])[0]
+			or tags.get('CATALOG_NUMBER', [''])[0]
+			or tags.get('CATALOGNO', [''])[0]
+			or ''
+		)
 	album_result['COVER_ART'] = cover_art_dimensions(flac_path)
 	album_result['_DIRECTORY_PATH'] = directory
 	return album_result
