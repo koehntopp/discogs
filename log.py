@@ -17,6 +17,21 @@ if _config_dir and _config_dir not in sys.path:
 SUCCESS = 25  # between INFO (20) and WARNING (30)
 logging.addLevelName(SUCCESS, 'SUCCESS')
 
+# Register success level inside structlog internal mappings
+try:
+	import structlog.stdlib
+
+	structlog.stdlib._NAME_TO_LEVEL['success'] = SUCCESS
+	structlog.stdlib._LEVEL_TO_NAME[SUCCESS] = 'success'
+except AttributeError:
+	pass
+
+
+class CustomBoundLogger(structlog.stdlib.BoundLogger):
+	def success(self, event=None, *args, **kw):
+		return self.log(SUCCESS, event, *args, **kw)
+
+
 _shared_processors = [
 	structlog.stdlib.add_log_level,
 	structlog.processors.TimeStamper(fmt='%H:%M:%S'),
@@ -26,9 +41,10 @@ _shared_processors = [
 structlog.configure(
 	processors=_shared_processors + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
 	logger_factory=structlog.stdlib.LoggerFactory(),
-	wrapper_class=structlog.stdlib.BoundLogger,
+	wrapper_class=CustomBoundLogger,
 	cache_logger_on_first_use=True,
 )
+
 
 _is_tty = sys.stderr.isatty()
 

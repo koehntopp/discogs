@@ -74,7 +74,7 @@ def calculate_dr(albumpath: str) -> None:
 
 				if DR != dr_song:
 					title_str = (audio.tags.get('TITLE') or ['Unknown'])[0]
-					logger.info(f'DR {str(dr_song).zfill(2)} → {str(DR).zfill(2)}  {title_str}')
+					logger.success(f'DR {str(dr_song).zfill(2)} → {str(DR).zfill(2)}  {title_str}')
 					audio['DYNAMIC_RANGE'] = [str(DR).zfill(2)]
 					audio.save()
 					try:
@@ -124,7 +124,7 @@ def calculate_dr(albumpath: str) -> None:
 						logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
 				except Exception as e:  # noqa: BLE001
 					logger.warning(f'Could not update ALBUM_DR for {fullfilename}: {e}')
-			logger.info(f'Album DR updated to {dr_album} for {last_album_name}')
+			logger.success(f'Album DR updated to {dr_album} for {last_album_name}')
 		else:
 			logger.info(f'Album DR {dr_album} unchanged for {last_album_name}')
 	else:
