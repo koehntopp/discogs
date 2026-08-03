@@ -37,7 +37,7 @@ def calculate_dr(albumpath: str) -> None:
 	Args:
 	    albumpath: Absolute path to the album directory.
 	"""
-	# assumption: folder only contains a single album
+	logger.info(f'Starting Dynamic Range calculation in {albumpath}')
 	dr_sum = 0
 	dr_tracks = 0
 	tracks = 0
