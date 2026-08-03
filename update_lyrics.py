@@ -63,7 +63,7 @@ def flactag(song: FLAC | dict, tag: str) -> str:
 	if not isinstance(tags, dict):
 		try:
 			tags = dict(tags)
-		except Exception:
+		except (TypeError, ValueError):
 			tags = {}
 	for k in (tag, tag.upper(), tag.lower()):
 		if tags.get(k):
@@ -171,7 +171,7 @@ def _fetch_one(
 					logger.warning(
 						f"Server error ({response.status_code}) fetching lyrics for '{title}', retries exhausted"
 					)
-		except Exception as e:
+		except requests.RequestException as e:
 			if attempt < max_retries:
 				sleep_time = backoff * (2**attempt)
 				time.sleep(sleep_time)
@@ -228,7 +228,7 @@ def _collect_tracks(flacdir: str) -> list[tuple[str, str]]:
 			if '[' in album_name:
 				album_name = album_name.split('[')[0].strip()
 			int(discogs_id_str)
-		except Exception:  # noqa: BLE001
+		except (ValueError, TypeError):
 			continue
 		for f in flacs:
 			tracks.append((os.path.join(root, f), album_name))
@@ -300,7 +300,7 @@ def main() -> None:
 								discogs_id,
 								track,
 							) = future.result()
-						except Exception as e:
+						except Exception as e:  # noqa: BLE001
 							logger.error(f'Fetch error: {e}')
 							done += 1
 							progress.update(task_id, advance=1, **stats)
@@ -325,7 +325,7 @@ def main() -> None:
 									t.save()
 									try:
 										os.utime(flac_path, None)
-									except Exception as e:
+									except OSError as e:
 										logger.warning(
 											f'Could not touch file mtime for {flac_path}: {e}'
 										)
@@ -337,7 +337,7 @@ def main() -> None:
 									t.save()
 									try:
 										os.utime(flac_path, None)
-									except Exception as e:
+									except OSError as e:
 										logger.warning(
 											f'Could not touch file mtime for {flac_path}: {e}'
 										)
