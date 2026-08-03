@@ -342,10 +342,10 @@ def main() -> None:
 											f'Could not touch file mtime for {flac_path}: {e}'
 										)
 									if action == 'header':
-										logger.info(f'LRC headers updated: {title} ({artist})')
+										logger.success(f'LRC headers updated: {title} ({artist})')
 									else:
 										kind = 'LRC' if lyric_type == 'lrc' else 'TXT'
-										logger.info(f'{kind} lyrics added: {title} ({artist})')
+										logger.success(f'{kind} lyrics added: {title} ({artist})')
 							except OSError as e:
 								logger.error(f'Could not save lyrics for {flac_path}: {e}')
 
