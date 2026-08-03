@@ -56,6 +56,7 @@ def calculate_dr(albumpath: str) -> None:
 		tracks = 0
 		flac_files: list[str] = []
 		last_album_name = 'Unknown'
+		dra_dirty = False
 
 		# Sort tracks by filename to process sequentially
 		for p in sorted(flac_paths):
@@ -64,7 +65,6 @@ def calculate_dr(albumpath: str) -> None:
 			tracks += 1
 			dr_song = 0
 			DR = 0
-			dra_dirty = False
 
 			try:
 				audio = FLAC(fullfilename)
@@ -116,18 +116,29 @@ def calculate_dr(albumpath: str) -> None:
 
 		if dr_tracks > 0:
 			dr_album = str(round(dr_sum / dr_tracks)).zfill(2)
-			dr_album_old = ''
 
-			if flac_files:
-				try:
-					f0 = FLAC(flac_files[0])
-					if f0.tags:
-						val = f0.tags.get('ALBUM_DR') or f0.tags.get('ALBUM DYNAMIC RANGE') or ['']
-						dr_album_old = val[0] if val else ''
-				except Exception:  # noqa: BLE001
-					dr_album_old = ''
+			# Check if any track lacks the correct ALBUM_DR tag
+			needs_update = dra_dirty
+			reason = 'track DR recalculated'
 
-			if dra_dirty or dr_album != dr_album_old:
+			if not needs_update:
+				for fullfilename in flac_files:
+					try:
+						audio = FLAC(fullfilename)
+						val = (
+							audio.tags.get('ALBUM_DR')
+							or audio.tags.get('ALBUM DYNAMIC RANGE')
+							or ['']
+						)
+						dr_old = val[0] if val else ''
+						if dr_old != dr_album:
+							needs_update = True
+							reason = f"album DR tag missing or outdated (value in files is '{dr_old or 'none'}', calculated '{dr_album}')"
+							break
+					except Exception:  # noqa: BLE001, S110
+						pass
+
+			if needs_update:
 				for fullfilename in flac_files:
 					try:
 						audio = FLAC(fullfilename)
@@ -141,7 +152,7 @@ def calculate_dr(albumpath: str) -> None:
 							logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
 					except Exception as e:  # noqa: BLE001
 						logger.warning(f'Could not update ALBUM_DR for {fullfilename}: {e}')
-				logger.success(f'Album DR updated to {dr_album} for {last_album_name}')
+				logger.success(f'Album DR updated to {dr_album} ({reason}) for {last_album_name}')
 			else:
 				logger.info(f'Album DR {dr_album} unchanged for {last_album_name}')
 		else:
