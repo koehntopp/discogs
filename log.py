@@ -17,12 +17,22 @@ if _config_dir and _config_dir not in sys.path:
 SUCCESS = 25  # between INFO (20) and WARNING (30)
 logging.addLevelName(SUCCESS, 'SUCCESS')
 
+
+# Add success method to standard logging.Logger so stdlib wrappers can delegate success() calls
+def _logging_success(self, msg, *args, **kwargs):
+	if self.isEnabledFor(SUCCESS):
+		self._log(SUCCESS, msg, args, **kwargs)
+
+
+logging.Logger.success = _logging_success
+
+
 # Register success level inside structlog internal mappings
 try:
 	import structlog.stdlib
 
-	structlog.stdlib._NAME_TO_LEVEL['success'] = SUCCESS
-	structlog.stdlib._LEVEL_TO_NAME[SUCCESS] = 'success'
+	structlog.stdlib.NAME_TO_LEVEL['success'] = SUCCESS
+	structlog.stdlib.LEVEL_TO_NAME[SUCCESS] = 'success'
 except AttributeError:
 	pass
 
