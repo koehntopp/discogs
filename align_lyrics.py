@@ -312,7 +312,16 @@ def align(
 				best_score = score
 				best_pos = i
 
-		suggested_ts = words[best_pos].start if best_score > 0 else None
+		# Three-level fallback for suggested timestamp:
+		#  1. Good text match → use Whisper word start time
+		#  2. No text match but original_ts exists → echo original (conf stays 0.00)
+		#  3. No text match, plain TXT input → leave as None
+		if best_score > 0:
+			suggested_ts = words[best_pos].start
+		elif lyric_line.original_ts is not None:
+			suggested_ts = lyric_line.original_ts
+		else:
+			suggested_ts = None
 		# Advance greedy cursor past this match so subsequent lines search forward
 		cursor = max(cursor, best_pos + max(n, 1))
 
@@ -366,7 +375,20 @@ def _render_comparison_table(aligned: list[AlignedLine]) -> Table:
 		orig_str = (
 			_secs_to_lrc(a.lyric.original_ts) if a.lyric.original_ts is not None else '(none)'
 		)
-		sugg_str = _secs_to_lrc(a.suggested_ts) if a.suggested_ts is not None else '(none)'
+
+		# Detect echo case: timestamp was not Whisper-derived, just copied from original
+		is_echo = (
+			a.confidence == 0.0
+			and a.suggested_ts is not None
+			and a.lyric.original_ts is not None
+			and a.suggested_ts == a.lyric.original_ts
+		)
+		if is_echo:
+			sugg_str = f'[dim]{_secs_to_lrc(a.suggested_ts)} (echo)[/dim]'
+		elif a.suggested_ts is not None:
+			sugg_str = _secs_to_lrc(a.suggested_ts)
+		else:
+			sugg_str = '(none)'
 
 		if a.lyric.original_ts is not None and a.suggested_ts is not None:
 			delta = a.suggested_ts - a.lyric.original_ts

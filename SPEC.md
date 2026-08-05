@@ -507,6 +507,7 @@ uv run align_lyrics.py [FOLDER] [OPTIONS]
 6. **Alignment** — two strategies depending on input format:
    - *LRC (time-anchor)*: for each line, searches only Whisper words whose start time falls within `±anchor_slack` seconds of the original timestamp. Prevents the cursor from jumping to a later repetition of a chorus phrase. Falls back to greedy if the anchor window is empty.
    - *Plain TXT (greedy)*: searches a forward look-ahead of `max(n×3, 20)` words from the cursor position; cursor advances past each match.
+   - **Timestamp fallback**: if text similarity is 0 but `original_ts` is present (LRC input), the original timestamp is echoed into `suggested_ts` unchanged (`confidence = 0.00`). These lines are marked `(echo)` in the comparison table so they are visually distinct from Whisper-derived timestamps. Plain TXT lines with no match remain `(none)`.
 7. Renders a Rich comparison table: original timestamp | suggested timestamp | Δ seconds | confidence score | lyric text.
 8. Displays a full suggested LRC preview (with `[ar:]`/`[ti:]`/`[al:]` headers from FLAC tags) in a syntax-highlighted panel.
 9. With `--write`, saves the output as `<track>.lrc.suggested` alongside the FLAC.
