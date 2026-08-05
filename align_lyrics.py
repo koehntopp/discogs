@@ -155,10 +155,11 @@ def parse_lyrics(raw: str) -> list[LyricLine]:
 
 def sanitize_out_of_order_anchors(lines: list[LyricLine]) -> tuple[list[LyricLine], bool]:
 	"""
-	Check if original timestamps in lines are monotonically non-decreasing.
-	If out-of-order timestamps are detected (e.g. t_k < t_{k-1} - 2.0s),
-	nullify the out-of-order original_ts anchors so alignment relies on forward
-	sequence alignment instead of corrupted time anchors.
+	Check if original timestamps in lines are valid and monotonic.
+	If out-of-order timestamps (t_k < t_{k-1} - 2.0s) or duplicate/flat timestamps
+	(>= 3 lines sharing the exact same timestamp) are detected, nullify the corrupted
+	original_ts anchors so alignment relies on forward sequence alignment instead of
+	corrupted time anchors.
 
 	Returns (sanitized_lines, had_corruption_flag).
 	"""
@@ -166,7 +167,12 @@ def sanitize_out_of_order_anchors(lines: list[LyricLine]) -> tuple[list[LyricLin
 	if len(ts_list) <= 1:
 		return lines, False
 
-	# Check for inversions where a timestamp jumps backward by > 2 seconds
+	# Count occurrences of each timestamp
+	ts_counts: dict[float, int] = {}
+	for t in ts_list:
+		ts_counts[t] = ts_counts.get(t, 0) + 1
+
+	# Check for inversions or flat duplicate blocks (>= 3 identical timestamps)
 	inversions = 0
 	last_t = ts_list[0]
 	for t in ts_list[1:]:
@@ -175,11 +181,19 @@ def sanitize_out_of_order_anchors(lines: list[LyricLine]) -> tuple[list[LyricLin
 		else:
 			last_t = t
 
-	if inversions == 0:
+	has_flat_duplicates = any(count >= 3 for count in ts_counts.values())
+
+	if inversions == 0 and not has_flat_duplicates:
 		return lines, False
 
-	# Tag has corrupted/out-of-order timestamps — nullify original_ts anchors
-	sanitized = [LyricLine(text=ll.text, original_ts=None) for ll in lines]
+	# Tag has corrupted/flat timestamps — nullify original_ts anchors for affected lines
+	sanitized = []
+	for ll in lines:
+		if ll.original_ts is not None and (inversions > 0 or ts_counts.get(ll.original_ts, 0) >= 3):
+			sanitized.append(LyricLine(text=ll.text, original_ts=None))
+		else:
+			sanitized.append(ll)
+
 	return sanitized, True
 
 

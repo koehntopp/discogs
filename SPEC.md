@@ -504,7 +504,8 @@ uv run align_lyrics.py [TARGET] [OPTIONS]
 1. Scans `FOLDER` for `*.flac` files (optionally recursive).
 2. For each file, reads the first populated lyrics tag in priority order: `LYRICS` → `UNSYNCEDLYRICS` → `COMMENT`.
 3. Detects whether the lyrics are LRC (has `[MM:SS.xx]` timestamps) or plain TXT and parses accordingly; LRC header lines (`[ar:]`, `[ti:]`, etc.) are ignored.
-4. **Delimiter splitting** (unless `--no-split`): lines containing ` / ` or ` | ` are expanded into individual sub-lines; un-timestamped lines that follow a timestamped one are already separate and aligned individually.
+4. **Delimiter splitting & Anchor Sanitization** (unless `--no-split`): lines containing ` / ` or ` | ` are expanded into individual sub-lines. Input LRC tags are validated for monotonicity and flat duplicate blocks ($\ge 3$ identical timestamps); corrupted or duplicate anchors are sanitized to ensure clean sequential alignment against speech audio.
+
 5. Transcribes the FLAC with Whisper (`word_timestamps=True`) to obtain a flat word list with start/end timestamps and segment groupings.
 6. **Whisper-segment splitting** (unless `--no-segment-split`): after alignment, any lyric line whose matched word window spans multiple Whisper segments (natural pause/breath boundaries) is split into individually-timestamped sub-lines. A minimum of 3 words per segment is required to avoid splitting on short filler segments. If the text cannot be cleanly partitioned (fragment similarity < 0.3), the line is kept intact.
 7. **Alignment & Low-Confidence Fallback** — two strategies depending on input format:
