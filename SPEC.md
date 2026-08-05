@@ -482,12 +482,13 @@ the transcription to suggest improved `[MM:SS.xx]` timestamps.
 **Usage:**
 
 ```bash
-uv run align_lyrics.py [FOLDER] [OPTIONS]
+uv run align_lyrics.py [TARGET] [OPTIONS]
 ```
 
 | Argument / Option | Default | Description |
 |---|---|---|
-| `FOLDER` | `.` | Directory to scan for FLAC files. |
+| `TARGET` | `.` | Directory or single `.flac` file to process. |
+
 | `--model`, `-m` | `base` | Whisper model size: `tiny` / `base` / `small` / `medium` / `large` / `turbo`. |
 | `--device`, `-d` | `auto` | Torch device: `auto` (cuda → mps → cpu), `cpu`, `cuda`, `mps`. |
 | `--write`, `-w` | off | Overwrite the `LYRICS` tag inside each FLAC file with the suggested LRC. Use `--dry-run` to preview first. |

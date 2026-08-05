@@ -744,7 +744,9 @@ def process_file(
 
 @click.command()
 @click.argument(
-	'folder', default='.', type=click.Path(exists=True, file_okay=False, path_type=Path)
+	'target',
+	default='.',
+	type=click.Path(exists=True, file_okay=True, dir_okay=True, path_type=Path),
 )
 @click.option(
 	'--model',
@@ -808,7 +810,7 @@ def process_file(
 	),
 )
 def main(
-	folder: Path,
+	target: Path,
 	model: str,
 	device: str,
 	write: bool,
@@ -855,7 +857,7 @@ def main(
 			f'[bold cyan]align_lyrics[/bold cyan]  —  Whisper LRC timestamp alignment\n'
 			f'Model: [magenta]{model}[/magenta]   '
 			f'Device: [magenta]{_device}[/magenta]   '
-			f'Folder: [dim]{folder}[/dim]',
+			f'Target: [dim]{target}[/dim]',
 			title='[bold]Startup[/bold]',
 		)
 	)
@@ -866,8 +868,15 @@ def main(
 	console.print(f'[green]✓[/green] Model [bold]{model}[/bold] ready on {_device}.')
 
 	# ── Discover FLAC files ────────────────────────────────────────────────
-	pattern = '**/*.flac' if recursive else '*.flac'
-	flac_files = sorted(folder.glob(pattern))
+	if target.is_file():
+		if target.suffix.lower() == '.flac':
+			flac_files = [target]
+		else:
+			console.print(f'[red]Target file {target.name} is not a .flac file.[/red]')
+			sys.exit(1)
+	else:
+		pattern = '**/*.flac' if recursive else '*.flac'
+		flac_files = sorted(target.glob(pattern))
 
 	if not flac_files:
 		console.print('[yellow]No FLAC files found.[/yellow]')
