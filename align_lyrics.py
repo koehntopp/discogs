@@ -77,6 +77,7 @@ class WhisperWord:
 	word: str
 	start: float
 	end: float
+	segment_id: int = 0  # index of the Whisper segment this word belongs to
 	norm: str = field(init=False)
 
 	def __post_init__(self) -> None:
@@ -230,11 +231,13 @@ def transcribe(
 			model = model.to(orig_device)
 
 	words: list[WhisperWord] = []
-	for segment in result.get('segments', []):
+	for seg_idx, segment in enumerate(result.get('segments', [])):
 		for w in segment.get('words', []):
 			word_text = w.get('word', '').strip()
 			if word_text:
-				words.append(WhisperWord(word=word_text, start=w['start'], end=w['end']))
+				words.append(
+					WhisperWord(word=word_text, start=w['start'], end=w['end'], segment_id=seg_idx)
+				)
 
 	return words
 
@@ -257,11 +260,117 @@ def _window_similarity(
 	return sm.ratio()
 
 
+def _split_by_segments(
+	lyric_line: LyricLine,
+	window_words: list[WhisperWord],
+	*,
+	min_segment_words: int = 3,
+	fallback_confidence: float = 0.3,
+) -> list[tuple[float, str]] | None:
+	"""
+	Attempt to split a lyric line into sub-lines using Whisper segment boundaries.
+
+	Returns a list of (timestamp, lyric_fragment) tuples when a meaningful split
+	is found, or None if the line should remain unsplit.
+
+	Algorithm:
+	  1. Group window_words by segment_id into N ordered groups.
+	  2. Merge any group with fewer than min_segment_words into its neighbour.
+	  3. Tokenise the lyric text and greedily assign lyric tokens to each segment
+	     group using SequenceMatcher to find the best token boundary.
+	  4. If any fragment has similarity below fallback_confidence, return None.
+	  5. Reconstruct each fragment from the *original* lyric text (preserving
+	     capitalisation and punctuation) by rejoining the assigned words.
+	"""
+	# ── 1. Group words by segment ────────────────────────────────────────────
+	from itertools import groupby
+
+	groups: list[list[WhisperWord]] = [
+		list(g) for _, g in groupby(window_words, key=lambda w: w.segment_id)
+	]
+
+	if len(groups) <= 1:
+		return None  # single segment — nothing to split
+
+	# ── 2. Merge tiny groups ─────────────────────────────────────────────────
+	merged: list[list[WhisperWord]] = []
+	for group in groups:
+		if merged and len(group) < min_segment_words:
+			# Too small — absorb into the previous group
+			merged[-1].extend(group)
+		else:
+			merged.append(list(group))
+
+	if len(merged) <= 1:
+		return None  # merging collapsed everything
+
+	# ── 3. Assign lyric tokens to segments ──────────────────────────────────
+	lyric_words_orig = lyric_line.text.split()  # preserve original capitalisation
+	lyric_tokens = _normalize_words(lyric_line.text)
+	n_tokens = len(lyric_tokens)
+
+	fragments: list[tuple[float, str]] = []
+	token_cursor = 0
+
+	for seg_idx, seg_words in enumerate(merged):
+		seg_tokens = [w.norm for w in seg_words]
+		seg_ts = seg_words[0].start
+		is_last = seg_idx == len(merged) - 1
+
+		if is_last:
+			# Last segment takes all remaining lyric tokens
+			assigned_orig = lyric_words_orig[token_cursor:]
+			assigned_norm = lyric_tokens[token_cursor:]
+		else:
+			# Find the boundary that best matches this segment's tokens
+			seg_len = len(seg_tokens)
+			best_score = 0.0
+			best_end = token_cursor + seg_len  # default: consume exactly seg_len tokens
+
+			# Search a small window around the expected boundary
+			for end in range(
+				max(token_cursor + 1, token_cursor + seg_len - 3),
+				min(n_tokens, token_cursor + seg_len + 4),
+			):
+				candidate = lyric_tokens[token_cursor:end]
+				sm = difflib.SequenceMatcher(None, seg_tokens, candidate, autojunk=False)
+				score = sm.ratio()
+				if score > best_score:
+					best_score = score
+					best_end = end
+
+			if best_score < fallback_confidence:
+				return None  # can't split cleanly — fall back to unsplit line
+
+			assigned_orig = lyric_words_orig[token_cursor:best_end]
+			assigned_norm = lyric_tokens[token_cursor:best_end]
+			token_cursor = best_end
+
+		if not assigned_orig:
+			continue
+
+		# Sanity: last-fragment similarity check
+		if is_last and assigned_norm:
+			sm = difflib.SequenceMatcher(
+				None, [w.norm for w in seg_words], assigned_norm, autojunk=False
+			)
+			if sm.ratio() < fallback_confidence:
+				return None
+
+		fragments.append((seg_ts, ' '.join(assigned_orig)))
+
+	if len(fragments) <= 1:
+		return None
+
+	return fragments
+
+
 def align(
 	lyric_lines: list[LyricLine],
 	words: list[WhisperWord],
 	*,
 	anchor_slack: float = DEFAULT_ANCHOR_SLACK,
+	segment_split: bool = True,
 ) -> list[AlignedLine]:
 	"""
 	Align each lyric line to the best matching window of Whisper words.
@@ -277,6 +386,10 @@ def align(
 	  Greedy (plain TXT input): search a forward look-ahead of max(n*3, 20)
 	  words from the cursor position.  The cursor advances past the best match
 	  to preserve line order.
+
+	When segment_split=True, any matched window that spans multiple Whisper
+	segments (natural pause boundaries) is split into individually-timestamped
+	sub-lines via _split_by_segments().
 	"""
 	if not words:
 		return [AlignedLine(lyric=ll, suggested_ts=None, confidence=0.0) for ll in lyric_lines]
@@ -324,8 +437,25 @@ def align(
 		#  3. No text match, plain TXT input → leave as None
 		if best_score > 0:
 			suggested_ts = words[best_pos].start
-			# Capture the words Whisper placed at the matched window position
-			whisper_text: str | None = ' '.join(w.word for w in words[best_pos : best_pos + n])
+			window_words = words[best_pos : best_pos + n]
+			whisper_text: str | None = ' '.join(w.word for w in window_words)
+
+			# ── Segment-based splitting ───────────────────────────────────────
+			if segment_split:
+				frags = _split_by_segments(lyric_line, window_words)
+				if frags:
+					for frag_ts, frag_text in frags:
+						results.append(
+							AlignedLine(
+								lyric=LyricLine(text=frag_text, original_ts=None),
+								suggested_ts=frag_ts,
+								confidence=round(best_score, 3),
+								whisper_text=whisper_text,
+							)
+						)
+					cursor = max(cursor, best_pos + max(n, 1))
+					continue  # skip the normal single-line append below
+
 		elif lyric_line.original_ts is not None:
 			suggested_ts = lyric_line.original_ts
 			# Echo case: collect whatever Whisper said anywhere near the anchor window
@@ -441,6 +571,7 @@ def process_file(
 	transcribe_device: str = 'cpu',
 	anchor_slack: float = DEFAULT_ANCHOR_SLACK,
 	split: bool = True,
+	segment_split: bool = True,
 ) -> bool:
 	"""
 	Full pipeline for one FLAC file.
@@ -482,7 +613,7 @@ def process_file(
 	console.print(f'  Whisper: [bold]{len(words)}[/bold] words transcribed.')
 
 	# 3. Align
-	aligned = align(lyric_lines, words, anchor_slack=anchor_slack)
+	aligned = align(lyric_lines, words, anchor_slack=anchor_slack, segment_split=segment_split)
 
 	# 4. Read tags for metadata
 	try:
@@ -607,7 +738,16 @@ def process_file(
 	'--no-split',
 	is_flag=True,
 	default=False,
-	help='Disable multi-line splitting (keep " / " and " | " delimiters intact).',
+	help='Disable delimiter-based splitting (keep " / " and " | " intact).',
+)
+@click.option(
+	'--no-segment-split',
+	is_flag=True,
+	default=False,
+	help=(
+		'Disable Whisper-segment-based splitting. '
+		'Large lyric blocks that span multiple Whisper segments will not be split.'
+	),
 )
 def main(
 	folder: Path,
@@ -619,6 +759,7 @@ def main(
 	recursive: bool,
 	anchor_slack: float,
 	no_split: bool,
+	no_segment_split: bool,
 ) -> None:
 	"""
 	Align FLAC lyrics tags to Whisper speech-to-text timestamps.
@@ -697,6 +838,7 @@ def main(
 				transcribe_device=_transcribe_device,
 				anchor_slack=anchor_slack,
 				split=not no_split,
+				segment_split=not no_segment_split,
 			):
 				ok += 1
 			progress.advance(task)

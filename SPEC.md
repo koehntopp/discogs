@@ -495,15 +495,17 @@ uv run align_lyrics.py [FOLDER] [OPTIONS]
 | `--min-confidence` | `0.5` | Warn about lines with alignment confidence below this threshold (0.0–1.0). |
 | `--recursive`, `-r` | off | Recurse into sub-folders. |
 | `--anchor-slack` | `5.0` | For LRC input: search Whisper words within ±N seconds of each original timestamp. Increase if original timestamps are badly off. |
-| `--no-split` | off | Disable multi-line splitting; keep ` / ` and ` \| ` delimiters intact. |
+| `--no-split` | off | Disable delimiter-based splitting; keep ` / ` and ` \| ` delimiters intact. |
+| `--no-segment-split` | off | Disable Whisper-segment-based splitting of large lyric blocks. |
 
 **Behaviour:**
 
 1. Scans `FOLDER` for `*.flac` files (optionally recursive).
 2. For each file, reads the first populated lyrics tag in priority order: `LYRICS` → `UNSYNCEDLYRICS` → `COMMENT`.
 3. Detects whether the lyrics are LRC (has `[MM:SS.xx]` timestamps) or plain TXT and parses accordingly; LRC header lines (`[ar:]`, `[ti:]`, etc.) are ignored.
-4. **Multi-line splitting** (unless `--no-split`): lines containing ` / ` or ` | ` are expanded into individual sub-lines; un-timestamped lines that follow a timestamped one are already separate and aligned individually.
-5. Transcribes the FLAC with Whisper (`word_timestamps=True`) to obtain a flat, ordered list of words with start/end timestamps.
+4. **Delimiter splitting** (unless `--no-split`): lines containing ` / ` or ` | ` are expanded into individual sub-lines; un-timestamped lines that follow a timestamped one are already separate and aligned individually.
+5. Transcribes the FLAC with Whisper (`word_timestamps=True`) to obtain a flat word list with start/end timestamps and segment groupings.
+6. **Whisper-segment splitting** (unless `--no-segment-split`): after alignment, any lyric line whose matched word window spans multiple Whisper segments (natural pause/breath boundaries) is split into individually-timestamped sub-lines. A minimum of 3 words per segment is required to avoid splitting on short filler segments. If the text cannot be cleanly partitioned (fragment similarity < 0.3), the line is kept intact.
 6. **Alignment** — two strategies depending on input format:
    - *LRC (time-anchor)*: for each line, searches only Whisper words whose start time falls within `±anchor_slack` seconds of the original timestamp. Prevents the cursor from jumping to a later repetition of a chorus phrase. Falls back to greedy if the anchor window is empty.
    - *Plain TXT (greedy)*: searches a forward look-ahead of `max(n×3, 20)` words from the cursor position; cursor advances past each match.
