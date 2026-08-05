@@ -90,6 +90,7 @@ class AlignedLine:
 	lyric: LyricLine
 	suggested_ts: float | None
 	confidence: float  # 0.0 – 1.0 similarity score
+	whisper_text: str | None = None  # raw words Whisper produced in the matched window
 
 
 # ─── Text helpers ────────────────────────────────────────────────────────────────
@@ -323,10 +324,18 @@ def align(
 		#  3. No text match, plain TXT input → leave as None
 		if best_score > 0:
 			suggested_ts = words[best_pos].start
+			# Capture the words Whisper placed at the matched window position
+			whisper_text: str | None = ' '.join(w.word for w in words[best_pos : best_pos + n])
 		elif lyric_line.original_ts is not None:
 			suggested_ts = lyric_line.original_ts
+			# Echo case: collect whatever Whisper said anywhere near the anchor window
+			lo = lyric_line.original_ts - anchor_slack
+			hi = lyric_line.original_ts + anchor_slack
+			nearby = [w.word for w in words if lo <= w.start <= hi]
+			whisper_text = ' '.join(nearby) if nearby else None
 		else:
 			suggested_ts = None
+			whisper_text = None
 		# Advance greedy cursor past this match so subsequent lines search forward
 		cursor = max(cursor, best_pos + max(n, 1))
 
@@ -335,6 +344,7 @@ def align(
 				lyric=lyric_line,
 				suggested_ts=suggested_ts,
 				confidence=round(max(0.0, best_score), 3),  # clamp sentinel -1 → 0
+				whisper_text=whisper_text,
 			)
 		)
 
@@ -506,13 +516,26 @@ def process_file(
 		)
 	)
 
-	# Warn about low-confidence lines
+	# Warn about low-confidence lines with per-line diagnostic
 	low_conf = [a for a in aligned if a.confidence < min_confidence]
 	if low_conf:
 		console.print(
-			f'  [yellow]⚠ {len(low_conf)} lines have confidence < {min_confidence:.2f} '
-			f'— review carefully before applying.[/yellow]'
+			f'  [yellow]⚠ {len(low_conf)} line(s) below confidence threshold '
+			f'({min_confidence:.2f}):[/yellow]'
 		)
+		diag = Table(show_header=True, header_style='bold yellow', box=None, padding=(0, 1))
+		diag.add_column('Conf', no_wrap=True, min_width=5)
+		diag.add_column('Lyric text', min_width=30)
+		diag.add_column('Whisper heard', style='dim')
+		for a in low_conf:
+			conf_str = f'[red]{a.confidence:.2f}[/red]'
+			lyric_str = a.lyric.text[:50]
+			if a.whisper_text:
+				heard_str = a.whisper_text[:60]
+			else:
+				heard_str = '[dim italic](nothing in window)[/dim italic]'
+			diag.add_row(conf_str, lyric_str, heard_str)
+		console.print(diag)
 
 	# 7. Optionally write back to the FLAC LYRICS tag
 	if write and not dry_run:
