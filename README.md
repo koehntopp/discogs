@@ -132,6 +132,14 @@ All Python scripts feature executable shebang lines (`#!/usr/bin/env -S uv run`)
 ./fixtags.py /path/to/album
 ./nzbfix.py /path/to/staging
 ./bliss.py
+
+# Align timestamps or auto-generate LRC lyrics with Whisper:
+uv run align_lyrics.py /path/to/album_or_song.flac --dry-run
+uv run align_lyrics.py /path/to/album_or_song.flac --write
+
+# Submit a FLAC file's LYRICS tag to LRCLIB:
+uv run lrclib_submitter.py /path/to/song.flac --dry-run
+uv run lrclib_submitter.py /path/to/song.flac
 ```
 
 ## Requirements

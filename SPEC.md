@@ -560,16 +560,22 @@ uv run lrclib_submitter.py TARGET_FLAC [OPTIONS]
 
 ## Typical workflow
 
-```
+```bash
 # 1. Ingest a new album from downloads
 uv run bliss.py --ingest /Volumes/FLAC/Downloads/NewAlbum/
 
 # 2. Run the full enrichment pipeline on the ingested directory
 uv run nzbfix.py /Volumes/flac/Artist/Album/
 
-# 3. Rebuild the album inventory CSV
+# 3. Align timestamps or auto-generate LRC lyrics with Whisper
+uv run align_lyrics.py /Volumes/flac/Artist/Album/ --write
+
+# 4. Submit verified lyrics to LRCLIB
+uv run lrclib_submitter.py /Volumes/flac/Artist/Album/01_Track.flac
+
+# 5. Rebuild the album inventory CSV
 uv run album_list.py /Volumes/flac/
 
-# 4. (Periodic) Sync the MP3 mirror
+# 6. (Periodic) Sync the MP3 mirror
 uv run bliss.py --mp3
 ```
