@@ -81,7 +81,8 @@ tag names consistently:
 | Service            | Script         | Protocol | Rate limit           |
 |--------------------|----------------|----------|----------------------|
 | Discogs REST API   | fixtags        | HTTPS    | 1 req/s (sleep 1 s)  |
-| lrclib.net REST API| update_lyrics  | HTTPS    | none enforced        |
+| lrclib.net REST API| update_lyrics, lrclib_submitter | HTTPS    | PoW challenge token required for publish |
+| OpenAI Whisper     | align_lyrics   | local    | —                    |
 | AcoustID / fpcalc  | calculate_fp   | local    | —                    |
 | rsgain             | nzbfix         | local    | —                    |
 | ffmpeg             | bliss          | local    | —                    |
@@ -94,6 +95,8 @@ Detailed architectural standards and design contracts are maintained in `docs/ad
 - [ADR 0003: Web UI Architecture, Process Lifecycle, and JSON Log Streaming](file:///Users/koehntopp/src/discogs/docs/adr/0003-webui-architecture-and-subprocess-management.md)
 - [ADR 0004: Album List Caching and Direct Lyrics Export Architecture](file:///Users/koehntopp/src/discogs/docs/adr/0004-performance-caching-and-lyrics-export-architecture.md)
 - [ADR 0005: MP3 Mirror Transcoding and Multi-Copy Library Comparison](file:///Users/koehntopp/src/discogs/docs/adr/0005-mp3-transcoding-and-library-comparison.md)
+- [ADR 0006: Whisper Speech-to-Text LRC Lyrics Alignment, Time-Anchor Search, and Fallback Architecture](file:///Users/koehntopp/src/discogs/docs/adr/0006-whisper-lrc-alignment-and-fallback.md)
+- [ADR 0007: LRCLIB Lyrics Submission & Proof-of-Work Challenge Solver Architecture](file:///Users/koehntopp/src/discogs/docs/adr/0007-lrclib-lyrics-submission-proof-of-work.md)
 
 ---
 
@@ -473,7 +476,7 @@ uv run compare_libraries.py /path/to/reference_library [--target /path/to/target
 
 ---
 
-### `align_lyrics.py` — Whisper LRC timestamp alignment
+## 9. `align_lyrics.py` — Whisper LRC timestamp alignment and auto-generation
 
 **Purpose:** Read LRC or plain TXT lyrics from FLAC tags and use a local OpenAI Whisper
 speech-to-text model to produce word-level timestamps. Each lyrics line is aligned against
@@ -529,7 +532,7 @@ uv run align_lyrics.py [TARGET] [OPTIONS]
 
 ---
 
-## 9. `lrclib_submitter.py` — LRCLIB Lyrics Publisher
+## 10. `lrclib_submitter.py` — LRCLIB Lyrics Publisher
 
 **Purpose:** Submits the `LYRICS` tag from a single `.flac` file to the LRCLIB API (`lrclib.net`), solving LRCLIB's Proof-of-Work (PoW) challenge automatically.
 
