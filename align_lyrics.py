@@ -168,12 +168,27 @@ def extract_lyrics_from_flac(path: Path) -> tuple[str | None, str | None]:
 # ─── Whisper transcription ────────────────────────────────────────────────────────
 
 
-def transcribe(path: Path, model: whisper.Whisper) -> list[WhisperWord]:
+def transcribe(
+	path: Path, model: whisper.Whisper, transcribe_device: str = 'cpu'
+) -> list[WhisperWord]:
 	"""
 	Transcribe the audio file with Whisper using word-level timestamps.
 	Returns a flat list of WhisperWord objects ordered by start time.
+
+	Note: word_timestamps=True uses a DTW (dynamic time warping) alignment step
+	that calls .double() internally, which requires float64.  MPS does not support
+	float64, so we move the model to `transcribe_device` (always CPU on MPS) just
+	for this call and restore it afterwards.
 	"""
-	result = model.transcribe(str(path), word_timestamps=True, verbose=False, task='transcribe')
+	orig_device = next(model.parameters()).device
+	need_move = str(orig_device) != transcribe_device
+	if need_move:
+		model = model.to(transcribe_device)
+	try:
+		result = model.transcribe(str(path), word_timestamps=True, verbose=False, task='transcribe')
+	finally:
+		if need_move:
+			model = model.to(orig_device)
 
 	words: list[WhisperWord] = []
 	for segment in result.get('segments', []):
@@ -321,7 +336,13 @@ def _render_comparison_table(aligned: list[AlignedLine]) -> Table:
 
 
 def process_file(
-	path: Path, model: whisper.Whisper, *, write: bool, dry_run: bool, min_confidence: float
+	path: Path,
+	model: whisper.Whisper,
+	*,
+	write: bool,
+	dry_run: bool,
+	min_confidence: float,
+	transcribe_device: str = 'cpu',
 ) -> bool:
 	"""
 	Full pipeline for one FLAC file.
@@ -350,7 +371,7 @@ def process_file(
 
 	# 2. Transcribe with Whisper
 	with console.status(f'  Transcribing [dim]{path.name}[/dim] with Whisper…'):
-		words = transcribe(path, model)
+		words = transcribe(path, model, transcribe_device=transcribe_device)
 
 	if not words:
 		console.print('  [red]Whisper returned no words — skipping.[/red]')
@@ -486,6 +507,15 @@ def main(
 	else:
 		_device = device
 
+	# Whisper's word-timestamp DTW alignment calls .double() (float64).
+	# MPS does not support float64, so transcription must run on CPU.
+	_transcribe_device = 'cpu' if _device == 'mps' else _device
+	if _device == 'mps':
+		console.print(
+			'[yellow]⚠ MPS does not support float64 (required by Whisper DTW). '
+			'Model will load on MPS but transcription will run on CPU.[/yellow]'
+		)
+
 	console.print(
 		Panel(
 			f'[bold cyan]align_lyrics[/bold cyan]  —  Whisper LRC timestamp alignment\n'
@@ -524,7 +554,12 @@ def main(
 		for flac_path in flac_files:
 			progress.update(task, description=f'[cyan]{flac_path.name[:40]}[/cyan]')
 			if process_file(
-				flac_path, wmodel, write=write, dry_run=dry_run, min_confidence=min_confidence
+				flac_path,
+				wmodel,
+				write=write,
+				dry_run=dry_run,
+				min_confidence=min_confidence,
+				transcribe_device=_transcribe_device,
 			):
 				ok += 1
 			progress.advance(task)
