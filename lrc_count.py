@@ -161,6 +161,7 @@ def main() -> None:
 	rows = scan_library(flacdir)
 	logger.info(f'Found {len(rows)} albums')
 
+	rows.sort(key=lambda r: r['tracks_without_lrc'], reverse=True)
 	write_csv(rows, output_path)
 
 	if output_path:
