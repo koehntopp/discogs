@@ -508,9 +508,10 @@ uv run align_lyrics.py [TARGET] [OPTIONS]
 5. Transcribes the FLAC with Whisper (`word_timestamps=True`) to obtain a flat word list with start/end timestamps and segment groupings.
 6. **Whisper-segment splitting** (unless `--no-segment-split`): after alignment, any lyric line whose matched word window spans multiple Whisper segments (natural pause/breath boundaries) is split into individually-timestamped sub-lines. A minimum of 3 words per segment is required to avoid splitting on short filler segments. If the text cannot be cleanly partitioned (fragment similarity < 0.3), the line is kept intact.
 7. **Alignment & Low-Confidence Fallback** — two strategies depending on input format:
-   - *LRC (time-anchor)*: for each line, searches only Whisper words whose start time falls within `±anchor_slack` seconds of the original timestamp, strictly bounded by `cursor` so alignment never rewinds before the end of the previously aligned line.
+   - *LRC (time-anchor)*: for each line, searches only Whisper words whose start time falls within `±anchor_slack` seconds of the original timestamp.
    - *Plain TXT (greedy)*: searches a forward look-ahead of `max(n×3, 20)` words from the cursor position; cursor advances past each match.
    - **Low-confidence fallback**: if Whisper alignment confidence is below `--min-confidence` (default 0.50), the existing tag timestamp (`original_ts`) is preserved instead of accepting an unreliable Whisper match. These lines are marked `(tag fallback)` in the comparison table.
+
 
 8. Renders a Rich comparison table: original timestamp | suggested timestamp | Δ seconds | confidence score | lyric text.
 9. For lines below `--min-confidence`, prints a per-line diagnostic table showing the lyric text alongside what Whisper actually transcribed in that time window (or `(nothing in window)` if Whisper produced no output there).

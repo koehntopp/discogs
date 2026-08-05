@@ -416,17 +416,17 @@ def align(
 
 		if lyric_line.original_ts is not None:
 			# ── Time-anchor search ──────────────────────────────────────────────
-			# Find word indices whose start time is within the anchor window and at/after cursor.
+			# Find word indices whose start time is within [original_ts - slack, original_ts + slack].
 			lo = lyric_line.original_ts - anchor_slack
 			hi = lyric_line.original_ts + anchor_slack
-			anchor_indices = [i for i, w in enumerate(words) if lo <= w.start <= hi and i >= cursor]
+			anchor_indices = [i for i, w in enumerate(words) if lo <= w.start <= hi]
 			if not anchor_indices:
 				# Anchor window empty — fall back to greedy from cursor
 				search_start = cursor
 				search_end = min(len(words) - n + 1, cursor + max(n * 3, 20))
 			else:
-				search_start = max(cursor, anchor_indices[0])
-				search_end = min(len(words) - n + 1, max(search_start + 1, anchor_indices[-1] + 1))
+				search_start = anchor_indices[0]
+				search_end = min(len(words) - n + 1, anchor_indices[-1] + 1)
 		else:
 			# ── Greedy forward search ───────────────────────────────────────────
 			search_start = cursor
