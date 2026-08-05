@@ -153,6 +153,36 @@ def parse_lyrics(raw: str) -> list[LyricLine]:
 	return lines
 
 
+def sanitize_out_of_order_anchors(lines: list[LyricLine]) -> tuple[list[LyricLine], bool]:
+	"""
+	Check if original timestamps in lines are monotonically non-decreasing.
+	If out-of-order timestamps are detected (e.g. t_k < t_{k-1} - 2.0s),
+	nullify the out-of-order original_ts anchors so alignment relies on forward
+	sequence alignment instead of corrupted time anchors.
+
+	Returns (sanitized_lines, had_corruption_flag).
+	"""
+	ts_list = [ll.original_ts for ll in lines if ll.original_ts is not None]
+	if len(ts_list) <= 1:
+		return lines, False
+
+	# Check for inversions where a timestamp jumps backward by > 2 seconds
+	inversions = 0
+	last_t = ts_list[0]
+	for t in ts_list[1:]:
+		if t < last_t - 2.0:
+			inversions += 1
+		else:
+			last_t = t
+
+	if inversions == 0:
+		return lines, False
+
+	# Tag has corrupted/out-of-order timestamps — nullify original_ts anchors
+	sanitized = [LyricLine(text=ll.text, original_ts=None) for ll in lines]
+	return sanitized, True
+
+
 def split_multiline(lines: list[LyricLine]) -> list[LyricLine]:
 	"""
 	Expand multi-line LRC entries into individual LyricLine objects so each
@@ -439,10 +469,10 @@ def align(
 				best_pos = i
 
 		# Three-level fallback for suggested timestamp:
-		#  1. High-confidence text match (>= min_confidence) → use Whisper word start time
-		#  2. Low-confidence match or no match but original_ts exists → fall back to original tag ts
-		#  3. Low-confidence match, plain TXT input → leave as None (format_lrc will interpolate)
-		if best_score >= min_confidence:
+		#  1. Any text match (> 0) → use Whisper word start time
+		#  2. No text match but original_ts exists → fall back to original tag ts
+		#  3. No text match, plain TXT input → leave as None (format_lrc will interpolate)
+		if best_score > 0 and best_pos < len(words):
 			suggested_ts = words[best_pos].start
 			window_words = words[best_pos : best_pos + n]
 			whisper_text: str | None = ' '.join(w.word for w in window_words)
@@ -516,6 +546,8 @@ def format_lrc(
 			ts = a.lyric.original_ts
 			last_ts = ts
 		else:
+			# If no timestamp is available, advance last_ts by a small offset (1.5s) to avoid duplicate timestamps
+			last_ts += 1.5
 			ts = last_ts
 		body_lines.append(f'{_secs_to_lrc(ts)}{a.lyric.text}')
 
@@ -609,6 +641,13 @@ def process_file(
 
 	if split:
 		lyric_lines = split_multiline(lyric_lines)
+
+	lyric_lines, is_corrupted_lrc = sanitize_out_of_order_anchors(lyric_lines)
+	if is_corrupted_lrc:
+		console.print(
+			'  [yellow]⚠ Input LYRICS tag contains out-of-order timestamps (corrupted LRC). '
+			'Sanitizing anchors for sequential alignment.[/yellow]'
+		)
 
 	has_timestamps = any(ll.original_ts is not None for ll in lyric_lines)
 	console.print(
