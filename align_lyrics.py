@@ -12,15 +12,25 @@
 # ]
 # ///
 """
-align_lyrics.py — LRC timestamp correction using local Whisper STT
+align_lyrics.py — Whisper-based LRC timestamp alignment and auto-generation.
 
-Reads FLAC files from a folder, extracts TXT or LRC lyrics from tags,
-runs a local Whisper model to get word-level timestamps, and aligns
-the lyrics lines against the transcription to suggest improved LRC timestamps.
+Reads FLAC files (directory or single file), inspects the LYRICS tag, runs local
+Whisper speech-to-text with word-level timestamps, and aligns lyric lines against
+the transcription to generate or correct LRC timestamps.
+
+Key Features:
+  - Supports single .flac file or directory targets (optionally recursive).
+  - Inspects exclusively the FLAC LYRICS tag.
+  - Auto-generates LRC lyrics directly from Whisper speech segments for un-tagged tracks.
+  - Time-anchor search (default ±15.0s slack) for existing LRC tags.
+  - Out-of-order and flat duplicate anchor sanitization for corrupted input tags.
+  - Whisper-segment splitting at natural breath/pause boundaries.
+  - Proportional timestamp interpolation for un-aligned lines and duration clamping at audio length.
+  - Direct FLAC LYRICS tag write-back via mutagen when --write is specified.
 
 Usage:
-    uv run align_lyrics.py [FOLDER] [--model base] [--write] [--dry-run]
-    uv run align_lyrics.py [FOLDER] --anchor-slack 5 --no-split
+    uv run align_lyrics.py [TARGET] [--model base] [--write] [--dry-run]
+    uv run align_lyrics.py [TARGET] --anchor-slack 15 --no-split --no-segment-split
 """
 
 import difflib

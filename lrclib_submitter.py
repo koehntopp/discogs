@@ -8,6 +8,16 @@
 #   "structlog",
 # ]
 # ///
+"""
+lrclib_submitter.py — Submit FLAC lyrics to LRCLIB API with automated Proof-of-Work.
+
+Extracts track metadata (TITLE, ARTIST/ALBUMARTIST, ALBUM, audio duration) and the LYRICS
+tag from a target .flac file, solves the LRCLIB SHA-256 Proof-of-Work challenge, and submits
+the synced or plain lyrics to LRCLIB (lrclib.net).
+
+Usage:
+    uv run lrclib_submitter.py /path/to/song.flac [--dry-run]
+"""
 
 import hashlib
 import re
