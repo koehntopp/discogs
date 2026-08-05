@@ -476,8 +476,8 @@ uv run compare_libraries.py /path/to/reference_library [--target /path/to/target
 ### `align_lyrics.py` — Whisper LRC timestamp alignment
 
 **Purpose:** Read LRC or plain TXT lyrics from FLAC tags and use a local OpenAI Whisper
-speech-to-text model to produce word-level timestamps. Each lyrics line is then greedily
-aligned against the transcription to suggest improved `[MM:SS.xx]` timestamps.
+speech-to-text model to produce word-level timestamps. Each lyrics line is aligned against
+the transcription to suggest improved `[MM:SS.xx]` timestamps.
 
 **Usage:**
 
@@ -494,23 +494,29 @@ uv run align_lyrics.py [FOLDER] [OPTIONS]
 | `--dry-run` | off | Show suggestions without writing any files (overrides `--write`). |
 | `--min-confidence` | `0.5` | Warn about lines with alignment confidence below this threshold (0.0–1.0). |
 | `--recursive`, `-r` | off | Recurse into sub-folders. |
+| `--anchor-slack` | `5.0` | For LRC input: search Whisper words within ±N seconds of each original timestamp. Increase if original timestamps are badly off. |
+| `--no-split` | off | Disable multi-line splitting; keep ` / ` and ` \| ` delimiters intact. |
 
 **Behaviour:**
 
 1. Scans `FOLDER` for `*.flac` files (optionally recursive).
 2. For each file, reads the first populated lyrics tag in priority order: `LYRICS` → `UNSYNCEDLYRICS` → `COMMENT`.
 3. Detects whether the lyrics are LRC (has `[MM:SS.xx]` timestamps) or plain TXT and parses accordingly; LRC header lines (`[ar:]`, `[ti:]`, etc.) are ignored.
-4. Transcribes the FLAC with Whisper (`word_timestamps=True`) to obtain a flat, ordered list of words with start/end timestamps.
-5. Greedily aligns each lyric line to the best-matching contiguous window of Whisper words using `difflib.SequenceMatcher` (normalised similarity score).
-6. Renders a Rich comparison table: original timestamp | suggested timestamp | Δ seconds | confidence score | lyric text.
-7. Displays a full suggested LRC preview (with `[ar:]`/`[ti:]`/`[al:]` headers from FLAC tags) in a syntax-highlighted panel.
-8. With `--write`, saves the output as `<track>.lrc.suggested` alongside the FLAC.
+4. **Multi-line splitting** (unless `--no-split`): lines containing ` / ` or ` | ` are expanded into individual sub-lines; un-timestamped lines that follow a timestamped one are already separate and aligned individually.
+5. Transcribes the FLAC with Whisper (`word_timestamps=True`) to obtain a flat, ordered list of words with start/end timestamps.
+6. **Alignment** — two strategies depending on input format:
+   - *LRC (time-anchor)*: for each line, searches only Whisper words whose start time falls within `±anchor_slack` seconds of the original timestamp. Prevents the cursor from jumping to a later repetition of a chorus phrase. Falls back to greedy if the anchor window is empty.
+   - *Plain TXT (greedy)*: searches a forward look-ahead of `max(n×3, 20)` words from the cursor position; cursor advances past each match.
+7. Renders a Rich comparison table: original timestamp | suggested timestamp | Δ seconds | confidence score | lyric text.
+8. Displays a full suggested LRC preview (with `[ar:]`/`[ti:]`/`[al:]` headers from FLAC tags) in a syntax-highlighted panel.
+9. With `--write`, saves the output as `<track>.lrc.suggested` alongside the FLAC.
 
 **Tags read:** `LYRICS`, `UNSYNCEDLYRICS`, `COMMENT`, `ARTIST`, `ALBUMARTIST`, `TITLE`, `ALBUM`
 
 **Tags written:** none (read-only; output is a sidecar `.lrc.suggested` file)
 
 **Dependencies:** `openai-whisper`, `torch`, `mutagen`, `rich`, `click`, `numpy`
+
 
 ---
 

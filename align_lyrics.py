@@ -20,6 +20,7 @@ the lyrics lines against the transcription to suggest improved LRC timestamps.
 
 Usage:
     uv run align_lyrics.py [FOLDER] [--model base] [--write] [--dry-run]
+    uv run align_lyrics.py [FOLDER] --anchor-slack 5 --no-split
 """
 
 import difflib
@@ -44,8 +45,11 @@ from rich.table import Table
 LRC_TIMESTAMP_RE = re.compile(r'\[(\d{2}):(\d{2})\.(\d{2})\]')
 LRC_HEADER_RE = re.compile(r'^\[(ar|ti|al|by|length|offset):.*\]\s*$', re.IGNORECASE)
 LYRICS_TAGS = ('LYRICS', 'UNSYNCEDLYRICS', 'COMMENT')  # checked in order
+MULTILINE_SPLIT_RE = re.compile(r'\s*/\s*|\s*\|\s*')  # " / " or " | " delimiters
 
 PUNCT_RE = re.compile(r"[^\w\s']", re.UNICODE)
+
+DEFAULT_ANCHOR_SLACK = 5.0  # seconds either side of original_ts to search
 
 console = Console(stderr=True)
 
@@ -140,6 +144,35 @@ def parse_lyrics(raw: str) -> list[LyricLine]:
 	return lines
 
 
+def split_multiline(lines: list[LyricLine]) -> list[LyricLine]:
+	"""
+	Expand multi-line LRC entries into individual LyricLine objects so each
+	sub-phrase can receive its own Whisper-derived timestamp.
+
+	Two heuristics are applied:
+	  1. Explicit delimiters: a line containing " / " or " | " is split on that
+	     delimiter. The first sub-phrase inherits the original timestamp; the
+	     rest get None (to be filled by alignment).
+	  2. Continuation lines: an un-timestamped line that immediately follows a
+	     timestamped one is already a separate LyricLine in the parsed output,
+	     so no extra work is needed here — they will be aligned individually.
+	"""
+	result: list[LyricLine] = []
+	for line in lines:
+		parts = MULTILINE_SPLIT_RE.split(line.text)
+		if len(parts) == 1:
+			# No delimiter found — pass through unchanged
+			result.append(line)
+		else:
+			for idx, part in enumerate(parts):
+				part = part.strip()
+				if part:
+					result.append(
+						LyricLine(text=part, original_ts=line.original_ts if idx == 0 else None)
+					)
+	return result
+
+
 def extract_lyrics_from_flac(path: Path) -> tuple[str | None, str | None]:
 	"""
 	Return (raw_lyrics, tag_name) for the first populated lyrics tag found,
@@ -218,22 +251,32 @@ def _window_similarity(
 	return sm.ratio()
 
 
-def align(lyric_lines: list[LyricLine], words: list[WhisperWord]) -> list[AlignedLine]:
+def align(
+	lyric_lines: list[LyricLine],
+	words: list[WhisperWord],
+	*,
+	anchor_slack: float = DEFAULT_ANCHOR_SLACK,
+) -> list[AlignedLine]:
 	"""
-	Greedily align each lyric line to the best matching window of Whisper words.
+	Align each lyric line to the best matching window of Whisper words.
 
-	Strategy:
-	  - For each lyric line, compute the similarity score for every possible
-	    starting position in the remaining (unconsumed) Whisper words.
-	  - Pick the highest-scoring position; advance the cursor to just past that window.
-	  - This single-pass greedy approach keeps lines in order, which is a safe
-	    assumption for sequential songs.
+	Two search strategies are used depending on whether original timestamps exist:
+
+	  Time-anchor (LRC input): when a lyric line carries an original_ts, search
+	  only the Whisper words whose start time falls within
+	  [original_ts - anchor_slack, original_ts + anchor_slack].  This prevents
+	  the cursor from jumping to a later repetition of a chorus phrase.
+	  Falls back to the greedy window if no words fall in the anchor range.
+
+	  Greedy (plain TXT input): search a forward look-ahead of max(n*3, 20)
+	  words from the cursor position.  The cursor advances past the best match
+	  to preserve line order.
 	"""
 	if not words:
 		return [AlignedLine(lyric=ll, suggested_ts=None, confidence=0.0) for ll in lyric_lines]
 
 	results: list[AlignedLine] = []
-	cursor = 0  # minimum word index for the next alignment
+	cursor = 0  # minimum word index for next greedy search
 
 	for lyric_line in lyric_lines:
 		tokens = _normalize_words(lyric_line.text)
@@ -242,12 +285,26 @@ def align(lyric_lines: list[LyricLine], words: list[WhisperWord]) -> list[Aligne
 			continue
 
 		n = len(tokens)
-		best_score = -1.0
+		best_score = 0.0
 		best_pos = cursor
 
-		# Search a generous look-ahead window (don't let the cursor pin us too tightly)
-		search_end = min(len(words) - n + 1, cursor + max(n * 10, 40))
-		search_start = cursor
+		if lyric_line.original_ts is not None:
+			# ── Time-anchor search ──────────────────────────────────────────────
+			# Find word indices whose start time is within the anchor window.
+			lo = lyric_line.original_ts - anchor_slack
+			hi = lyric_line.original_ts + anchor_slack
+			anchor_indices = [i for i, w in enumerate(words) if lo <= w.start <= hi]
+			if not anchor_indices:
+				# Anchor window empty — fall back to greedy from cursor
+				search_start = cursor
+				search_end = min(len(words) - n + 1, cursor + max(n * 3, 20))
+			else:
+				search_start = anchor_indices[0]
+				search_end = min(len(words) - n + 1, anchor_indices[-1] + 1)
+		else:
+			# ── Greedy forward search ───────────────────────────────────────────
+			search_start = cursor
+			search_end = min(len(words) - n + 1, cursor + max(n * 3, 20))
 
 		for i in range(search_start, search_end):
 			score = _window_similarity(tokens, words, i)
@@ -256,12 +313,14 @@ def align(lyric_lines: list[LyricLine], words: list[WhisperWord]) -> list[Aligne
 				best_pos = i
 
 		suggested_ts = words[best_pos].start if best_score > 0 else None
-		# Advance cursor to just after the matched window so next line starts later
-		cursor = best_pos + max(n, 1)
+		# Advance greedy cursor past this match so subsequent lines search forward
+		cursor = max(cursor, best_pos + max(n, 1))
 
 		results.append(
 			AlignedLine(
-				lyric=lyric_line, suggested_ts=suggested_ts, confidence=round(best_score, 3)
+				lyric=lyric_line,
+				suggested_ts=suggested_ts,
+				confidence=round(max(0.0, best_score), 3),  # clamp sentinel -1 → 0
 			)
 		)
 
@@ -343,6 +402,8 @@ def process_file(
 	dry_run: bool,
 	min_confidence: float,
 	transcribe_device: str = 'cpu',
+	anchor_slack: float = DEFAULT_ANCHOR_SLACK,
+	split: bool = True,
 ) -> bool:
 	"""
 	Full pipeline for one FLAC file.
@@ -362,11 +423,15 @@ def process_file(
 		console.print('  [dim]Lyrics tag is empty after parsing — skipping.[/dim]')
 		return False
 
+	if split:
+		lyric_lines = split_multiline(lyric_lines)
+
 	has_timestamps = any(ll.original_ts is not None for ll in lyric_lines)
 	console.print(
 		f'  Tag [cyan]{tag_name}[/cyan]: '
 		f'[bold]{len(lyric_lines)}[/bold] lines, '
 		f'format: [magenta]{"LRC" if has_timestamps else "plain TXT"}[/magenta]'
+		+ (f', anchor_slack=[cyan]±{anchor_slack}s[/cyan]' if has_timestamps else '')
 	)
 
 	# 2. Transcribe with Whisper
@@ -380,7 +445,7 @@ def process_file(
 	console.print(f'  Whisper: [bold]{len(words)}[/bold] words transcribed.')
 
 	# 3. Align
-	aligned = align(lyric_lines, words)
+	aligned = align(lyric_lines, words, anchor_slack=anchor_slack)
 
 	# 4. Read tags for metadata
 	try:
@@ -477,6 +542,22 @@ def process_file(
 	help='Warn about lines with alignment confidence below this threshold.',
 )
 @click.option('--recursive', '-r', is_flag=True, default=False, help='Recurse into sub-folders.')
+@click.option(
+	'--anchor-slack',
+	default=DEFAULT_ANCHOR_SLACK,
+	show_default=True,
+	type=float,
+	help=(
+		'For LRC input: search Whisper words within ±SECONDS of each original timestamp. '
+		'Increase if original timestamps are far off; decrease for tighter anchoring.'
+	),
+)
+@click.option(
+	'--no-split',
+	is_flag=True,
+	default=False,
+	help='Disable multi-line splitting (keep " / " and " | " delimiters intact).',
+)
 def main(
 	folder: Path,
 	model: str,
@@ -485,6 +566,8 @@ def main(
 	dry_run: bool,
 	min_confidence: float,
 	recursive: bool,
+	anchor_slack: float,
+	no_split: bool,
 ) -> None:
 	"""
 	Align FLAC lyrics tags to Whisper speech-to-text timestamps.
@@ -560,6 +643,8 @@ def main(
 				dry_run=dry_run,
 				min_confidence=min_confidence,
 				transcribe_device=_transcribe_device,
+				anchor_slack=anchor_slack,
+				split=not no_split,
 			):
 				ok += 1
 			progress.advance(task)
