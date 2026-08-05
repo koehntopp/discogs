@@ -26,8 +26,13 @@ Usage:
 import difflib
 import re
 import sys
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
+
+# Suppress Whisper's "FP16 is not supported on CPU; using FP32 instead" noise.
+# We already handle this intentionally for the MPS workaround.
+warnings.filterwarnings('ignore', message='FP16 is not supported on CPU')
 
 import click
 import numpy as np
@@ -509,14 +514,15 @@ def process_file(
 			f'— review carefully before applying.[/yellow]'
 		)
 
-	# 7. Optionally write sidecar
+	# 7. Optionally write back to the FLAC LYRICS tag
 	if write and not dry_run:
-		out_path = path.with_suffix('.lrc.suggested')
 		try:
-			out_path.write_text(lrc_out, encoding='utf-8')
-			console.print(f'  [green]✓ Written to[/green] {out_path.name}')
-		except OSError as exc:
-			console.print(f'  [red]✗ Could not write {out_path.name}: {exc}[/red]')
+			audio_w = FLAC(str(path))
+			audio_w['LYRICS'] = lrc_out
+			audio_w.save()
+			console.print(f'  [green]✓ LYRICS tag updated in[/green] {path.name}')
+		except (OSError, ValueError, EOFError) as exc:
+			console.print(f'  [red]✗ Could not write LYRICS tag in {path.name}: {exc}[/red]')
 
 	return True
 
@@ -548,7 +554,7 @@ def process_file(
 	'-w',
 	is_flag=True,
 	default=False,
-	help='Write suggested LRC to a .lrc.suggested sidecar file next to each FLAC.',
+	help='Write suggested LRC back into the LYRICS tag of each FLAC file (overwrites existing lyrics).',
 )
 @click.option(
 	'--dry-run',
@@ -599,7 +605,8 @@ def main(
 	to the best-matching span of transcribed words.
 
 	Outputs a comparison table and a suggested LRC for each track.
-	Use --write to save results as .lrc.suggested sidecar files.
+	Use --write to overwrite the LYRICS tag in each FLAC with the suggested LRC.
+	Use --dry-run to preview suggestions without modifying any files.
 	"""
 	# ── Device selection ────────────────────────────────────────────────────
 	if device == 'auto':
@@ -677,7 +684,7 @@ def main(
 		f'Done. [bold green]{ok}[/bold green] / [bold]{len(flac_files)}[/bold] file(s) aligned.'
 	)
 	if write and not dry_run:
-		console.print('[dim]Results saved as .lrc.suggested alongside each FLAC.[/dim]')
+		console.print('[dim]LYRICS tags updated in each processed FLAC.[/dim]')
 
 
 if __name__ == '__main__':

@@ -490,7 +490,7 @@ uv run align_lyrics.py [FOLDER] [OPTIONS]
 | `FOLDER` | `.` | Directory to scan for FLAC files. |
 | `--model`, `-m` | `base` | Whisper model size: `tiny` / `base` / `small` / `medium` / `large` / `turbo`. |
 | `--device`, `-d` | `auto` | Torch device: `auto` (cuda → mps → cpu), `cpu`, `cuda`, `mps`. |
-| `--write`, `-w` | off | Write suggested LRC to a `.lrc.suggested` sidecar file next to each FLAC. |
+| `--write`, `-w` | off | Overwrite the `LYRICS` tag inside each FLAC file with the suggested LRC. Use `--dry-run` to preview first. |
 | `--dry-run` | off | Show suggestions without writing any files (overrides `--write`). |
 | `--min-confidence` | `0.5` | Warn about lines with alignment confidence below this threshold (0.0–1.0). |
 | `--recursive`, `-r` | off | Recurse into sub-folders. |
@@ -510,7 +510,7 @@ uv run align_lyrics.py [FOLDER] [OPTIONS]
    - **Timestamp fallback**: if text similarity is 0 but `original_ts` is present (LRC input), the original timestamp is echoed into `suggested_ts` unchanged (`confidence = 0.00`). These lines are marked `(echo)` in the comparison table so they are visually distinct from Whisper-derived timestamps. Plain TXT lines with no match remain `(none)`.
 7. Renders a Rich comparison table: original timestamp | suggested timestamp | Δ seconds | confidence score | lyric text.
 8. Displays a full suggested LRC preview (with `[ar:]`/`[ti:]`/`[al:]` headers from FLAC tags) in a syntax-highlighted panel.
-9. With `--write`, saves the output as `<track>.lrc.suggested` alongside the FLAC.
+9. With `--write`, overwrites the `LYRICS` tag in each FLAC file with the suggested LRC string. The original lyrics are replaced. Use `--dry-run` to review suggestions first.
 
 **Tags read:** `LYRICS`, `UNSYNCEDLYRICS`, `COMMENT`, `ARTIST`, `ALBUMARTIST`, `TITLE`, `ALBUM`
 
