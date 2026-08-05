@@ -521,11 +521,38 @@ uv run align_lyrics.py [TARGET] [OPTIONS]
 11. Displays a full suggested LRC preview (with `[ar:]`/`[ti:]`/`[al:]` headers from FLAC tags) in a syntax-highlighted panel. All lines are guaranteed to have a `[MM:SS.xx]` timestamp.
 12. With `--write`, overwrites the `LYRICS` tag in each FLAC file with the suggested LRC string.
 
-**Tags read:** `LYRICS`, `UNSYNCEDLYRICS`, `COMMENT`, `ARTIST`, `ALBUMARTIST`, `TITLE`, `ALBUM`
+**Tags read:** `LYRICS` (exclusively for lyrics alignment), `ARTIST`, `ALBUMARTIST`, `TITLE`, `ALBUM`
 
 **Tags written:** `LYRICS` (when `--write` is specified)
 
 **Dependencies:** `openai-whisper`, `torch`, `mutagen`, `rich`, `click`, `numpy`
+
+---
+
+## 9. `lrclib_submitter.py` — LRCLIB Lyrics Publisher
+
+**Purpose:** Submits the `LYRICS` tag from a single `.flac` file to the LRCLIB API (`lrclib.net`), solving LRCLIB's Proof-of-Work (PoW) challenge automatically.
+
+```
+uv run lrclib_submitter.py TARGET_FLAC [OPTIONS]
+```
+
+| Argument / Option | Default | Description |
+| --- | --- | --- |
+| `TARGET` | (required) | Path to a single `.flac` file to publish. |
+| `--dry-run` | off | Preview metadata payload and format without solving PoW or publishing. |
+
+**Behaviour:**
+1. Reads `TITLE`, `ARTIST`/`ALBUMARTIST`, `ALBUM`, audio duration (`FLAC.info.length`), and `LYRICS` tag from the FLAC file.
+2. Checks whether lyrics are synced (contain `[MM:SS.xx]` timestamps) or plain text.
+3. Requests a Proof-of-Work challenge from `POST https://lrclib.net/api/request-challenge`.
+4. Solves the SHA-256 hash puzzle (`SHA256(prefix + nonce) < target`) to compute `X-Publish-Token: prefix:nonce`.
+5. Sends `POST https://lrclib.net/api/publish` with JSON payload (`trackName`, `artistName`, `albumName`, `duration`, `syncedLyrics`/`plainLyrics`).
+6. Logs structured success event (`logger.info("lyrics_published", ...)`) and displays Rich status notification.
+
+**Dependencies:** `mutagen`, `requests`, `rich`, `click`, `structlog`
+
+---
 
 
 

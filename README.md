@@ -118,6 +118,7 @@ All config values are also editable via the Settings modal in the web UI.
 | `album_list.py` | Album inventory scan → CSV + DR chart |
 | `update_lyrics.py` | Parallel lyrics fetch from lrclib.net (32 workers) |
 | `align_lyrics.py` | Whisper-based LRC timestamp alignment / correction |
+| `lrclib_submitter.py` | Submit FLAC file lyrics to LRCLIB (lrclib.net) with PoW challenge solver |
 | `calculate_dr.py` | Dynamic Range calculation |
 | `calculate_fp.py` | AcoustID fingerprint generation |
 | `migrate_tags.py` | Tag schema migration to discrete `ALBUM_*` tags |

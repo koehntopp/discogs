@@ -37,6 +37,7 @@
 - `bliss.py`: File/folder organization and MP3 mirror sync (`ffmpeg`).
 - `album_list.py`: Scans FLAC library, outputs `albums.csv` and `albums_dr.png`.
 - `update_lyrics.py`: Parallel lyrics fetcher from lrclib.net with backoff retry logic.
+- `lrclib_submitter.py`: Submits FLAC file lyrics to LRCLIB API (`lrclib.net`) with PoW challenge solver.
 - `calculate_dr.py`: Dynamic Range calculation per track and album (`drmeter`).
 - `calculate_fp.py`: AcoustID acoustic fingerprint generation (`fpcalc` / `pyacoustid`).
 - `convert_opus.py`: Transcodes FLAC to Opus format.
