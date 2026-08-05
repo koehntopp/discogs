@@ -476,7 +476,7 @@ uv run compare_libraries.py /path/to/reference_library [--target /path/to/target
 
 ---
 
-## 9. `align_lyrics.py` — Whisper LRC timestamp alignment and auto-generation
+### `align_lyrics.py` — Whisper LRC timestamp alignment and auto-generation
 
 **Purpose:** Read LRC or plain TXT lyrics from FLAC tags and use a local OpenAI Whisper
 speech-to-text model to produce word-level timestamps. Each lyrics line is aligned against
@@ -532,7 +532,7 @@ uv run align_lyrics.py [TARGET] [OPTIONS]
 
 ---
 
-## 10. `lrclib_submitter.py` — LRCLIB Lyrics Publisher
+### `lrclib_submitter.py` — LRCLIB Lyrics Publisher
 
 **Purpose:** Submits the `LYRICS` tag from a single `.flac` file to the LRCLIB API (`lrclib.net`), solving LRCLIB's Proof-of-Work (PoW) challenge automatically.
 
