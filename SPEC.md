@@ -512,8 +512,9 @@ uv run align_lyrics.py [FOLDER] [OPTIONS]
    - **Low-confidence fallback**: if Whisper alignment confidence is below `--min-confidence` (default 0.50), the existing tag timestamp (`original_ts`) is preserved instead of accepting an unreliable Whisper match. These lines are marked `(tag fallback)` in the comparison table.
 8. Renders a Rich comparison table: original timestamp | suggested timestamp | Δ seconds | confidence score | lyric text.
 9. For lines below `--min-confidence`, prints a per-line diagnostic table showing the lyric text alongside what Whisper actually transcribed in that time window (or `(nothing in window)` if Whisper produced no output there).
-10. Displays a full suggested LRC preview (with `[ar:]`/`[ti:]`/`[al:]` headers from FLAC tags) in a syntax-highlighted panel. All lines are guaranteed to have a `[MM:SS.xx]` timestamp.
-11. With `--write`, overwrites the `LYRICS` tag in each FLAC file with the suggested LRC string.
+10. Prints a summary table and emits structured log events (`logger.info("timestamp_changed", ...)`) for all lines whose timestamps actually changed.
+11. Displays a full suggested LRC preview (with `[ar:]`/`[ti:]`/`[al:]` headers from FLAC tags) in a syntax-highlighted panel. All lines are guaranteed to have a `[MM:SS.xx]` timestamp.
+12. With `--write`, overwrites the `LYRICS` tag in each FLAC file with the suggested LRC string.
 
 **Tags read:** `LYRICS`, `UNSYNCEDLYRICS`, `COMMENT`, `ARTIST`, `ALBUMARTIST`, `TITLE`, `ALBUM`
 

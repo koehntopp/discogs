@@ -45,6 +45,8 @@ from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn
 from rich.syntax import Syntax
 from rich.table import Table
 
+from log import logger
+
 # ─── Constants ──────────────────────────────────────────────────────────────────
 
 LRC_TIMESTAMP_RE = re.compile(r'\[(\d{2}):(\d{2})\.(\d{2})\]')
@@ -687,6 +689,42 @@ def process_file(
 				heard_str = '[dim italic](nothing in window)[/dim italic]'
 			diag.add_row(conf_str, lyric_str, heard_str)
 		console.print(diag)
+
+	# Log lines with changed timestamps
+	changed_lines = []
+	for a in aligned:
+		if a.suggested_ts is not None:
+			if a.lyric.original_ts is not None:
+				delta = a.suggested_ts - a.lyric.original_ts
+				if abs(delta) >= 0.05:
+					changed_lines.append((a, delta))
+			else:
+				changed_lines.append((a, None))
+
+	if changed_lines:
+		console.print()
+		console.print(f'  [cyan]ℹ {len(changed_lines)} timestamp(s) changed:[/cyan]')
+		chg_table = Table(show_header=True, header_style='bold cyan', box=None, padding=(0, 1))
+		chg_table.add_column('Original', style='dim', no_wrap=True, min_width=10)
+		chg_table.add_column('Suggested', no_wrap=True, min_width=10)
+		chg_table.add_column('Δ sec', no_wrap=True, min_width=7)
+		chg_table.add_column('Lyric text', min_width=30)
+		for a, delta in changed_lines:
+			orig_s = (
+				_secs_to_lrc(a.lyric.original_ts) if a.lyric.original_ts is not None else '(none)'
+			)
+			sugg_s = _secs_to_lrc(a.suggested_ts) if a.suggested_ts is not None else '(none)'
+			delta_s = f'{delta:+.2f}s' if delta is not None else 'NEW'
+			chg_table.add_row(orig_s, sugg_s, delta_s, a.lyric.text[:50])
+			logger.info(
+				'timestamp_changed',
+				file=path.name,
+				orig=orig_s,
+				suggested=sugg_s,
+				delta=delta_s,
+				text=a.lyric.text,
+			)
+		console.print(chg_table)
 
 	# 7. Optionally write back to the FLAC LYRICS tag
 	if write and not dry_run:
