@@ -56,7 +56,7 @@ MULTILINE_SPLIT_RE = re.compile(r'\s*/\s*|\s*\|\s*')  # " / " or " | " delimiter
 
 PUNCT_RE = re.compile(r"[^\w\s']", re.UNICODE)
 
-DEFAULT_ANCHOR_SLACK = 5.0  # seconds either side of original_ts to search
+DEFAULT_ANCHOR_SLACK = 15.0  # seconds either side of original_ts to search
 
 console = Console(stderr=True)
 
@@ -256,10 +256,12 @@ def extract_lyrics_from_flac(path: Path) -> tuple[str | None, str | None]:
 
 def transcribe(
 	path: Path, model: whisper.Whisper, transcribe_device: str = 'cpu'
-) -> list[WhisperWord]:
+) -> tuple[list[WhisperWord], list[tuple[float, str]]]:
 	"""
 	Transcribe the audio file with Whisper using word-level timestamps.
-	Returns a flat list of WhisperWord objects ordered by start time.
+	Returns a tuple of:
+	  - words: flat list of WhisperWord objects ordered by start time.
+	  - segments: list of (start_time, segment_text) tuples for segment-level output.
 
 	Note: word_timestamps=True uses a DTW (dynamic time warping) alignment step
 	that calls .double() internally, which requires float64.  MPS does not support
@@ -277,7 +279,11 @@ def transcribe(
 			model = model.to(orig_device)
 
 	words: list[WhisperWord] = []
+	segments: list[tuple[float, str]] = []
 	for seg_idx, segment in enumerate(result.get('segments', [])):
+		seg_text = segment.get('text', '').strip()
+		if seg_text:
+			segments.append((segment['start'], seg_text))
 		for w in segment.get('words', []):
 			word_text = w.get('word', '').strip()
 			if word_text:
@@ -285,7 +291,7 @@ def transcribe(
 					WhisperWord(word=word_text, start=w['start'], end=w['end'], segment_id=seg_idx)
 				)
 
-	return words
+	return words, segments
 
 
 # ─── Alignment ───────────────────────────────────────────────────────────────────
@@ -645,50 +651,68 @@ def process_file(
 	# 1. Extract lyrics
 	raw_lyrics, tag_name = extract_lyrics_from_flac(path)
 	if not raw_lyrics:
-		console.print('  [dim]No lyrics tag found — skipping.[/dim]')
-		return False
-
-	lyric_lines = parse_lyrics(raw_lyrics)
-	if not lyric_lines:
-		console.print('  [dim]Lyrics tag is empty after parsing — skipping.[/dim]')
-		return False
-
-	if split:
-		lyric_lines = split_multiline(lyric_lines)
-
-	lyric_lines, is_corrupted_lrc = sanitize_out_of_order_anchors(lyric_lines)
-	if is_corrupted_lrc:
 		console.print(
-			'  [yellow]⚠ Input LYRICS tag contains out-of-order timestamps (corrupted LRC). '
-			'Sanitizing anchors for sequential alignment.[/yellow]'
+			'  [yellow]⚠ No existing lyrics tag — generating LRC directly from Whisper transcription…[/yellow]'
+		)
+		with console.status(f'  Transcribing [dim]{path.name}[/dim] with Whisper…'):
+			words, segments = transcribe(path, model, transcribe_device=transcribe_device)
+
+		if not segments:
+			console.print('  [red]Whisper returned no speech — skipping.[/red]')
+			return False
+
+		console.print(f'  Whisper: generated [bold]{len(segments)}[/bold] timestamped lines.')
+		aligned = [
+			AlignedLine(
+				lyric=LyricLine(text=seg_text, original_ts=None),
+				suggested_ts=seg_ts,
+				confidence=1.0,
+				whisper_text=seg_text,
+			)
+			for seg_ts, seg_text in segments
+		]
+	else:
+		lyric_lines = parse_lyrics(raw_lyrics)
+		if not lyric_lines:
+			console.print('  [dim]Lyrics tag is empty after parsing — skipping.[/dim]')
+			return False
+
+		if split:
+			lyric_lines = split_multiline(lyric_lines)
+
+		lyric_lines, is_corrupted_lrc = sanitize_out_of_order_anchors(lyric_lines)
+		if is_corrupted_lrc:
+			console.print(
+				'  [yellow]⚠ Input LYRICS tag contains out-of-order timestamps (corrupted LRC). '
+				'Sanitizing anchors for sequential alignment.[/yellow]'
+			)
+
+		has_timestamps = any(ll.original_ts is not None for ll in lyric_lines)
+		console.print(
+			f'  Tag [cyan]{tag_name}[/cyan]: '
+			f'[bold]{len(lyric_lines)}[/bold] lines, '
+			f'format: [magenta]{"LRC" if has_timestamps else "plain TXT"}[/magenta]'
+			+ (f', anchor_slack=[cyan]±{anchor_slack}s[/cyan]' if has_timestamps else '')
 		)
 
-	has_timestamps = any(ll.original_ts is not None for ll in lyric_lines)
-	console.print(
-		f'  Tag [cyan]{tag_name}[/cyan]: '
-		f'[bold]{len(lyric_lines)}[/bold] lines, '
-		f'format: [magenta]{"LRC" if has_timestamps else "plain TXT"}[/magenta]'
-		+ (f', anchor_slack=[cyan]±{anchor_slack}s[/cyan]' if has_timestamps else '')
-	)
+		# 2. Transcribe with Whisper
+		with console.status(f'  Transcribing [dim]{path.name}[/dim] with Whisper…'):
+			words, segments = transcribe(path, model, transcribe_device=transcribe_device)
 
-	# 2. Transcribe with Whisper
-	with console.status(f'  Transcribing [dim]{path.name}[/dim] with Whisper…'):
-		words = transcribe(path, model, transcribe_device=transcribe_device)
+		if not words:
+			console.print('  [red]Whisper returned no words — skipping.[/red]')
+			return False
 
-	if not words:
-		console.print('  [red]Whisper returned no words — skipping.[/red]')
-		return False
+		console.print(f'  Whisper: [bold]{len(words)}[/bold] words transcribed.')
 
-	console.print(f'  Whisper: [bold]{len(words)}[/bold] words transcribed.')
-
-	# 3. Align
-	aligned = align(
-		lyric_lines,
-		words,
-		anchor_slack=anchor_slack,
-		segment_split=segment_split,
-		min_confidence=min_confidence,
-	)
+		# 3. Align
+		aligned = align(
+			lyric_lines,
+			words,
+			anchor_slack=anchor_slack,
+			segment_split=segment_split,
+			min_confidence=min_confidence,
+		)
 
 	# 4. Read tags for metadata
 	try:

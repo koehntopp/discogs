@@ -495,15 +495,16 @@ uv run align_lyrics.py [TARGET] [OPTIONS]
 | `--dry-run` | off | Show suggestions without writing any files (overrides `--write`). |
 | `--min-confidence` | `0.5` | Threshold for Whisper alignment confidence (0.0–1.0). Matches below this threshold fall back to existing tag data. |
 | `--recursive`, `-r` | off | Recurse into sub-folders. |
-| `--anchor-slack` | `5.0` | For LRC input: search Whisper words within ±N seconds of each original timestamp. Increase if original timestamps are badly off. |
+| `--anchor-slack` | `15.0` | For LRC input: search Whisper words within ±N seconds of each original timestamp. Increase if original timestamps are badly off. |
 | `--no-split` | off | Disable delimiter-based splitting; keep ` / ` and ` \| ` delimiters intact. |
 | `--no-segment-split` | off | Disable Whisper-segment-based splitting of large lyric blocks. |
 
 **Behaviour:**
 
-1. Scans `FOLDER` for `*.flac` files (optionally recursive).
+1. Scans `TARGET` for `*.flac` files (optionally recursive).
 2. For each file, reads the first populated lyrics tag in priority order: `LYRICS` → `UNSYNCEDLYRICS` → `COMMENT`.
-3. Detects whether the lyrics are LRC (has `[MM:SS.xx]` timestamps) or plain TXT and parses accordingly; LRC header lines (`[ar:]`, `[ti:]`, etc.) are ignored.
+3. If no existing lyrics tag is found, auto-generates timestamped LRC lines directly from Whisper's speech-to-text segments (`[MM:SS.xx] transcribed text`).
+4. Detects whether existing lyrics are LRC (has `[MM:SS.xx]` timestamps) or plain TXT and parses accordingly; LRC header lines (`[ar:]`, `[ti:]`, etc.) are ignored.
 4. **Delimiter splitting & Anchor Sanitization** (unless `--no-split`): lines containing ` / ` or ` | ` are expanded into individual sub-lines. Input LRC tags are validated for monotonicity and flat duplicate blocks ($\ge 3$ identical timestamps); corrupted or duplicate anchors are sanitized to ensure clean sequential alignment against speech audio.
 
 5. Transcribes the FLAC with Whisper (`word_timestamps=True`) to obtain a flat word list with start/end timestamps and segment groupings.
