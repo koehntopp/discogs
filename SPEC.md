@@ -502,8 +502,8 @@ uv run align_lyrics.py [TARGET] [OPTIONS]
 **Behaviour:**
 
 1. Scans `TARGET` for `*.flac` files (optionally recursive).
-2. For each file, reads the first populated lyrics tag in priority order: `LYRICS` → `UNSYNCEDLYRICS` → `COMMENT`.
-3. If no existing lyrics tag is found, auto-generates timestamped LRC lines directly from Whisper's speech-to-text segments (`[MM:SS.xx] transcribed text`).
+2. For each file, inspects exclusively the FLAC `LYRICS` tag.
+3. If no existing `LYRICS` tag is found, auto-generates timestamped LRC lines directly from Whisper's speech-to-text segments (`[MM:SS.xx] transcribed text`).
 4. Detects whether existing lyrics are LRC (has `[MM:SS.xx]` timestamps) or plain TXT and parses accordingly; LRC header lines (`[ar:]`, `[ti:]`, etc.) are ignored.
 4. **Delimiter splitting & Anchor Sanitization** (unless `--no-split`): lines containing ` / ` or ` | ` are expanded into individual sub-lines. Input LRC tags are validated for monotonicity and flat duplicate blocks ($\ge 3$ identical timestamps); corrupted or duplicate anchors are sanitized to ensure clean sequential alignment against speech audio.
 

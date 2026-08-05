@@ -51,7 +51,7 @@ from log import logger
 
 LRC_TIMESTAMP_RE = re.compile(r'\[(\d{2}):(\d{2})\.(\d{2})\]')
 LRC_HEADER_RE = re.compile(r'^\[(ar|ti|al|by|length|offset):.*\]\s*$', re.IGNORECASE)
-LYRICS_TAGS = ('LYRICS', 'UNSYNCEDLYRICS', 'COMMENT')  # checked in order
+LYRICS_TAGS = ('LYRICS',)  # exclusively inspect LYRICS tag
 MULTILINE_SPLIT_RE = re.compile(r'\s*/\s*|\s*\|\s*')  # " / " or " | " delimiters
 
 PUNCT_RE = re.compile(r"[^\w\s']", re.UNICODE)
