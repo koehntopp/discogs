@@ -117,6 +117,7 @@ All config values are also editable via the Settings modal in the web UI.
 | `bliss.py` | File organisation + MP3 sync (with overwrite protection) |
 | `album_list.py` | Album inventory scan → CSV + DR chart |
 | `update_lyrics.py` | Parallel lyrics fetch from lrclib.net (32 workers) |
+| `align_lyrics.py` | Whisper-based LRC timestamp alignment / correction |
 | `calculate_dr.py` | Dynamic Range calculation |
 | `calculate_fp.py` | AcoustID fingerprint generation |
 | `migrate_tags.py` | Tag schema migration to discrete `ALBUM_*` tags |
@@ -154,5 +155,6 @@ Structured logging via [structlog](https://github.com/hynek/structlog):
 - [pyacoustid](https://github.com/beetbox/pyacoustid) — AcoustID fingerprinting
 - [lrclib.net](https://lrclib.net) — synced lyrics API
 - [rsgain](https://github.com/complexlogic/rsgain) — ReplayGain tag calculation
+- [openai-whisper](https://github.com/openai/whisper) — local speech-to-text for LRC timestamp alignment
 - [FastAPI](https://github.com/fastapi/fastapi) + [HTMX](https://htmx.org) — web UI
 - [structlog](https://github.com/hynek/structlog) — structured logging
