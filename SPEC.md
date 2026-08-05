@@ -492,7 +492,7 @@ uv run align_lyrics.py [FOLDER] [OPTIONS]
 | `--device`, `-d` | `auto` | Torch device: `auto` (cuda → mps → cpu), `cpu`, `cuda`, `mps`. |
 | `--write`, `-w` | off | Overwrite the `LYRICS` tag inside each FLAC file with the suggested LRC. Use `--dry-run` to preview first. |
 | `--dry-run` | off | Show suggestions without writing any files (overrides `--write`). |
-| `--min-confidence` | `0.5` | Warn about lines with alignment confidence below this threshold (0.0–1.0). |
+| `--min-confidence` | `0.5` | Threshold for Whisper alignment confidence (0.0–1.0). Matches below this threshold fall back to existing tag data. |
 | `--recursive`, `-r` | off | Recurse into sub-folders. |
 | `--anchor-slack` | `5.0` | For LRC input: search Whisper words within ±N seconds of each original timestamp. Increase if original timestamps are badly off. |
 | `--no-split` | off | Disable delimiter-based splitting; keep ` / ` and ` \| ` delimiters intact. |
@@ -506,20 +506,21 @@ uv run align_lyrics.py [FOLDER] [OPTIONS]
 4. **Delimiter splitting** (unless `--no-split`): lines containing ` / ` or ` | ` are expanded into individual sub-lines; un-timestamped lines that follow a timestamped one are already separate and aligned individually.
 5. Transcribes the FLAC with Whisper (`word_timestamps=True`) to obtain a flat word list with start/end timestamps and segment groupings.
 6. **Whisper-segment splitting** (unless `--no-segment-split`): after alignment, any lyric line whose matched word window spans multiple Whisper segments (natural pause/breath boundaries) is split into individually-timestamped sub-lines. A minimum of 3 words per segment is required to avoid splitting on short filler segments. If the text cannot be cleanly partitioned (fragment similarity < 0.3), the line is kept intact.
-6. **Alignment** — two strategies depending on input format:
-   - *LRC (time-anchor)*: for each line, searches only Whisper words whose start time falls within `±anchor_slack` seconds of the original timestamp. Prevents the cursor from jumping to a later repetition of a chorus phrase. Falls back to greedy if the anchor window is empty.
+7. **Alignment & Low-Confidence Fallback** — two strategies depending on input format:
+   - *LRC (time-anchor)*: for each line, searches only Whisper words whose start time falls within `±anchor_slack` seconds of the original timestamp.
    - *Plain TXT (greedy)*: searches a forward look-ahead of `max(n×3, 20)` words from the cursor position; cursor advances past each match.
-   - **Timestamp fallback**: if text similarity is 0 but `original_ts` is present (LRC input), the original timestamp is echoed into `suggested_ts` unchanged (`confidence = 0.00`). These lines are marked `(echo)` in the comparison table so they are visually distinct from Whisper-derived timestamps. Plain TXT lines with no match remain `(none)`.
-7. Renders a Rich comparison table: original timestamp | suggested timestamp | Δ seconds | confidence score | lyric text. Lines where the suggested timestamp was echoed from the original (confidence 0.00, no Whisper match) are marked `(echo)` in the Suggested column.
-8. For lines below `--min-confidence`, prints a per-line diagnostic table showing the lyric text alongside what Whisper actually transcribed in that time window (or `(nothing in window)` if Whisper produced no output there). This makes it easy to see whether low confidence is due to a garbled transcription or a silent/instrumental passage.
-8. Displays a full suggested LRC preview (with `[ar:]`/`[ti:]`/`[al:]` headers from FLAC tags) in a syntax-highlighted panel.
-9. With `--write`, overwrites the `LYRICS` tag in each FLAC file with the suggested LRC string. The original lyrics are replaced. Use `--dry-run` to review suggestions first.
+   - **Low-confidence fallback**: if Whisper alignment confidence is below `--min-confidence` (default 0.50), the existing tag timestamp (`original_ts`) is preserved instead of accepting an unreliable Whisper match. These lines are marked `(tag fallback)` in the comparison table.
+8. Renders a Rich comparison table: original timestamp | suggested timestamp | Δ seconds | confidence score | lyric text.
+9. For lines below `--min-confidence`, prints a per-line diagnostic table showing the lyric text alongside what Whisper actually transcribed in that time window (or `(nothing in window)` if Whisper produced no output there).
+10. Displays a full suggested LRC preview (with `[ar:]`/`[ti:]`/`[al:]` headers from FLAC tags) in a syntax-highlighted panel. All lines are guaranteed to have a `[MM:SS.xx]` timestamp.
+11. With `--write`, overwrites the `LYRICS` tag in each FLAC file with the suggested LRC string.
 
 **Tags read:** `LYRICS`, `UNSYNCEDLYRICS`, `COMMENT`, `ARTIST`, `ALBUMARTIST`, `TITLE`, `ALBUM`
 
-**Tags written:** none (read-only; output is a sidecar `.lrc.suggested` file)
+**Tags written:** `LYRICS` (when `--write` is specified)
 
 **Dependencies:** `openai-whisper`, `torch`, `mutagen`, `rich`, `click`, `numpy`
+
 
 
 ---

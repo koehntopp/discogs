@@ -371,6 +371,7 @@ def align(
 	*,
 	anchor_slack: float = DEFAULT_ANCHOR_SLACK,
 	segment_split: bool = True,
+	min_confidence: float = 0.5,
 ) -> list[AlignedLine]:
 	"""
 	Align each lyric line to the best matching window of Whisper words.
@@ -392,7 +393,9 @@ def align(
 	sub-lines via _split_by_segments().
 	"""
 	if not words:
-		return [AlignedLine(lyric=ll, suggested_ts=None, confidence=0.0) for ll in lyric_lines]
+		return [
+			AlignedLine(lyric=ll, suggested_ts=ll.original_ts, confidence=0.0) for ll in lyric_lines
+		]
 
 	results: list[AlignedLine] = []
 	cursor = 0  # minimum word index for next greedy search
@@ -400,7 +403,9 @@ def align(
 	for lyric_line in lyric_lines:
 		tokens = _normalize_words(lyric_line.text)
 		if not tokens:
-			results.append(AlignedLine(lyric=lyric_line, suggested_ts=None, confidence=0.0))
+			results.append(
+				AlignedLine(lyric=lyric_line, suggested_ts=lyric_line.original_ts, confidence=0.0)
+			)
 			continue
 
 		n = len(tokens)
@@ -432,17 +437,19 @@ def align(
 				best_pos = i
 
 		# Three-level fallback for suggested timestamp:
-		#  1. Good text match → use Whisper word start time
-		#  2. No text match but original_ts exists → echo original (conf stays 0.00)
-		#  3. No text match, plain TXT input → leave as None
-		if best_score > 0:
+		#  1. High-confidence text match (>= min_confidence) → use Whisper word start time
+		#  2. Low-confidence match or no match but original_ts exists → fall back to original tag ts
+		#  3. Low-confidence match, plain TXT input → leave as None (format_lrc will interpolate)
+		if best_score >= min_confidence:
 			suggested_ts = words[best_pos].start
 			window_words = words[best_pos : best_pos + n]
 			whisper_text: str | None = ' '.join(w.word for w in window_words)
 
 			# ── Segment-based splitting ───────────────────────────────────────
 			if segment_split:
-				frags = _split_by_segments(lyric_line, window_words)
+				frags = _split_by_segments(
+					lyric_line, window_words, fallback_confidence=min_confidence
+				)
 				if frags:
 					for frag_ts, frag_text in frags:
 						results.append(
@@ -458,7 +465,7 @@ def align(
 
 		elif lyric_line.original_ts is not None:
 			suggested_ts = lyric_line.original_ts
-			# Echo case: collect whatever Whisper said anywhere near the anchor window
+			# Tag fallback case: collect whatever Whisper said anywhere near the anchor window
 			lo = lyric_line.original_ts - anchor_slack
 			hi = lyric_line.original_ts + anchor_slack
 			nearby = [w.word for w in words if lo <= w.start <= hi]
@@ -466,6 +473,7 @@ def align(
 		else:
 			suggested_ts = None
 			whisper_text = None
+
 		# Advance greedy cursor past this match so subsequent lines search forward
 		cursor = max(cursor, best_pos + max(n, 1))
 
@@ -487,7 +495,7 @@ def align(
 def format_lrc(
 	aligned: list[AlignedLine], *, artist: str = '', title: str = '', album: str = ''
 ) -> str:
-	"""Render aligned lines as an LRC file string with suggested timestamps."""
+	"""Render aligned lines as an LRC file string with guaranteed timestamps for every line."""
 	header_parts = []
 	if artist:
 		header_parts.append(f'[ar:{artist}]')
@@ -497,11 +505,17 @@ def format_lrc(
 		header_parts.append(f'[al:{album}]')
 
 	body_lines = []
+	last_ts = 0.0
 	for a in aligned:
 		if a.suggested_ts is not None:
-			body_lines.append(f'{_secs_to_lrc(a.suggested_ts)}{a.lyric.text}')
+			ts = a.suggested_ts
+			last_ts = ts
+		elif a.lyric.original_ts is not None:
+			ts = a.lyric.original_ts
+			last_ts = ts
 		else:
-			body_lines.append(a.lyric.text)  # no timestamp available
+			ts = last_ts
+		body_lines.append(f'{_secs_to_lrc(ts)}{a.lyric.text}')
 
 	parts = header_parts + body_lines
 	return '\n'.join(parts)
@@ -521,15 +535,15 @@ def _render_comparison_table(aligned: list[AlignedLine]) -> Table:
 			_secs_to_lrc(a.lyric.original_ts) if a.lyric.original_ts is not None else '(none)'
 		)
 
-		# Detect echo case: timestamp was not Whisper-derived, just copied from original
-		is_echo = (
-			a.confidence == 0.0
-			and a.suggested_ts is not None
+		# Detect fallback case: timestamp was not Whisper-derived, copied from original
+		is_fallback = (
+			a.suggested_ts is not None
 			and a.lyric.original_ts is not None
 			and a.suggested_ts == a.lyric.original_ts
+			and a.confidence < 0.5
 		)
-		if is_echo:
-			sugg_str = f'[dim]{_secs_to_lrc(a.suggested_ts)} (echo)[/dim]'
+		if is_fallback:
+			sugg_str = f'[dim]{_secs_to_lrc(a.suggested_ts)} (tag fallback)[/dim]'
 		elif a.suggested_ts is not None:
 			sugg_str = _secs_to_lrc(a.suggested_ts)
 		else:
@@ -613,7 +627,13 @@ def process_file(
 	console.print(f'  Whisper: [bold]{len(words)}[/bold] words transcribed.')
 
 	# 3. Align
-	aligned = align(lyric_lines, words, anchor_slack=anchor_slack, segment_split=segment_split)
+	aligned = align(
+		lyric_lines,
+		words,
+		anchor_slack=anchor_slack,
+		segment_split=segment_split,
+		min_confidence=min_confidence,
+	)
 
 	# 4. Read tags for metadata
 	try:
