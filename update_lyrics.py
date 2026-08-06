@@ -32,6 +32,7 @@ from log import _console_handler, logger
 LRC_TIMESTAMP = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]')  # valid: [MM:SS.xx]
 LRC_BAD_TS = re.compile(r'\[\d{3,}:\d{2}:\d{2}\.\d{2}\]')  # invalid: [HH:MM:SS.xx]
 LRC_HEADER_LINE = re.compile(r'^\[(ar|ti|al|by|length|offset):.*\]\s*$', re.IGNORECASE)
+LRC_LINE = re.compile(r'^(\[\d{2}:\d{2}\.\d{2}\])(.*)$')
 USER_AGENT = 'DiscogsMusicManager/1.0 (+https://github.com/koehntopp/discogs)'
 MAX_WORKERS = 8
 
@@ -56,6 +57,28 @@ def _strip_headers(lrc: str) -> str:
 
 def _apply_headers(lrc: str, artist: str, title: str, album: str, length_secs: float) -> str:
 	return _make_headers(artist, title, album, length_secs) + _strip_headers(lrc)
+
+
+def _capitalize_line(text: str) -> str:
+	"""Uppercase the first non-whitespace character of a line, preserving leading whitespace."""
+	m = re.match(r'^(\s*)(\S)(.*)$', text, re.DOTALL)
+	return m.group(1) + m.group(2).upper() + m.group(3) if m else text
+
+
+def _capitalize_lrc(lrc: str) -> str:
+	"""Capitalize the lyric text following each [MM:SS.xx] timestamp.
+
+	Header lines ([ar:..], [ti:..], etc.) don't match LRC_LINE and pass through untouched.
+	"""
+	out = []
+	for line in lrc.splitlines():
+		m = LRC_LINE.match(line)
+		out.append(m.group(1) + _capitalize_line(m.group(2)) if m else line)
+	return '\n'.join(out)
+
+
+def _capitalize_txt(text: str) -> str:
+	return '\n'.join(_capitalize_line(line) for line in text.splitlines())
 
 
 def flactag(song: FLAC | dict, tag: str) -> str:
@@ -118,10 +141,11 @@ def _fetch_one(
 			)
 			had_invalid_lrc = True
 		elif _is_lrc(existing_lyrics):
-			# Re-apply updated headers if missing/stale
+			# Re-apply updated headers if missing/stale, and normalize line capitalization
 			updated_lrc = _apply_headers(existing_lyrics, artist, title, album_name, length)
+			updated_lrc = _capitalize_lrc(updated_lrc)
 			if updated_lrc != existing_lyrics:
-				return flac_path, artist, title, updated_lrc, 'lrc', 'header', discogs_id, track
+				return flac_path, artist, title, updated_lrc, 'lrc', 'fix', discogs_id, track
 			return flac_path, artist, title, existing_lyrics, 'lrc', 'skip', discogs_id, track
 
 	params = {
@@ -186,24 +210,31 @@ def _fetch_one(
 			logger.warning(f'Invalid LRC timestamps from lrclib, skipping: {title} ({artist})')
 		else:
 			lrc = _apply_headers(lrc, artist, title, album_name, length)
+			lrc = _capitalize_lrc(lrc)
 			if lrc == existing_lyrics:
 				return flac_path, artist, title, existing_lyrics, 'lrc', 'skip', discogs_id, track
 			return flac_path, artist, title, lrc, 'lrc', 'new', discogs_id, track
 	if data.get('plainLyrics') and not existing_lyrics:
-		return flac_path, artist, title, data['plainLyrics'], 'txt', 'new', discogs_id, track
+		txt = _capitalize_txt(data['plainLyrics'])
+		return flac_path, artist, title, txt, 'txt', 'new', discogs_id, track
 
 	if had_invalid_lrc:
 		return flac_path, artist, title, '', 'none', 'clear', discogs_id, track
-	return (
-		flac_path,
-		artist,
-		title,
-		existing_lyrics,
-		('lrc' if _is_lrc(existing_lyrics) else ('txt' if existing_lyrics else 'none')),
-		'skip',
-		discogs_id,
-		track,
-	)
+
+	# Nothing new fetched — fall back to what's on disk, normalizing capitalization if needed.
+	if existing_lyrics:
+		is_lrc_existing = _is_lrc(existing_lyrics)
+		fixed = (
+			_capitalize_lrc(existing_lyrics)
+			if is_lrc_existing
+			else _capitalize_txt(existing_lyrics)
+		)
+		lyric_type = 'lrc' if is_lrc_existing else 'txt'
+		if fixed != existing_lyrics:
+			return flac_path, artist, title, fixed, lyric_type, 'fix', discogs_id, track
+		return flac_path, artist, title, existing_lyrics, lyric_type, 'skip', discogs_id, track
+
+	return flac_path, artist, title, '', 'none', 'skip', discogs_id, track
 
 
 def _collect_tracks(flacdir: str) -> list[tuple[str, str]]:
@@ -314,7 +345,7 @@ def main() -> None:
 						else:
 							stats['none'] += 1
 
-						if action in ('new', 'header', 'clear'):
+						if action in ('new', 'fix', 'clear'):
 							stats['new'] += 1
 							try:
 								t = FLAC(flac_path)
@@ -341,8 +372,8 @@ def main() -> None:
 										logger.warning(
 											f'Could not touch file mtime for {flac_path}: {e}'
 										)
-									if action == 'header':
-										logger.success(f'LRC headers updated: {title} ({artist})')
+									if action == 'fix':
+										logger.success(f'Lyrics fixed: {title} ({artist})')
 									else:
 										kind = 'LRC' if lyric_type == 'lrc' else 'TXT'
 										logger.success(f'{kind} lyrics added: {title} ({artist})')
