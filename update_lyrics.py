@@ -66,14 +66,14 @@ def _capitalize_line(text: str) -> str:
 
 
 def _capitalize_lrc(lrc: str) -> str:
-	"""Capitalize the lyric text following each [MM:SS.xx] timestamp.
+	"""Strip whitespace after each [MM:SS.xx] timestamp and capitalize the lyric text.
 
 	Header lines ([ar:..], [ti:..], etc.) don't match LRC_LINE and pass through untouched.
 	"""
 	out = []
 	for line in lrc.splitlines():
 		m = LRC_LINE.match(line)
-		out.append(m.group(1) + _capitalize_line(m.group(2)) if m else line)
+		out.append(m.group(1) + _capitalize_line(m.group(2).lstrip()) if m else line)
 	return '\n'.join(out)
 
 

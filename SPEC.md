@@ -290,7 +290,8 @@ uv run update_lyrics.py [FLAC_DIR]
    - Otherwise, Stage 1: Queries lrclib.net with artist, title, clean album name, and duration.
    - Stage 2: If Stage 1 returns 404, retries lrclib.net with artist, title, and duration (omitting album name).
    - Writes synced LRC lyrics if available, otherwise plain-text lyrics when the tag was empty.
-   - **Capitalization normalization**: every lyric line — newly fetched or already embedded — has its first non-whitespace character uppercased (leading whitespace and LRC header lines are left untouched).
+   - **Capitalization normalization**: every lyric line — newly fetched or already embedded — has its first non-whitespace character uppercased (LRC header lines are left untouched).
+   - **Timestamp whitespace stripping**: for LRC lines, any whitespace between the `[MM:SS.xx]` timestamp and the lyric text is removed (`[MM:SS.xx]Text`, not `[MM:SS.xx] Text`).
 4. Saves modified files immediately after each successful fetch or fix.
 5. Prints summary totals: LRC count, plain-text count, no-lyrics count, and new/fixed writes.
 

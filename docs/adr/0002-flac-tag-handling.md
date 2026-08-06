@@ -62,7 +62,8 @@ We establish the following binding rules and standards for all FLAC tag handling
 ### 6. Lyrics Tag Management (`LYRICS`)
 * **Format Distinction**: Synced LRC (`[MM:SS.xx]`) vs Plain Text TXT.
 * **Header Preservation**: Rebuilds headers (`[ar:...]`, `[ti:...]`, `[al:...]`, `[length:...]`) via line-greedy regexes.
-* **Capitalization Normalization**: The first non-whitespace character of every lyric line (new or already embedded) is uppercased, both for synced LRC (text following the `[MM:SS.xx]` timestamp) and plain TXT. Leading whitespace and LRC header lines are left untouched. Existing embedded lyrics that need only this fix are rewritten in place rather than skipped.
+* **Capitalization Normalization**: The first non-whitespace character of every lyric line (new or already embedded) is uppercased, both for synced LRC (text following the `[MM:SS.xx]` timestamp) and plain TXT. LRC header lines are left untouched. Existing embedded lyrics that need only this fix are rewritten in place rather than skipped.
+* **LRC Timestamp Whitespace Stripping**: Any whitespace between an `[MM:SS.xx]` timestamp and its lyric text is stripped (`[MM:SS.xx]Text`, not `[MM:SS.xx] Text`), applied via the same normalization pass.
 
 ### 7. Calculated Metric Tags
 * Track DR (`DYNAMIC_RANGE`), Album DR (`ALBUM_DR`), AcoustID Fingerprints (`ACOUSTID_FINGERPRINT`).
