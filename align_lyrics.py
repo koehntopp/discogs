@@ -3,11 +3,10 @@
 # requires-python = ">=3.14"
 # dependencies = [
 #   "mutagen>=1.47",
-#   "openai-whisper",
+#   "stable-ts",
+#   "mlx-whisper",
 #   "rich>=13",
 #   "click>=8",
-#   "torch",
-#   "numpy",
 #   "structlog",
 # ]
 # ///
@@ -15,8 +14,8 @@
 align_lyrics.py — Whisper-based LRC timestamp alignment and auto-generation.
 
 Reads FLAC files (directory or single file), inspects the LYRICS tag, runs local
-Whisper speech-to-text with word-level timestamps, and aligns lyric lines against
-the transcription to generate or correct LRC timestamps.
+stable-whisper (MLX-accelerated) speech-to-text with word-level timestamps, and aligns
+lyric lines against the transcription to generate or correct LRC timestamps.
 
 Key Features:
   - Supports single .flac file or directory targets (optionally recursive).
@@ -36,18 +35,12 @@ Usage:
 import difflib
 import re
 import sys
-import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-
-# Suppress Whisper's "FP16 is not supported on CPU; using FP32 instead" noise.
-# We already handle this intentionally for the MPS workaround.
-warnings.filterwarnings('ignore', message='FP16 is not supported on CPU')
+from typing import Any
 
 import click
-import numpy as np
-import torch
-import whisper
+import stable_whisper
 from mutagen.flac import FLAC
 from rich.console import Console
 from rich.panel import Panel
@@ -264,42 +257,26 @@ def extract_lyrics_from_flac(path: Path) -> tuple[str | None, str | None]:
 # ─── Whisper transcription ────────────────────────────────────────────────────────
 
 
-def transcribe(
-	path: Path, model: whisper.Whisper, transcribe_device: str = 'cpu'
-) -> tuple[list[WhisperWord], list[tuple[float, str]]]:
+def transcribe(path: Path, model: Any) -> tuple[list[WhisperWord], list[tuple[float, str]]]:
 	"""
-	Transcribe the audio file with Whisper using word-level timestamps.
+	Transcribe the audio file using stable-whisper with MLX acceleration.
 	Returns a tuple of:
 	  - words: flat list of WhisperWord objects ordered by start time.
 	  - segments: list of (start_time, segment_text) tuples for segment-level output.
-
-	Note: word_timestamps=True uses a DTW (dynamic time warping) alignment step
-	that calls .double() internally, which requires float64.  MPS does not support
-	float64, so we move the model to `transcribe_device` (always CPU on MPS) just
-	for this call and restore it afterwards.
 	"""
-	orig_device = next(model.parameters()).device
-	need_move = str(orig_device) != transcribe_device
-	if need_move:
-		model = model.to(transcribe_device)
-	try:
-		result = model.transcribe(str(path), word_timestamps=True, verbose=False, task='transcribe')
-	finally:
-		if need_move:
-			model = model.to(orig_device)
+	result = model.transcribe(str(path))
 
 	words: list[WhisperWord] = []
+	for w in result.all_words():
+		w_text = w.word.strip()
+		if w_text:
+			words.append(WhisperWord(word=w_text, start=w.start, end=w.end))
+
 	segments: list[tuple[float, str]] = []
-	for seg_idx, segment in enumerate(result.get('segments', [])):
-		seg_text = segment.get('text', '').strip()
+	for seg in result.segments:
+		seg_text = seg.text.strip()
 		if seg_text:
-			segments.append((segment['start'], seg_text))
-		for w in segment.get('words', []):
-			word_text = w.get('word', '').strip()
-			if word_text:
-				words.append(
-					WhisperWord(word=word_text, start=w['start'], end=w['end'], segment_id=seg_idx)
-				)
+			segments.append((seg.start, seg_text))
 
 	return words, segments
 
@@ -641,12 +618,11 @@ def _render_comparison_table(aligned: list[AlignedLine]) -> Table:
 
 def process_file(
 	path: Path,
-	model: whisper.Whisper,
+	model: Any,
 	*,
 	write: bool,
 	dry_run: bool,
 	min_confidence: float,
-	transcribe_device: str = 'cpu',
 	anchor_slack: float = DEFAULT_ANCHOR_SLACK,
 	split: bool = True,
 	segment_split: bool = True,
@@ -665,7 +641,7 @@ def process_file(
 			'  [yellow]⚠ No existing lyrics tag — generating LRC directly from Whisper transcription…[/yellow]'
 		)
 		with console.status(f'  Transcribing [dim]{path.name}[/dim] with Whisper…'):
-			words, segments = transcribe(path, model, transcribe_device=transcribe_device)
+			words, segments = transcribe(path, model)
 
 		if not segments:
 			console.print('  [red]Whisper returned no speech — skipping.[/red]')
@@ -707,7 +683,7 @@ def process_file(
 
 		# 2. Transcribe with Whisper
 		with console.status(f'  Transcribing [dim]{path.name}[/dim] with Whisper…'):
-			words, segments = transcribe(path, model, transcribe_device=transcribe_device)
+			words, segments = transcribe(path, model)
 
 		if not words:
 			console.print('  [red]Whisper returned no words — skipping.[/red]')
@@ -744,7 +720,7 @@ def process_file(
 
 	# 6. Compute suggested LRC and show preview
 	lrc_out = format_lrc(aligned, artist=artist, title=title, album=album)
-	avg_conf = float(np.mean([a.confidence for a in aligned]))
+	avg_conf = sum(a.confidence for a in aligned) / len(aligned) if aligned else 0.0
 
 	console.print()
 	console.print(
@@ -919,40 +895,19 @@ def main(
 	Use --write to overwrite the LYRICS tag in each FLAC with the suggested LRC.
 	Use --dry-run to preview suggestions without modifying any files.
 	"""
-	# ── Device selection ────────────────────────────────────────────────────
-	if device == 'auto':
-		if torch.cuda.is_available():
-			_device = 'cuda'
-		elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-			_device = 'mps'
-		else:
-			_device = 'cpu'
-	else:
-		_device = device
-
-	# Whisper's word-timestamp DTW alignment calls .double() (float64).
-	# MPS does not support float64, so transcription must run on CPU.
-	_transcribe_device = 'cpu' if _device == 'mps' else _device
-	if _device == 'mps':
-		console.print(
-			'[yellow]⚠ MPS does not support float64 (required by Whisper DTW). '
-			'Model will load on MPS but transcription will run on CPU.[/yellow]'
-		)
-
 	console.print(
 		Panel(
-			f'[bold cyan]align_lyrics[/bold cyan]  —  Whisper LRC timestamp alignment\n'
+			f'[bold cyan]align_lyrics[/bold cyan]  —  Whisper LRC timestamp alignment (MLX)\n'
 			f'Model: [magenta]{model}[/magenta]   '
-			f'Device: [magenta]{_device}[/magenta]   '
 			f'Target: [dim]{target}[/dim]',
 			title='[bold]Startup[/bold]',
 		)
 	)
 
 	# ── Load model ──────────────────────────────────────────────────────────
-	with console.status(f'Loading Whisper model [bold]{model}[/bold] on [bold]{_device}[/bold]…'):
-		wmodel = whisper.load_model(model, device=_device)
-	console.print(f'[green]✓[/green] Model [bold]{model}[/bold] ready on {_device}.')
+	with console.status(f'Loading MLX Whisper model [bold]{model}[/bold]…'):
+		wmodel = stable_whisper.load_mlx_whisper(model)
+	console.print(f'[green]✓[/green] MLX Whisper model [bold]{model}[/bold] ready.')
 
 	# ── Discover FLAC files ────────────────────────────────────────────────
 	if target.is_file():
@@ -989,7 +944,6 @@ def main(
 				write=write,
 				dry_run=dry_run,
 				min_confidence=min_confidence,
-				transcribe_device=_transcribe_device,
 				anchor_slack=anchor_slack,
 				split=not no_split,
 				segment_split=not no_segment_split,

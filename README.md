@@ -160,6 +160,7 @@ Structured logging via [structlog](https://github.com/hynek/structlog):
 
 - [discogs_client](https://github.com/joalla/discogs_client) — Discogs API
 - [mutagen](https://github.com/quodlibet/mutagen) — FLAC audio tag read/write
+- [stable-whisper](https://github.com/cfmcdonald/stable-whisper) — MLX-accelerated word-level Whisper STT alignment
 - [drmeter](https://codeberg.org/janw/drmeter) — Dynamic Range calculation
 - [pyacoustid](https://github.com/beetbox/pyacoustid) — AcoustID fingerprinting
 - [lrclib.net](https://lrclib.net) — synced lyrics API

@@ -528,7 +528,7 @@ uv run align_lyrics.py [TARGET] [OPTIONS]
 
 **Tags written:** `LYRICS` (when `--write` is specified)
 
-**Dependencies:** `openai-whisper`, `torch`, `mutagen`, `rich`, `click`, `numpy`
+**Dependencies:** `stable-ts`, `mlx-whisper`, `mutagen`, `rich`, `click`, `structlog`
 
 ---
 

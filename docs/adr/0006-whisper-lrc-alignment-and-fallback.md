@@ -8,7 +8,7 @@
 
 Managing synchronized lyrics (`.lrc` / FLAC `LYRICS` tags) across a local FLAC music library requires high-accuracy timestamp alignment. Existing lyrics from external databases (such as LRCLIB or Genius) often contain unsynchronized text, missing timestamps, out-of-order timestamps, or timing drift.
 
-To provide automated, precise timestamp alignment and auto-generation for local FLAC tracks, we implemented `align_lyrics.py` using OpenAI Whisper speech-to-text with word-level timestamps.
+To provide automated, precise timestamp alignment and auto-generation for local FLAC tracks, we implemented `align_lyrics.py` using `stable-whisper` (`stable_whisper.load_mlx_whisper`) for Apple Silicon MLX GPU acceleration (~3s per track) and word-level timestamps.
 
 ---
 
