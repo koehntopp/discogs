@@ -6,10 +6,14 @@
 # ]
 # ///
 
-"""lrc_count.py — Report LRC lyrics coverage per album across a FLAC library.
+"""lrc_count.py — Report lyrics coverage per album artist across a FLAC library.
 
-For each album directory that contains at least one FLAC file, outputs a CSV row with:
-    artist, album, track_count, tracks_without_lrc, path
+For each album artist, aggregates track counts across their whole discography by
+lyric status and outputs a CSV row with:
+    album_artist, lrc, txt, no_lyrics
+
+Rows are sorted by highest TXT count first (artists most in need of an LRC upgrade
+pass, e.g. via align_lyrics.py).
 
 Usage:
     uv run lrc_count.py [<flacdir>] [--output <file.csv>]
@@ -22,7 +26,7 @@ import csv
 import os
 import re
 import sys
-from pathlib import Path
+from collections import defaultdict
 
 from mutagen.flac import FLAC
 
@@ -42,19 +46,21 @@ def _flactag(song: FLAC, tag: str) -> str:
 	return ''
 
 
-def _has_lrc(song: FLAC) -> bool:
-	"""Return True if the LYRICS tag contains at least one valid LRC timestamp."""
+def _lyric_status(song: FLAC) -> str:
+	"""Classify a track's LYRICS tag as 'lrc', 'txt', or 'none'."""
 	lyrics = _flactag(song, 'LYRICS').strip()
-	return bool(lyrics and LRC_TIMESTAMP.search(lyrics))
+	if not lyrics:
+		return 'none'
+	return 'lrc' if LRC_TIMESTAMP.search(lyrics) else 'txt'
 
 
-def scan_album(directory: str) -> dict | None:
-	"""Scan one album directory and return coverage stats, or None if no FLACs found."""
+def scan_album(directory: str) -> tuple[str, dict[str, int]] | None:
+	"""Scan one album directory and return (album_artist, status_counts), or None."""
 	flacs = sorted(f for f in os.listdir(directory) if f.lower().endswith('.flac'))
 	if not flacs:
 		return None
 
-	# Read artist / album from the first track
+	# Read artist from the first track
 	first_path = os.path.join(directory, flacs[0])
 	try:
 		first = FLAC(first_path)
@@ -63,55 +69,43 @@ def scan_album(directory: str) -> dict | None:
 		return None
 
 	artist = _flactag(first, 'ALBUMARTIST') or _flactag(first, 'ARTIST')
-	album = (
-		_flactag(first, 'ALBUM_TITLE_OVERRIDE')
-		or _flactag(first, 'ORIGINAL_TITLE')
-		or _flactag(first, 'ALBUM')
-		or Path(directory).name
-	)
 
-	track_count = 0
-	missing_lrc = 0
-	missing_paths: list[str] = []
-
+	counts = {'lrc': 0, 'txt': 0, 'none': 0}
 	for filename in flacs:
 		track_path = os.path.join(directory, filename)
-		track_count += 1
 		try:
 			song = FLAC(track_path)
-			if not _has_lrc(song):
-				missing_lrc += 1
-				missing_paths.append(track_path)
+			counts[_lyric_status(song)] += 1
 		except Exception as e:  # noqa: BLE001
 			logger.warning(f'Could not read {track_path}: {e}')
-			missing_lrc += 1
-			missing_paths.append(track_path)
+			counts['none'] += 1
 
-	return {
-		'artist': artist,
-		'album': album,
-		'track_count': track_count,
-		'tracks_without_lrc': missing_lrc,
-		'path': directory,
-	}
+	return artist, counts
 
 
-def scan_library(flacdir: str) -> list[dict]:
-	"""Walk the library root and collect per-album stats."""
-	results: list[dict] = []
+def scan_library(flacdir: str) -> tuple[dict[str, dict[str, int]], int]:
+	"""Walk the library root, aggregating lyric-status counts per album artist.
+
+	Returns (artist_counts, album_count).
+	"""
+	artist_counts: dict[str, dict[str, int]] = defaultdict(lambda: {'lrc': 0, 'txt': 0, 'none': 0})
+	album_count = 0
 	for root, dirs, files in os.walk(flacdir):
 		dirs.sort()  # deterministic traversal order
 		if any(f.lower().endswith('.flac') for f in files):
-			row = scan_album(root)
-			if row is not None:
-				results.append(row)
+			result = scan_album(root)
+			if result is not None:
+				artist, counts = result
+				for status, n in counts.items():
+					artist_counts[artist][status] += n
+				album_count += 1
 			dirs.clear()  # don't descend further into an album directory
-	return results
+	return artist_counts, album_count
 
 
 def write_csv(rows: list[dict], output_path: str | None) -> None:
 	"""Write results as CSV to a file or stdout."""
-	fieldnames = ['artist', 'album', 'track_count', 'tracks_without_lrc', 'path']
+	fieldnames = ['album_artist', 'lrc', 'txt', 'no_lyrics']
 	if output_path:
 		fp = open(output_path, 'w', newline='', encoding='utf-8')  # noqa: SIM115
 		close_after = True
@@ -158,10 +152,19 @@ def main() -> None:
 		sys.exit(1)
 
 	logger.info(f'Scanning FLAC library: {flacdir}')
-	rows = scan_library(flacdir)
-	logger.info(f'Found {len(rows)} albums')
+	artist_counts, album_count = scan_library(flacdir)
+	logger.info(f'Found {album_count} albums across {len(artist_counts)} artists')
 
-	rows.sort(key=lambda r: r['tracks_without_lrc'], reverse=True)
+	rows = [
+		{
+			'album_artist': artist,
+			'lrc': counts['lrc'],
+			'txt': counts['txt'],
+			'no_lyrics': counts['none'],
+		}
+		for artist, counts in artist_counts.items()
+	]
+	rows.sort(key=lambda r: (-r['txt'], r['album_artist']))
 	write_csv(rows, output_path)
 
 	if output_path:

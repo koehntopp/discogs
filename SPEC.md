@@ -432,6 +432,36 @@ uv run migrate_tags.py [--write] [DIR]
 
 ---
 
+### `lrc_count.py` — Lyrics coverage report by album artist
+
+**Purpose:** Scan a FLAC library and report lyrics coverage aggregated per album artist, to identify artists most in need of an LRC upgrade pass (e.g. via `align_lyrics.py`).
+
+**Usage:**
+
+```bash
+uv run lrc_count.py [<flacdir>] [--output <file.csv>]
+```
+
+| Argument | Required | Description |
+|---|---|---|
+| `flacdir` | No | Root directory to scan (defaults to `config.flacroot`). |
+| `--output` | No | Output CSV file path (defaults to stdout). |
+
+**Behaviour:**
+
+1. Walks `flacdir` recursively to find all album directories.
+2. For each track, classifies the `LYRICS` tag as synced LRC (has `[MM:SS.xx]` timestamps), plain TXT, or absent (`none`); unreadable files count as `none`.
+3. Aggregates counts across every album by `ALBUMARTIST` (falls back to `ARTIST`).
+4. Writes CSV rows sorted by highest `txt` count first (ties broken alphabetically by `album_artist`).
+
+**Output columns:** `album_artist`, `lrc`, `txt`, `no_lyrics`
+
+**Tags read:** `LYRICS`, `ALBUMARTIST`, `ARTIST`
+
+**Tags written:** none (read-only)
+
+---
+
 ### `dump_original_filenames.py` — Export albums with ORIGINAL FILENAME tag
 
 **Purpose:** Scan a FLAC library and export a CSV summary (`file_path`, `album_name`, `discogs_album_title`, `ORIGINAL FILENAME`) for all albums containing the `ORIGINAL FILENAME` tag.
