@@ -452,11 +452,11 @@ uv run lrc_count.py [<flacdir>] [--output <file.csv>]
 **Behaviour:**
 
 1. Walks `flacdir` recursively to find all album directories.
-2. For each track, classifies the `LYRICS` tag as synced LRC (has `[MM:SS.xx]` timestamps), plain TXT, or absent (`none`); unreadable files count as `none`.
+2. For each track, classifies the `LYRICS` tag as instrumental (contains the `[instrumental:true]` marker), synced LRC (has `[MM:SS.xx]` timestamps), plain TXT, or absent (`none`); unreadable files count as `none`.
 3. Aggregates counts across every album by `ALBUMARTIST` (falls back to `ARTIST`).
 4. Writes CSV rows sorted by highest `txt` count first (ties broken alphabetically by `album_artist`).
 
-**Output columns:** `album_artist`, `lrc`, `txt`, `no_lyrics`
+**Output columns:** `album_artist`, `lrc`, `txt`, `instrumental`, `no_lyrics`
 
 **Tags read:** `LYRICS`, `ALBUMARTIST`, `ARTIST`
 

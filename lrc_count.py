@@ -10,7 +10,7 @@
 
 For each album artist, aggregates track counts across their whole discography by
 lyric status and outputs a CSV row with:
-    album_artist, lrc, txt, no_lyrics
+    album_artist, lrc, txt, instrumental, no_lyrics
 
 Rows are sorted by highest TXT count first (artists most in need of an LRC upgrade
 pass, e.g. via align_lyrics.py).
@@ -33,6 +33,7 @@ from mutagen.flac import FLAC
 from log import logger
 
 LRC_TIMESTAMP = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]')
+INSTRUMENTAL_MARKER = '[instrumental:true]'
 
 
 def _flactag(song: FLAC, tag: str) -> str:
@@ -47,10 +48,12 @@ def _flactag(song: FLAC, tag: str) -> str:
 
 
 def _lyric_status(song: FLAC) -> str:
-	"""Classify a track's LYRICS tag as 'lrc', 'txt', or 'none'."""
+	"""Classify a track's LYRICS tag as 'instrumental', 'lrc', 'txt', or 'none'."""
 	lyrics = _flactag(song, 'LYRICS').strip()
 	if not lyrics:
 		return 'none'
+	if INSTRUMENTAL_MARKER in lyrics:
+		return 'instrumental'
 	return 'lrc' if LRC_TIMESTAMP.search(lyrics) else 'txt'
 
 
@@ -70,7 +73,7 @@ def scan_album(directory: str) -> tuple[str, dict[str, int]] | None:
 
 	artist = _flactag(first, 'ALBUMARTIST') or _flactag(first, 'ARTIST')
 
-	counts = {'lrc': 0, 'txt': 0, 'none': 0}
+	counts = {'lrc': 0, 'txt': 0, 'none': 0, 'instrumental': 0}
 	for filename in flacs:
 		track_path = os.path.join(directory, filename)
 		try:
@@ -88,7 +91,9 @@ def scan_library(flacdir: str) -> tuple[dict[str, dict[str, int]], int]:
 
 	Returns (artist_counts, album_count).
 	"""
-	artist_counts: dict[str, dict[str, int]] = defaultdict(lambda: {'lrc': 0, 'txt': 0, 'none': 0})
+	artist_counts: dict[str, dict[str, int]] = defaultdict(
+		lambda: {'lrc': 0, 'txt': 0, 'none': 0, 'instrumental': 0}
+	)
 	album_count = 0
 	for root, dirs, files in os.walk(flacdir):
 		dirs.sort()  # deterministic traversal order
@@ -105,7 +110,7 @@ def scan_library(flacdir: str) -> tuple[dict[str, dict[str, int]], int]:
 
 def write_csv(rows: list[dict], output_path: str | None) -> None:
 	"""Write results as CSV to a file or stdout."""
-	fieldnames = ['album_artist', 'lrc', 'txt', 'no_lyrics']
+	fieldnames = ['album_artist', 'lrc', 'txt', 'instrumental', 'no_lyrics']
 	if output_path:
 		fp = open(output_path, 'w', newline='', encoding='utf-8')  # noqa: SIM115
 		close_after = True
@@ -160,6 +165,7 @@ def main() -> None:
 			'album_artist': artist,
 			'lrc': counts['lrc'],
 			'txt': counts['txt'],
+			'instrumental': counts['instrumental'],
 			'no_lyrics': counts['none'],
 		}
 		for artist, counts in artist_counts.items()
