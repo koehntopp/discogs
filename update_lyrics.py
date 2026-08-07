@@ -35,6 +35,7 @@ LRC_HEADER_LINE = re.compile(r'^\[(ar|ti|al|by|length|offset):.*\]\s*$', re.IGNO
 LRC_LINE = re.compile(r'^(\[\d{2}:\d{2}\.\d{2}\])(.*)$')
 USER_AGENT = 'DiscogsMusicManager/1.0 (+https://github.com/koehntopp/discogs)'
 MAX_WORKERS = 8
+INSTRUMENTAL_MARKER = '[instrumental:true]'
 
 
 def _is_lrc(text: str) -> bool:
@@ -57,6 +58,17 @@ def _strip_headers(lrc: str) -> str:
 
 def _apply_headers(lrc: str, artist: str, title: str, album: str, length_secs: float) -> str:
 	return _make_headers(artist, title, album, length_secs) + _strip_headers(lrc)
+
+
+def _is_instrumental(text: str) -> bool:
+	return INSTRUMENTAL_MARKER in text
+
+
+def _make_instrumental_lrc(artist: str, title: str, album: str, length_secs: float) -> str:
+	return (
+		_make_headers(artist, title, album, length_secs)
+		+ '[la:zxx]\n[instrumental:true]\n[00:00.00](Instrumental)\n'
+	)
 
 
 def _capitalize_line(text: str) -> str:
@@ -133,6 +145,9 @@ def _fetch_one(
 	lookup_album = master_title or album_name
 
 	# Check existing embedded FLAC lyrics
+	if existing_lyrics and _is_instrumental(existing_lyrics):
+		return flac_path, artist, title, existing_lyrics, 'instrumental', 'skip', discogs_id, track
+
 	had_invalid_lrc = False
 	if existing_lyrics:
 		if _is_invalid_lrc(existing_lyrics):
@@ -203,6 +218,21 @@ def _fetch_one(
 				logger.warning(
 					f"Request error ({type(e).__name__}) fetching lyrics for '{title}', retries exhausted"
 				)
+
+	if data.get('instrumental'):
+		marker_lrc = _make_instrumental_lrc(artist, title, album_name, length)
+		if marker_lrc == existing_lyrics:
+			return (
+				flac_path,
+				artist,
+				title,
+				existing_lyrics,
+				'instrumental',
+				'skip',
+				discogs_id,
+				track,
+			)
+		return flac_path, artist, title, marker_lrc, 'instrumental', 'new', discogs_id, track
 
 	if data.get('syncedLyrics'):
 		lrc = re.sub(r'\[(\d{2}:\d{2}\.\d{2})\d\]', r'[\1]', data['syncedLyrics'])
@@ -277,7 +307,7 @@ def main() -> None:
 	total = len(tracks)
 	logger.info(f'Fetching lyrics for {total} tracks with up to {MAX_WORKERS} parallel requests')
 
-	stats = {'lrc': 0, 'txt': 0, 'none': 0, 'new': 0}
+	stats = {'lrc': 0, 'txt': 0, 'none': 0, 'instrumental': 0, 'new': 0}
 	done = 0
 	last_report = time.monotonic()
 	is_tty = sys.stderr.isatty()
@@ -301,6 +331,7 @@ def main() -> None:
 		TextColumn('• [cyan]LRC:[/cyan] {task.fields[lrc]}'),
 		TextColumn('[green]TXT:[/green] {task.fields[txt]}'),
 		TextColumn('[bright_black]None:[/bright_black] {task.fields[none]}'),
+		TextColumn('[yellow]Instrumental:[/yellow] {task.fields[instrumental]}'),
 		TextColumn('[magenta]New:[/magenta] {task.fields[new]}'),
 		TimeRemainingColumn(),
 		console=console,
@@ -342,6 +373,8 @@ def main() -> None:
 							stats['lrc'] += 1
 						elif lyric_type == 'txt':
 							stats['txt'] += 1
+						elif lyric_type == 'instrumental':
+							stats['instrumental'] += 1
 						else:
 							stats['none'] += 1
 
@@ -372,7 +405,11 @@ def main() -> None:
 										logger.warning(
 											f'Could not touch file mtime for {flac_path}: {e}'
 										)
-									if action == 'fix':
+									if lyric_type == 'instrumental':
+										logger.success(
+											f'Instrumental track marked: {title} ({artist})'
+										)
+									elif action == 'fix':
 										logger.success(f'Lyrics fixed: {title} ({artist})')
 									else:
 										kind = 'LRC' if lyric_type == 'lrc' else 'TXT'
@@ -389,7 +426,8 @@ def main() -> None:
 							elif lyrics:
 								ext = (
 									'lrc'
-									if lyric_type == 'lrc' or lyrics.startswith('[')
+									if lyric_type in ('lrc', 'instrumental')
+									or lyrics.startswith('[')
 									else 'txt'
 								)
 								target_file = lyrics_dir / f'{discogs_id}_{track}.{ext}'
@@ -403,7 +441,8 @@ def main() -> None:
 							logger.info(
 								f'Progress: {done}/{total} tracks — '
 								f'LRC: {stats["lrc"]} TXT: {stats["txt"]} '
-								f'None: {stats["none"]} New/updated: {stats["new"]}'
+								f'None: {stats["none"]} Instrumental: {stats["instrumental"]} '
+								f'New/updated: {stats["new"]}'
 							)
 							last_report = time.monotonic()
 				except KeyboardInterrupt:
@@ -418,7 +457,8 @@ def main() -> None:
 
 	logger.info(
 		f'Done — LRC: {stats["lrc"]} TXT: {stats["txt"]} '
-		f'None: {stats["none"]} New/updated: {stats["new"]}'
+		f'None: {stats["none"]} Instrumental: {stats["instrumental"]} '
+		f'New/updated: {stats["new"]}'
 	)
 
 

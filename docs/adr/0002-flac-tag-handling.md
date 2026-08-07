@@ -64,6 +64,17 @@ We establish the following binding rules and standards for all FLAC tag handling
 * **Header Preservation**: Rebuilds headers (`[ar:...]`, `[ti:...]`, `[al:...]`, `[length:...]`) via line-greedy regexes.
 * **Capitalization Normalization**: The first non-whitespace character of every lyric line (new or already embedded) is uppercased, both for synced LRC (text following the `[MM:SS.xx]` timestamp) and plain TXT. LRC header lines are left untouched. Existing embedded lyrics that need only this fix are rewritten in place rather than skipped.
 * **LRC Timestamp Whitespace Stripping**: Any whitespace between an `[MM:SS.xx]` timestamp and its lyric text is stripped (`[MM:SS.xx]Text`, not `[MM:SS.xx] Text`), applied via the same normalization pass.
+* **Instrumental Track Marking**: When lrclib.net's API response for a track sets `instrumental: true` (no synced/plain lyrics available), `update_lyrics.py` writes a fixed-format marker to `LYRICS` instead of leaving it empty:
+  ```
+  [ar:...]
+  [ti:...]
+  [al:...]
+  [length:...]
+  [la:zxx]
+  [instrumental:true]
+  [00:00.00](Instrumental)
+  ```
+  `[la:zxx]` is the standard ISO 639-2 "no linguistic content" LRC language code; `[instrumental:true]` is the sentinel `update_lyrics.py` checks on subsequent runs to skip re-fetching. Tracks already carrying this marker are left untouched without an lrclib.net API call.
 
 ### 7. Calculated Metric Tags
 * Track DR (`DYNAMIC_RANGE`), Album DR (`ALBUM_DR`), AcoustID Fingerprints (`ACOUSTID_FINGERPRINT`).

@@ -287,13 +287,15 @@ uv run update_lyrics.py [FLAC_DIR]
 2. For each album, extracts canonical Discogs master title (`ALBUM_MASTER_TITLE` $\rightarrow$ `ORIGINAL_TITLE`) as the primary clean album name for lrclib.net.
 3. For each FLAC:
    - If the `LYRICS` tag already contains valid LRC-format content (timestamp pattern `[mm:ss.xx]`), refreshes the `[ar:]`/`[ti:]`/`[al:]`/`[length:]` headers and re-normalizes line capitalization in place instead of querying lrclib.net.
+   - If the `LYRICS` tag already contains the instrumental marker (`[instrumental:true]`), skips it without querying lrclib.net.
    - Otherwise, Stage 1: Queries lrclib.net with artist, title, clean album name, and duration.
    - Stage 2: If Stage 1 returns 404, retries lrclib.net with artist, title, and duration (omitting album name).
-   - Writes synced LRC lyrics if available, otherwise plain-text lyrics when the tag was empty.
+   - If lrclib.net's response flags the track `instrumental: true`, writes a fixed-format LRC marker (`[la:zxx]` / `[instrumental:true]` / `[00:00.00](Instrumental)`) instead of lyrics.
+   - Otherwise writes synced LRC lyrics if available, otherwise plain-text lyrics when the tag was empty.
    - **Capitalization normalization**: every lyric line — newly fetched or already embedded — has its first non-whitespace character uppercased (LRC header lines are left untouched).
    - **Timestamp whitespace stripping**: for LRC lines, any whitespace between the `[MM:SS.xx]` timestamp and the lyric text is removed (`[MM:SS.xx]Text`, not `[MM:SS.xx] Text`).
 4. Saves modified files immediately after each successful fetch or fix.
-5. Prints summary totals: LRC count, plain-text count, no-lyrics count, and new/fixed writes.
+5. Prints summary totals: LRC count, plain-text count, no-lyrics count, instrumental count, and new/fixed writes.
 
 **Tags read:** `LYRICS`, `DISCOGS_RELEASE_ID`, `ARTIST`, `ALBUM_ARTIST_OVERRIDE`, `ALBUMARTIST`, `TITLE`, `ALBUM_MASTER_TITLE`, `ORIGINAL_TITLE`, `ALBUM_TITLE_OVERRIDE`, `ORIGINAL FILENAME`, `ALBUM`
 
