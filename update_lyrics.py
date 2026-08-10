@@ -31,7 +31,8 @@ from log import _console_handler, logger
 
 LRC_TIMESTAMP = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]')  # valid: [MM:SS.xx]
 LRC_BAD_TS = re.compile(r'\[\d{3,}:\d{2}:\d{2}\.\d{2}\]')  # invalid: [HH:MM:SS.xx]
-LRC_HEADER_LINE = re.compile(r'^\[(ar|ti|al|by|length|offset):.*\]\s*$', re.IGNORECASE)
+ID_TAG_LINE = re.compile(r'^\[([a-zA-Z]{2,10}):.*\]\s*$')
+MANAGED_HEADER_KEYS = ('ar', 'ti', 'al', 'length')
 LRC_LINE = re.compile(r'^(\[\d{2}:\d{2}\.\d{2}\])(.*)$')
 USER_AGENT = 'DiscogsMusicManager/1.0 (+https://github.com/koehntopp/discogs)'
 MAX_WORKERS = 8
@@ -52,13 +53,29 @@ def _make_headers(artist: str, title: str, album: str, length_secs: float) -> st
 	return f'[ar:{artist}]\n[ti:{title}]\n[al:{album}]\n[length:{mins:02d}:{secs:02d}]\n'
 
 
-def _strip_headers(lrc: str) -> str:
-	"""Remove existing metadata header lines, keep timestamp lines."""
-	return '\n'.join(line for line in lrc.splitlines() if not LRC_HEADER_LINE.match(line)).strip()
-
-
 def _apply_headers(lrc: str, artist: str, title: str, album: str, length_secs: float) -> str:
-	return _make_headers(artist, title, album, length_secs) + _strip_headers(lrc)
+	"""Update ar/ti/al/length header values in place, wherever they already sit in the
+	tag. Any other line (lyric lines, or header lines this tool doesn't own — e.g. a
+	[re:] line from another tool) is left completely untouched, in its original
+	position. Managed headers not yet present are inserted at the top, in
+	ar/ti/al/length order — matching behavior for brand-new lyrics.
+	"""
+	mins, secs = divmod(int(length_secs), 60)
+	values = {'ar': artist, 'ti': title, 'al': album, 'length': f'{mins:02d}:{secs:02d}'}
+	seen = set()
+	out = []
+	for line in lrc.splitlines():
+		m = ID_TAG_LINE.match(line)
+		key = m.group(1).lower() if m else None
+		if key in values:
+			out.append(f'[{key}:{values[key]}]')
+			seen.add(key)
+		else:
+			out.append(line)
+	missing = [k for k in MANAGED_HEADER_KEYS if k not in seen]
+	if missing:
+		out = [f'[{k}:{values[k]}]' for k in missing] + out
+	return '\n'.join(line for line in out if line).strip()
 
 
 def _is_instrumental(text: str) -> bool:

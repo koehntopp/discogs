@@ -47,7 +47,7 @@ We adopt the following general Python standards and architectural rules across a
 
 ### 5. Tagging Safety & Metadata Preservation (`mutagen`)
 * **Authority Anchor**: User-set tags (e.g. `DISCOGS_RELEASE_ID`) are treated as authoritative and must never be overwritten arbitrarily.
-* **Header Parsing Robustness**: Metadata header parsing and regex operations (such as LRC tag headers `[ar:...]`, `[ti:...]`) must use greedy line-boundary matching (`^\[(ar|ti|al|by|length|offset):.*\]\s*$`) to safely handle bracketed values (e.g. titles with `[Remaster]`) without generating duplicate metadata entries.
+* **Header Parsing Robustness**: Metadata header parsing and regex operations (such as LRC tag headers `[ar:...]`, `[ti:...]`) must use greedy line-boundary matching (e.g. `^\[([a-zA-Z]{2,10}):.*\]\s*$`) to safely handle bracketed values (e.g. titles with `[Remaster]`) without generating duplicate metadata entries. For LRC headers specifically, only the tool's own managed keys (`ar`/`ti`/`al`/`length`) are rewritten in place; any other id-tag line (e.g. another tool's `[re:...]`) must be left untouched at its original position rather than stripped and relocated — see ADR 0002 §6.
 
 ### 6. Concurrency & Network Operations
 * **Parallel Execution**: Network-bound or batch tasks (e.g. lyrics fetching) must use `concurrent.futures.ThreadPoolExecutor` paired with thread-safe `requests.Session` and connection pooling (`HTTPAdapter`).
