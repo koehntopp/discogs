@@ -294,6 +294,7 @@ uv run update_lyrics.py [FLAC_DIR]
    - Otherwise writes synced LRC lyrics if available, otherwise plain-text lyrics when the tag was empty.
    - **Capitalization normalization**: every lyric line — newly fetched or already embedded — has its first non-whitespace character uppercased (LRC header lines are left untouched).
    - **Timestamp whitespace stripping**: for LRC lines, any whitespace between the `[MM:SS.xx]` timestamp and the lyric text is removed (`[MM:SS.xx]Text`, not `[MM:SS.xx] Text`).
+   - **Manual instrumental marking**: if the `LYRICS` tag contains a hand-typed `[MM:SS.xx][Instrumental]` marker (case-insensitive), it's normalized to the canonical instrumental block without an lrclib.net request, as if the API had reported `instrumental: true`.
 4. Saves modified files immediately after each successful fetch or fix.
 5. Prints summary totals: LRC count, plain-text count, no-lyrics count, instrumental count, and new/fixed writes.
 

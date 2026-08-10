@@ -36,6 +36,7 @@ LRC_LINE = re.compile(r'^(\[\d{2}:\d{2}\.\d{2}\])(.*)$')
 USER_AGENT = 'DiscogsMusicManager/1.0 (+https://github.com/koehntopp/discogs)'
 MAX_WORKERS = 8
 INSTRUMENTAL_MARKER = '[instrumental:true]'
+MANUAL_INSTRUMENTAL_MARKER = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]\s*\[instrumental\]', re.IGNORECASE)
 
 
 def _is_lrc(text: str) -> bool:
@@ -62,6 +63,15 @@ def _apply_headers(lrc: str, artist: str, title: str, album: str, length_secs: f
 
 def _is_instrumental(text: str) -> bool:
 	return INSTRUMENTAL_MARKER in text
+
+
+def _has_manual_instrumental_marker(text: str) -> bool:
+	"""Detect a hand-entered marker like '[00:00.00][Instrumental]' (case-insensitive).
+
+	Distinct from the canonical '[instrumental:true]' + '(Instrumental)' block that
+	update_lyrics.py itself writes — this is the informal marker a user types by hand.
+	"""
+	return bool(MANUAL_INSTRUMENTAL_MARKER.search(text))
 
 
 def _make_instrumental_lrc(artist: str, title: str, album: str, length_secs: float) -> str:
@@ -147,6 +157,12 @@ def _fetch_one(
 	# Check existing embedded FLAC lyrics
 	if existing_lyrics and _is_instrumental(existing_lyrics):
 		return flac_path, artist, title, existing_lyrics, 'instrumental', 'skip', discogs_id, track
+
+	if existing_lyrics and _has_manual_instrumental_marker(existing_lyrics):
+		# User hand-marked this track instrumental — normalize to the canonical block
+		# without hitting lrclib.net, as if we'd fetched instrumental:true from the API.
+		marker_lrc = _make_instrumental_lrc(artist, title, album_name, length)
+		return flac_path, artist, title, marker_lrc, 'instrumental', 'new', discogs_id, track
 
 	had_invalid_lrc = False
 	if existing_lyrics:

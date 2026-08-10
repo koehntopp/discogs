@@ -75,6 +75,7 @@ We establish the following binding rules and standards for all FLAC tag handling
   [00:00.00](Instrumental)
   ```
   `[la:zxx]` is the standard ISO 639-2 "no linguistic content" LRC language code; `[instrumental:true]` is the sentinel `update_lyrics.py` checks on subsequent runs to skip re-fetching. Tracks already carrying this marker are left untouched without an lrclib.net API call.
+* **Manual Instrumental Marking**: A user may hand-type an informal marker into the `LYRICS` tag matching `[MM:SS.xx][Instrumental]` (case-insensitive, e.g. `[00:00.00][Instrumental]`) to mark a track instrumental without waiting on lrclib.net. `update_lyrics.py` detects this pattern and rewrites it into the canonical marker block above — as if `instrumental: true` had been fetched from the API — without making any network request.
 
 ### 7. Calculated Metric Tags
 * Track DR (`DYNAMIC_RANGE`), Album DR (`ALBUM_DR`), AcoustID Fingerprints (`ACOUSTID_FINGERPRINT`).
