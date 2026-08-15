@@ -122,8 +122,6 @@ All config values are also editable via the Settings modal in the web UI.
 | `calculate_dr.py` | Dynamic Range calculation |
 | `calculate_fp.py` | AcoustID fingerprint generation |
 | `migrate_tags.py` | Tag schema migration to discrete `ALBUM_*` tags |
-| `dump_original_filenames.py` | Export albums with `ORIGINAL FILENAME` to CSV |
-| `compare_libraries.py` | Compare directory trees & track counts between libraries |
 | `build_synology.sh` | Build Docker image tar for Synology upload |
 
 All Python scripts feature executable shebang lines (`#!/usr/bin/env -S uv run`) and declare dependencies via PEP 723 headers — run them directly from your shell:

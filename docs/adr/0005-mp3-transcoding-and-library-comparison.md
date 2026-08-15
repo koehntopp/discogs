@@ -6,17 +6,16 @@
 
 ## Context
 
-The Discogs Music Library Manager includes core tools for managing, organizing, and auditing music collections across local and network storage volumes:
+The Discogs Music Library Manager includes core tools for managing and organizing music collections across local and network storage volumes:
 1. **Library & File Organization (`bliss.py`)**: Reorganizes FLAC files into canonical directory structures and track filename patterns.
 2. **MP3 Mirror Sync (`bliss.py --mp3`)**: Transcodes FLAC tracks under `flacroot` to a mirrored MP3 tree under `mp3root` using `ffmpeg`.
 3. **Pipeline Orchestration (`nzbfix.py`)**: Post-download enrichment pipeline for new album ingest.
-4. **Library Audit & Comparison (`compare_libraries.py`)**: Audits a reference/backup FLAC library against a target library to identify exact matches, renamed/moved directories, missing releases, and track count mismatches.
 
 ---
 
 ## Decision
 
-We establish the following architectural rules for library organization, MP3 mirror transcoding, pipeline orchestration, and library comparison:
+We establish the following architectural rules for library organization, MP3 mirror transcoding, and pipeline orchestration:
 
 ### 1. `bliss.py` File and Directory Organization Contract
 * **Canonical Destination Path**:
@@ -68,14 +67,6 @@ We establish the following architectural rules for library organization, MP3 mir
   * Renders a Rich progress bar (`Progress(..., disable=not _is_tty)`) in TTY mode.
   * Emits `success(f'Transcoded {count} MP3 track(s) for album {album_name}')` upon completing each album.
 
-### 4. Multi-Copy Library Comparison (`compare_libraries.py`)
-* **List-Based Key Mapping**:
-  * `compare_libraries.py` MUST use `ref_by_key = defaultdict(list)` to store albums by key.
-  * Multiple folders or reissues sharing the same `DISCOGS_RELEASE_ID` (or box sets) MUST NOT collapse or overwrite each other in dictionary comprehension.
-  * Every physical directory in the reference library MUST be preserved and paired by relative path or track counts.
-* **Summary CLI Mode (`--stats` / `-s`)**:
-  * `--stats` (`-s`) CLI option scans a library directory and logs total album count, total FLAC song count, and average tracks per album.
-
 ---
 
 ## Consequences
@@ -85,4 +76,3 @@ We establish the following architectural rules for library organization, MP3 mir
 * **Predictable 6-Step Ingest**: Every newly ingested album undergoes identical, deterministic enrichment (`dot_clean` $\rightarrow$ `DR` $\rightarrow$ `ReplayGain` $\rightarrow$ `AcoustID` $\rightarrow$ `Discogs` $\rightarrow$ `Lyrics`).
 * **HFS+ Unicode Safety**: NFD normalization prevents case-folding loops on macOS/HFS+ filesystems.
 * **100% Reliability for MP3 Mirror Sync**: Destination directories exist before `ffmpeg` runs.
-* **Accurate Multi-Copy Library Audits**: Accounts for box sets and duplicate pressings without key collisions.

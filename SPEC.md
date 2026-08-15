@@ -196,7 +196,7 @@ At least one of the two must be provided; otherwise help is printed.
    - `ALBUM` — clean master release title for players (e.g. `Brothers in Arms`). Taken from `ALBUM_TITLE_OVERRIDE` if present, otherwise clean `ALBUM_MASTER_TITLE` or `ORIGINAL_TITLE`.
    - `VERSION` — release decoration string for Roon version display (no square brackets): `<year> <format>` or `<year> <format> (<edition>)` (e.g., `2025 Blu-ray (40th Anniversary Edition)`).
 
-**Tags read:** `DISCOGS_RELEASE_ID`, `ORIGINAL FILENAME`, `DATE`, `SUBTITLE`,
+**Tags read:** `DISCOGS_RELEASE_ID`, `DATE`, `SUBTITLE`,
 `ALBUM_DR` (or deprecated `ALBUM DYNAMIC RANGE`), `ALBUM_TITLE_OVERRIDE`, `ALBUM_ARTIST_OVERRIDE`
 
 **Tags written:** `RELEASEDATE`, `DATE`, `YEAR`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`, `ORIGINAL DATE`, `ORIGINAL YEAR`,
@@ -284,21 +284,20 @@ uv run update_lyrics.py [FLAC_DIR]
 **Behaviour:**
 
 1. Walks `FLAC_DIR` recursively to find all album directories.
-2. For each album, extracts canonical Discogs master title (`ALBUM_MASTER_TITLE` $\rightarrow$ `ORIGINAL_TITLE`) as the primary clean album name for lrclib.net.
-3. For each FLAC:
+2. For each FLAC:
    - If the `LYRICS` tag already contains valid LRC-format content (timestamp pattern `[mm:ss.xx]`), refreshes the `[ar:]`/`[ti:]`/`[al:]`/`[length:]` headers and re-normalizes line capitalization in place instead of querying lrclib.net.
    - If the `LYRICS` tag already contains the instrumental marker (`[instrumental:true]`), skips it without querying lrclib.net.
-   - Otherwise, Stage 1: Queries lrclib.net with artist, title, clean album name, and duration.
-   - Stage 2: If Stage 1 returns 404, retries lrclib.net with artist, title, and duration (omitting album name).
+   - Otherwise, Stage 1: Queries lrclib.net with artist, title, the FLAC's own `ALBUM` tag, and duration.
+   - Stage 2: If Stage 1 returns 404, retries lrclib.net with artist, title, and duration (omitting album).
    - If lrclib.net's response flags the track `instrumental: true`, writes a fixed-format LRC marker (`[la:zxx]` / `[instrumental:true]` / `[00:00.00](Instrumental)`) instead of lyrics.
    - Otherwise writes synced LRC lyrics if available, otherwise plain-text lyrics when the tag was empty.
    - **Capitalization normalization**: every lyric line — newly fetched or already embedded — has its first non-whitespace character uppercased (LRC header lines are left untouched).
    - **Timestamp whitespace stripping**: for LRC lines, any whitespace between the `[MM:SS.xx]` timestamp and the lyric text is removed (`[MM:SS.xx]Text`, not `[MM:SS.xx] Text`).
    - **Manual instrumental marking**: if the `LYRICS` tag contains a hand-typed `[MM:SS.xx][Instrumental]` marker (case-insensitive), it's normalized to the canonical instrumental block without an lrclib.net request, as if the API had reported `instrumental: true`.
-4. Saves modified files immediately after each successful fetch or fix.
-5. Prints summary totals: LRC count, plain-text count, no-lyrics count, instrumental count, and separate new/fixed/cleared write counts.
+3. Saves modified files immediately after each successful fetch or fix.
+4. Prints summary totals: LRC count, plain-text count, no-lyrics count, instrumental count, and separate new/fixed/cleared write counts.
 
-**Tags read:** `LYRICS`, `DISCOGS_RELEASE_ID`, `ARTIST`, `ALBUM_ARTIST_OVERRIDE`, `ALBUMARTIST`, `TITLE`, `ALBUM_MASTER_TITLE`, `ORIGINAL_TITLE`, `ALBUM_TITLE_OVERRIDE`, `ORIGINAL FILENAME`, `ALBUM`
+**Tags read:** `LYRICS`, `DISCOGS_RELEASE_ID`, `ARTIST`, `TITLE`, `TRACKNUMBER`, `ALBUM`
 
 **Tags written:** `LYRICS`
 
@@ -462,42 +461,6 @@ uv run lrc_count.py [<flacdir>] [--output <file.csv>]
 **Tags read:** `LYRICS`, `ALBUMARTIST`, `ARTIST`
 
 **Tags written:** none (read-only)
-
----
-
-### `dump_original_filenames.py` — Export albums with ORIGINAL FILENAME tag
-
-**Purpose:** Scan a FLAC library and export a CSV summary (`file_path`, `album_name`, `discogs_album_title`, `ORIGINAL FILENAME`) for all albums containing the `ORIGINAL FILENAME` tag.
-
-**Usage:**
-
-```bash
-uv run dump_original_filenames.py [-o OUTPUT_CSV] [DIR]
-```
-
-| Argument | Required | Description |
-|---|---|---|
-| `DIR` | No | Root directory to scan (defaults to `config.flacroot`). |
-| `-o`, `--output` | No | Output CSV file path (defaults to `albums_original_filename.csv`). |
-
----
-
-### `compare_libraries.py` — Compare directory structure and track counts between libraries
-
-**Purpose:** Walk a reference FLAC library (e.g. a backup copy) and compare its album directories and track counts against a target library (defaults to `config.flacroot`), generating a CSV report (`library_comparison.csv`).
-
-**Usage:**
-
-```bash
-uv run compare_libraries.py /path/to/reference_library [--target /path/to/target_library] [-s] [-o library_comparison.csv]
-```
-
-| Argument | Required | Description |
-|---|---|---|
-| `reference_dir` | Yes | Path to the reference / backup FLAC library root. |
-| `--target` | No | Path to target library root (defaults to `config.flacroot`). |
-| `-s`, `--stats` | No | List total albums, FLAC song count, and average tracks/album for `reference_dir` instead of comparing. |
-| `-o`, `--output` | No | Output CSV report path (defaults to `library_comparison.csv`). |
 
 ---
 
