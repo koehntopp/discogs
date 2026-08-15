@@ -341,7 +341,7 @@ def main() -> None:
 	total = len(tracks)
 	logger.info(f'Fetching lyrics for {total} tracks with up to {MAX_WORKERS} parallel requests')
 
-	stats = {'lrc': 0, 'txt': 0, 'none': 0, 'instrumental': 0, 'new': 0}
+	stats = {'lrc': 0, 'txt': 0, 'none': 0, 'instrumental': 0, 'new': 0, 'fixed': 0, 'cleared': 0}
 	done = 0
 	last_report = time.monotonic()
 	is_tty = sys.stderr.isatty()
@@ -367,6 +367,8 @@ def main() -> None:
 		TextColumn('[bright_black]None:[/bright_black] {task.fields[none]}'),
 		TextColumn('[yellow]Instrumental:[/yellow] {task.fields[instrumental]}'),
 		TextColumn('[magenta]New:[/magenta] {task.fields[new]}'),
+		TextColumn('[blue]Fixed:[/blue] {task.fields[fixed]}'),
+		TextColumn('[red]Cleared:[/red] {task.fields[cleared]}'),
 		TimeRemainingColumn(),
 		console=console,
 		disable=not is_tty,
@@ -413,13 +415,19 @@ def main() -> None:
 							stats['none'] += 1
 
 						if action in ('new', 'fix', 'clear'):
-							stats['new'] += 1
+							if action == 'new':
+								stats['new'] += 1
+							elif action == 'fix':
+								stats['fixed'] += 1
+							else:  # 'clear'
+								stats['cleared'] += 1
 							try:
 								t = FLAC(flac_path)
 								if not t.tags:
 									t.add_tags()
 								if action == 'clear':
-									t.tags.pop('LYRICS', None)
+									if 'LYRICS' in t.tags:
+										del t.tags['LYRICS']
 									t.save()
 									try:
 										os.utime(flac_path, None)
@@ -476,7 +484,8 @@ def main() -> None:
 								f'Progress: {done}/{total} tracks — '
 								f'LRC: {stats["lrc"]} TXT: {stats["txt"]} '
 								f'None: {stats["none"]} Instrumental: {stats["instrumental"]} '
-								f'New/updated: {stats["new"]}'
+								f'New: {stats["new"]} Fixed: {stats["fixed"]} '
+								f'Cleared: {stats["cleared"]}'
 							)
 							last_report = time.monotonic()
 				except KeyboardInterrupt:
@@ -492,7 +501,7 @@ def main() -> None:
 	logger.info(
 		f'Done — LRC: {stats["lrc"]} TXT: {stats["txt"]} '
 		f'None: {stats["none"]} Instrumental: {stats["instrumental"]} '
-		f'New/updated: {stats["new"]}'
+		f'New: {stats["new"]} Fixed: {stats["fixed"]} Cleared: {stats["cleared"]}'
 	)
 
 

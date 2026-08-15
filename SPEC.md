@@ -296,7 +296,7 @@ uv run update_lyrics.py [FLAC_DIR]
    - **Timestamp whitespace stripping**: for LRC lines, any whitespace between the `[MM:SS.xx]` timestamp and the lyric text is removed (`[MM:SS.xx]Text`, not `[MM:SS.xx] Text`).
    - **Manual instrumental marking**: if the `LYRICS` tag contains a hand-typed `[MM:SS.xx][Instrumental]` marker (case-insensitive), it's normalized to the canonical instrumental block without an lrclib.net request, as if the API had reported `instrumental: true`.
 4. Saves modified files immediately after each successful fetch or fix.
-5. Prints summary totals: LRC count, plain-text count, no-lyrics count, instrumental count, and new/fixed writes.
+5. Prints summary totals: LRC count, plain-text count, no-lyrics count, instrumental count, and separate new/fixed/cleared write counts.
 
 **Tags read:** `LYRICS`, `DISCOGS_RELEASE_ID`, `ARTIST`, `ALBUM_ARTIST_OVERRIDE`, `ALBUMARTIST`, `TITLE`, `ALBUM_MASTER_TITLE`, `ORIGINAL_TITLE`, `ALBUM_TITLE_OVERRIDE`, `ORIGINAL FILENAME`, `ALBUM`
 
