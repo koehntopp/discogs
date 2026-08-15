@@ -135,7 +135,7 @@ def flactag(song: FLAC | dict, tag: str) -> str:
 
 
 def _fetch_one(
-	flac_path: str, album_name: str, session: requests.Session
+	flac_path: str, session: requests.Session
 ) -> tuple[str, str, str, str, str, str, str, str]:
 	"""Read tags, fetch/upgrade lyrics, apply LRC metadata headers from FLAC tags.
 
@@ -157,7 +157,6 @@ def _fetch_one(
 		title = flactag(song, 'TITLE')
 		discogs_id = flactag(song, 'DISCOGS_RELEASE_ID')
 		track = flactag(song, 'TRACKNUMBER')
-		master_title = flactag(song, 'ALBUM_MASTER_TITLE') or flactag(song, 'ORIGINAL_TITLE')
 		album = flactag(song, 'ALBUM')
 		existing_lyrics = flactag(song, 'LYRICS').strip()
 		length = float(song.info.length) if song.info and hasattr(song.info, 'length') else 0.0
@@ -168,9 +167,6 @@ def _fetch_one(
 	if not artist or not title:
 		logger.info(f'Missing ARTIST or TITLE tag in {flac_path}')
 		return flac_path, artist, title, '', 'none', 'error', discogs_id, track
-
-	# Canonical album title for lrclib lookup (master title > folder name)
-	lookup_album = master_title or album_name
 
 	# Check existing embedded FLAC lyrics
 	if existing_lyrics and _is_instrumental(existing_lyrics):
@@ -200,7 +196,7 @@ def _fetch_one(
 	params = {
 		'artist_name': artist,
 		'track_name': title,
-		'album_name': lookup_album,
+		'album_name': album,
 		'duration': str(round(length)),
 	}
 	data = {}
@@ -301,8 +297,8 @@ def _fetch_one(
 	return flac_path, artist, title, '', 'none', 'skip', discogs_id, track
 
 
-def _collect_tracks(flacdir: str) -> list[tuple[str, str]]:
-	"""Return (flac_path, album_name) for every FLAC that has a DISCOGS_RELEASE_ID."""
+def _collect_tracks(flacdir: str) -> list[str]:
+	"""Return the path of every FLAC that has a DISCOGS_RELEASE_ID."""
 	tracks = []
 	for root, _, files in os.walk(flacdir):
 		flacs = sorted(f for f in files if f.endswith('.flac'))
@@ -312,21 +308,11 @@ def _collect_tracks(flacdir: str) -> list[tuple[str, str]]:
 		try:
 			song = FLAC(first)
 			discogs_id_str = flactag(song, 'DISCOGS_RELEASE_ID')
-			album_name = (
-				flactag(song, 'ALBUM_TITLE_OVERRIDE').strip()
-				or flactag(song, 'ORIGINAL FILENAME').strip()
-				or flactag(song, 'ORIGINAL_FILENAME').strip()
-				or flactag(song, 'ALBUM_MASTER_TITLE').strip()
-				or flactag(song, 'ORIGINAL_TITLE').strip()
-				or flactag(song, 'ALBUM').strip()
-			)
-			if '[' in album_name:
-				album_name = album_name.split('[')[0].strip()
 			int(discogs_id_str)
 		except (ValueError, TypeError):
 			continue
 		for f in flacs:
-			tracks.append((os.path.join(root, f), album_name))
+			tracks.append(os.path.join(root, f))
 	return tracks
 
 
@@ -381,10 +367,7 @@ def main() -> None:
 		try:
 			task_id = progress.add_task('Fetching', total=total, **stats)
 			with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-				futures = {
-					executor.submit(_fetch_one, path, album, session): path
-					for path, album in tracks
-				}
+				futures = {executor.submit(_fetch_one, path, session): path for path in tracks}
 				try:
 					for future in as_completed(futures):
 						try:
