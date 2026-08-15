@@ -158,6 +158,7 @@ def _fetch_one(
 		discogs_id = flactag(song, 'DISCOGS_RELEASE_ID')
 		track = flactag(song, 'TRACKNUMBER')
 		master_title = flactag(song, 'ALBUM_MASTER_TITLE') or flactag(song, 'ORIGINAL_TITLE')
+		album = flactag(song, 'ALBUM')
 		existing_lyrics = flactag(song, 'LYRICS').strip()
 		length = float(song.info.length) if song.info and hasattr(song.info, 'length') else 0.0
 	except Exception as e:  # noqa: BLE001
@@ -178,7 +179,7 @@ def _fetch_one(
 	if existing_lyrics and _has_manual_instrumental_marker(existing_lyrics):
 		# User hand-marked this track instrumental — normalize to the canonical block
 		# without hitting lrclib.net, as if we'd fetched instrumental:true from the API.
-		marker_lrc = _make_instrumental_lrc(artist, title, album_name, length)
+		marker_lrc = _make_instrumental_lrc(artist, title, album, length)
 		return flac_path, artist, title, marker_lrc, 'instrumental', 'new', discogs_id, track
 
 	had_invalid_lrc = False
@@ -190,7 +191,7 @@ def _fetch_one(
 			had_invalid_lrc = True
 		elif _is_lrc(existing_lyrics):
 			# Re-apply updated headers if missing/stale, and normalize line capitalization
-			updated_lrc = _apply_headers(existing_lyrics, artist, title, album_name, length)
+			updated_lrc = _apply_headers(existing_lyrics, artist, title, album, length)
 			updated_lrc = _capitalize_lrc(updated_lrc)
 			if updated_lrc != existing_lyrics:
 				return flac_path, artist, title, updated_lrc, 'lrc', 'fix', discogs_id, track
@@ -253,7 +254,7 @@ def _fetch_one(
 				)
 
 	if data.get('instrumental'):
-		marker_lrc = _make_instrumental_lrc(artist, title, album_name, length)
+		marker_lrc = _make_instrumental_lrc(artist, title, album, length)
 		if marker_lrc == existing_lyrics:
 			return (
 				flac_path,
@@ -272,7 +273,7 @@ def _fetch_one(
 		if _is_invalid_lrc(lrc):
 			logger.warning(f'Invalid LRC timestamps from lrclib, skipping: {title} ({artist})')
 		else:
-			lrc = _apply_headers(lrc, artist, title, album_name, length)
+			lrc = _apply_headers(lrc, artist, title, album, length)
 			lrc = _capitalize_lrc(lrc)
 			if lrc == existing_lyrics:
 				return flac_path, artist, title, existing_lyrics, 'lrc', 'skip', discogs_id, track
