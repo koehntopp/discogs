@@ -180,6 +180,11 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 	    ALBUM                 – formatted title: "<name> [<year> <desc> <kHz>DR<dr>]"
 	    ORIGINAL_TITLE        – canonical Discogs title (from master release if available)
 
+	Also writes PART and WORK per track (not uniformly like the tags above):
+	PART is always that track's own TITLE; WORK is that track's own SET SUBTITLE
+	when present, letting Roon group/identify individual discs of a box set
+	that this codebase otherwise treats as one flat album directory.
+
 	Skips the directory silently if no FLAC files exist or if DISCOGS_RELEASE_ID is
 	missing / non-numeric. Sleeps 1 second after each Discogs API call to respect the
 	rate limit.
@@ -333,19 +338,44 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 				if not audio.tags:
 					audio.add_tags()
 
-				stale_removed = False
+				# PART/WORK are per-track (Roon box-set grouping): WORK comes from
+				# each track's own SET SUBTITLE (a tag the user sets manually on
+				# discs within multi-disc editions, so it varies track to track
+				# within a single fixdir), not from the uniform album-level new_tags.
+				title = audio.tags.get('TITLE', [''])[0].strip()
+				set_subtitle = audio.tags.get('SET SUBTITLE', [''])[0].strip()
+				part_changed = bool(title) and [str(x) for x in audio.tags.get('PART', [])] != [
+					title
+				]
+				work_changed = bool(set_subtitle) and [
+					str(x) for x in audio.tags.get('WORK', [])
+				] != [set_subtitle]
+				work_stale = not set_subtitle and 'WORK' in audio.tags
+
+				stale_removed = work_stale
 				for opt_tag in managed_optional:
 					if opt_tag not in new_tags and opt_tag in audio.tags:
 						audio.tags.pop(opt_tag, None)
 						stale_removed = True
 
-				needs_update = stale_removed or any(
-					[str(x) for x in audio.tags.get(k, [])] != v for k, v in new_tags.items()
+				needs_update = (
+					stale_removed
+					or part_changed
+					or work_changed
+					or any(
+						[str(x) for x in audio.tags.get(k, [])] != v for k, v in new_tags.items()
+					)
 				)
 
 				if needs_update:
 					for k, v in new_tags.items():
 						audio[k] = v
+					if title:
+						audio['PART'] = [title]
+					if set_subtitle:
+						audio['WORK'] = [set_subtitle]
+					elif 'WORK' in audio.tags:
+						del audio.tags['WORK']
 					try:
 						audio.save()
 						try:

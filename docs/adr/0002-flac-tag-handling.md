@@ -22,9 +22,10 @@ We establish the following binding rules and standards for all FLAC tag handling
 * **Vorbis Comment Format**: All FLAC tag keys must be read and written using **UPPERCASE** string keys.
 * **Standard Tag Inventory**:
   * **User Anchor Tag (Read-Only by scripts)**: `DISCOGS_RELEASE_ID` (anchors album to exact Discogs version).
-  * **Ripping/Tagger Metadata (Read-Only by scripts)**: `ALBUMARTIST`, `ARTIST`, `TITLE`, `TRACKNUMBER`, `DISCNUMBER`, `CATALOGNUMBER`, `MUSICBRAINZ_ALBUMID`, `SUBTITLE`.
+  * **Ripping/Tagger Metadata (Read-Only by scripts)**: `ALBUMARTIST`, `ARTIST`, `TITLE`, `TRACKNUMBER`, `DISCNUMBER`, `CATALOGNUMBER`, `MUSICBRAINZ_ALBUMID`, `SUBTITLE`, `SET SUBTITLE` (user-set, per-track, on discs within multi-disc editions — see §5a).
   * **Enriched Metadata (Managed by `fixtags.py`)**: `ALBUM`, `VERSION`, `DATE`, `RELEASEDATE`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`.
   * **Structured Custom Metadata (Managed by `fixtags.py`)**: `ALBUM_MASTER_TITLE`, `ALBUM_MASTER_YEAR`, `ALBUM_RELEASE_TITLE`, `ALBUM_RELEASE_YEAR`, `ALBUM_MAX_RESOLUTION`, `ALBUM_EDITION`, `ALBUM_FORMAT`, `ALBUM_RELEASE_COUNTRY`, `ALBUM_RELEASE_LABEL`.
+  * **Per-Track Structured Metadata (Managed by `fixtags.py`)**: `PART`, `WORK` — unlike everything else in this table, set independently per track rather than uniformly across the album directory. See §5a.
   * **User Overrides (Optional, read by scripts)**: `ALBUM_TITLE_OVERRIDE`, `ALBUM_ARTIST_OVERRIDE`.
   * **Calculated Metric Tags**:
     * **Track & Album Dynamic Range (`DYNAMIC_RANGE`, `ALBUM_DR`)**: Computed via EBU R 128 / `drmeter`. Track DR is written to `DYNAMIC_RANGE`. Album DR is the rounded arithmetic mean of all track DR scores in the album, written to `ALBUM_DR`.
@@ -58,6 +59,25 @@ We establish the following binding rules and standards for all FLAC tag handling
   * Example `ALBUM`: `Brothers in Arms`
   * Example `VERSION`: `2025 Blu-ray (40th Anniversary Edition)`
 * `bliss.py` combines `clean(f"{ALBUM} {VERSION}".strip())` to compute directory names on disk, preserving 100% backward compatibility with existing folder names.
+
+### 5a. Per-Track Box-Set Grouping (`PART` and `WORK`)
+* `fixtags.py` writes `PART` and `WORK` **per track**, inside the same per-file
+  loop that saves each FLAC — not as part of the uniform album-level tag set
+  applied identically to every file in the directory. This matters because a
+  single `fixdir` invocation can span an entire multi-disc box set treated as
+  one Discogs release, where each disc's own identity still needs to be
+  distinguishable.
+  * **`PART`**: always set to that track's own `TITLE`.
+  * **`WORK`**: set to that track's own `SET SUBTITLE` — a tag the user sets
+    manually, per disc, within multi-disc editions — but only when
+    `SET SUBTITLE` is present on that specific track; removed if it's later
+    cleared on that track.
+* Roon renders `WORK` as a shared header it groups tracks under, and `PART`
+  as the individual track label shown beneath it — letting discs of a
+  box set (e.g. "Disc 1: Studio Album", "Disc 2: Live") appear as distinct,
+  identifiable groups in Roon even though this codebase treats the whole box
+  set as one flat album directory. See ADR 0008 for the full set of
+  Roon-specific tagging decisions.
 
 ### 6. Lyrics Tag Management (`LYRICS`)
 * **Format Distinction**: Synced LRC (`[MM:SS.xx]`) vs Plain Text TXT.

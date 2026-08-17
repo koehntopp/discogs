@@ -87,6 +87,7 @@ Detailed architectural standards and design contracts are maintained in `docs/ad
 - [ADR 0005: MP3 Mirror Transcoding and Multi-Copy Library Comparison](file:///Users/koehntopp/src/discogs/docs/adr/0005-mp3-transcoding-and-library-comparison.md)
 - [ADR 0006: Whisper Speech-to-Text LRC Lyrics Alignment, Time-Anchor Search, and Fallback Architecture](file:///Users/koehntopp/src/discogs/docs/adr/0006-whisper-lrc-alignment-and-fallback.md)
 - [ADR 0007: LRCLIB Lyrics Submission & Proof-of-Work Challenge Solver Architecture](file:///Users/koehntopp/src/discogs/docs/adr/0007-lrclib-lyrics-submission-proof-of-work.md)
+- [ADR 0008: Roon-Specific Tag Conventions](file:///Users/koehntopp/src/discogs/docs/adr/0008-roon-specific-tag-conventions.md)
 
 ---
 
@@ -195,14 +196,17 @@ At least one of the two must be provided; otherwise help is printed.
    - `ALBUM_DR` — album dynamic range score (mirrored from ALBUM DYNAMIC RANGE)
    - `ALBUM` — clean master release title for players (e.g. `Brothers in Arms`). Taken from `ALBUM_TITLE_OVERRIDE` if present, otherwise clean `ALBUM_MASTER_TITLE` or `ORIGINAL_TITLE`.
    - `VERSION` — release decoration string for Roon version display (no square brackets): `<year> <format>` or `<year> <format> (<edition>)` (e.g., `2025 Blu-ray (40th Anniversary Edition)`).
+5. Writes the following tags **per track** (not uniformly — each file's own value, independent of step 4's album-wide set), for Roon box-set grouping (see ADR 0008):
+   - `PART` — always that track's own `TITLE`.
+   - `WORK` — that track's own `SET SUBTITLE` when present (a tag the user sets manually, per disc, within multi-disc editions); removed if `SET SUBTITLE` is later cleared on that track.
 
-**Tags read:** `DISCOGS_RELEASE_ID`, `DATE`, `SUBTITLE`,
+**Tags read:** `DISCOGS_RELEASE_ID`, `DATE`, `SUBTITLE`, `SET SUBTITLE`, `TITLE`,
 `ALBUM_DR` (or deprecated `ALBUM DYNAMIC RANGE`), `ALBUM_TITLE_OVERRIDE`, `ALBUM_ARTIST_OVERRIDE`
 
 **Tags written:** `RELEASEDATE`, `DATE`, `YEAR`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`, `ORIGINAL DATE`, `ORIGINAL YEAR`,
 `ALBUM`, `VERSION`, `ALBUM_MASTER_TITLE`, `ALBUM_MASTER_YEAR`, `ALBUM_RELEASE_TITLE`,
 `ALBUM_RELEASE_YEAR`, `ALBUM_EDITION`, `ALBUM_RELEASE_COUNTRY`, `ALBUM_RELEASE_LABEL`,
-`ALBUM_FORMAT`, `ALBUM_MAX_RESOLUTION`, `ALBUM_DR`
+`ALBUM_FORMAT`, `ALBUM_MAX_RESOLUTION`, `ALBUM_DR`, `PART`, `WORK` (per-track)
 
 **External service:** Discogs REST API — requires `api_key` in `config.py`.
 
