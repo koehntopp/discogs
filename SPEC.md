@@ -452,15 +452,18 @@ uv run lrc_count.py [<flacdir>] [--output <file.csv>]
 |---|---|---|
 | `flacdir` | No | Root directory to scan (defaults to `config.flacroot`). |
 | `--output` | No | Output CSV file path (defaults to stdout). |
+| `--tracks` | No | Output one row per track instead of aggregated per-artist counts. |
 
 **Behaviour:**
 
 1. Walks `flacdir` recursively to find all album directories.
 2. For each track, classifies the `LYRICS` tag as instrumental (contains the `[instrumental:true]` marker), synced LRC (has `[MM:SS.xx]` timestamps), plain TXT, or absent (`none`); unreadable files count as `none`.
-3. Aggregates counts across every album by `ALBUMARTIST` (falls back to `ARTIST`).
-4. Writes CSV rows sorted by highest `txt` count first (ties broken alphabetically by `album_artist`).
+3. Default mode: aggregates counts across every album by `ALBUMARTIST` (falls back to `ARTIST`); writes CSV rows sorted by highest `txt` count first (ties broken alphabetically by `album_artist`).
+4. `--tracks` mode: writes one row per track instead, with the decorated album title (`ALBUM` + `VERSION`, bliss.py's directory-naming convention; falls back to the directory basename if `ALBUM` is empty), sorted by album then disc/track number.
 
-**Output columns:** `album_artist`, `lrc`, `txt`, `instrumental`, `no_lyrics`
+**Output columns (default):** `album_artist`, `lrc`, `txt`, `instrumental`, `no_lyrics`
+
+**Output columns (`--tracks`):** `album`, `song`, `lyrics_type`
 
 **Tags read:** `LYRICS`, `ALBUMARTIST`, `ARTIST`
 
