@@ -463,7 +463,7 @@ uv run lrc_count.py [<flacdir>] [--output <file.csv>]
 
 **Output columns (default):** `album_artist`, `lrc`, `txt`, `instrumental`, `no_lyrics`
 
-**Output columns (`--tracks`):** `album`, `song`, `lyrics_type`
+**Output columns (`--tracks`):** `album_artist`, `album`, `song`, `lyrics_type`
 
 **Tags read:** `LYRICS`, `ALBUMARTIST`, `ARTIST`
 

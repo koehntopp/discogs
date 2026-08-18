@@ -16,7 +16,7 @@ Rows are sorted by highest TXT count first (artists most in need of an LRC upgra
 pass, e.g. via align_lyrics.py).
 
 With --tracks, outputs one row per track instead, with columns:
-    album, song, lyrics_type
+    album_artist, album, song, lyrics_type
 `album` is the decorated album title (ALBUM + VERSION, as bliss.py uses for its
 directory names). Rows are sorted by album, then disc/track number.
 
@@ -103,14 +103,15 @@ def _decorated_album(song: FLAC, directory: str) -> str:
 def scan_album_tracks(directory: str) -> list[dict]:
 	"""Scan one album directory and return one row per track.
 
-	Each row has 'album', 'song', 'lyrics_type', plus internal '_disc'/'_track'
-	sort keys (not meant for CSV output).
+	Each row has 'album_artist', 'album', 'song', 'lyrics_type', plus internal
+	'_disc'/'_track' sort keys (not meant for CSV output).
 	"""
 	flacs = sorted(f for f in os.listdir(directory) if f.lower().endswith('.flac'))
 	if not flacs:
 		return []
 
 	rows = []
+	album_artist = ''
 	for filename in flacs:
 		track_path = os.path.join(directory, filename)
 		try:
@@ -118,6 +119,9 @@ def scan_album_tracks(directory: str) -> list[dict]:
 		except Exception as e:  # noqa: BLE001
 			logger.warning(f'Could not read {track_path}: {e}')
 			continue
+
+		if not album_artist:
+			album_artist = _flactag(song, 'ALBUMARTIST') or _flactag(song, 'ARTIST')
 
 		disc_str = _flactag(song, 'DISCNUMBER').split('/')[0]
 		track_str = _flactag(song, 'TRACKNUMBER').split('/')[0]
@@ -132,6 +136,7 @@ def scan_album_tracks(directory: str) -> list[dict]:
 
 		rows.append(
 			{
+				'album_artist': album_artist,
 				'album': _decorated_album(song, directory),
 				'song': _flactag(song, 'TITLE') or filename,
 				'lyrics_type': _lyric_status(song),
@@ -233,10 +238,15 @@ def main() -> None:
 		logger.info(f'Found {len(track_rows)} tracks')
 		track_rows.sort(key=lambda r: (r['album'].lower(), r['_disc'], r['_track']))
 		rows = [
-			{'album': r['album'], 'song': r['song'], 'lyrics_type': r['lyrics_type']}
+			{
+				'album_artist': r['album_artist'],
+				'album': r['album'],
+				'song': r['song'],
+				'lyrics_type': r['lyrics_type'],
+			}
 			for r in track_rows
 		]
-		write_csv(rows, ['album', 'song', 'lyrics_type'], output_path)
+		write_csv(rows, ['album_artist', 'album', 'song', 'lyrics_type'], output_path)
 	else:
 		artist_counts, album_count = scan_library(flacdir)
 		logger.info(f'Found {album_count} albums across {len(artist_counts)} artists')
