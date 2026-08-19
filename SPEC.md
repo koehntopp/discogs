@@ -451,7 +451,7 @@ uv run lrc_count.py [<flacdir>] [--output <file.csv>]
 | Argument | Required | Description |
 |---|---|---|
 | `flacdir` | No | Root directory to scan (defaults to `config.flacroot`). |
-| `--output` | No | Output CSV file path (defaults to stdout). |
+| `--output` | No | Output CSV file path (defaults to stdout). Also writes a sibling `.xlsx` workbook with the same rows/columns next to it. |
 | `--tracks` | No | Output one row per track instead of aggregated per-artist counts. |
 
 **Behaviour:**

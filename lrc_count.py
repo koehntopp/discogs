@@ -3,6 +3,7 @@
 # dependencies = [
 #   "structlog",
 #   "mutagen",
+#   "openpyxl",
 # ]
 # ///
 
@@ -24,7 +25,9 @@ Usage:
     uv run lrc_count.py [<flacdir>] [--output <file.csv>] [--tracks]
 
 If <flacdir> is omitted, config.flacroot is used.
-If --output is omitted, the CSV is written to stdout.
+If --output is omitted, the CSV is written to stdout (no .xlsx is written).
+If --output is given, an .xlsx workbook with the same rows/columns is written
+alongside the CSV (same path, .xlsx extension).
 """
 
 import csv
@@ -32,8 +35,10 @@ import os
 import re
 import sys
 from collections import defaultdict
+from pathlib import Path
 
 from mutagen.flac import FLAC
+from openpyxl import Workbook
 
 from log import logger
 
@@ -198,6 +203,21 @@ def write_csv(rows: list[dict], fieldnames: list[str], output_path: str | None) 
 			fp.close()
 
 
+def write_xlsx(rows: list[dict], fieldnames: list[str], output_path: str) -> str:
+	"""Write results as a single-sheet .xlsx workbook next to output_path.
+
+	Returns the .xlsx path written.
+	"""
+	xlsx_path = str(Path(output_path).with_suffix('.xlsx'))
+	wb = Workbook()
+	ws = wb.active
+	ws.append(fieldnames)
+	for row in rows:
+		ws.append([row[f] for f in fieldnames])
+	wb.save(xlsx_path)
+	return xlsx_path
+
+
 def main() -> None:
 	args = sys.argv[1:]
 	flacdir: str | None = None
@@ -246,7 +266,8 @@ def main() -> None:
 			}
 			for r in track_rows
 		]
-		write_csv(rows, ['album_artist', 'album', 'song', 'lyrics_type'], output_path)
+		fieldnames = ['album_artist', 'album', 'song', 'lyrics_type']
+		write_csv(rows, fieldnames, output_path)
 	else:
 		artist_counts, album_count = scan_library(flacdir)
 		logger.info(f'Found {album_count} albums across {len(artist_counts)} artists')
@@ -262,10 +283,13 @@ def main() -> None:
 			for artist, counts in artist_counts.items()
 		]
 		rows.sort(key=lambda r: (-r['txt'], r['album_artist']))
-		write_csv(rows, ['album_artist', 'lrc', 'txt', 'instrumental', 'no_lyrics'], output_path)
+		fieldnames = ['album_artist', 'lrc', 'txt', 'instrumental', 'no_lyrics']
+		write_csv(rows, fieldnames, output_path)
 
 	if output_path:
 		logger.info(f'CSV written to {output_path}')
+		xlsx_path = write_xlsx(rows, fieldnames, output_path)
+		logger.info(f'XLSX written to {xlsx_path}')
 
 
 if __name__ == '__main__':
