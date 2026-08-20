@@ -355,7 +355,7 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 				stale_removed = work_stale
 				for opt_tag in managed_optional:
 					if opt_tag not in new_tags and opt_tag in audio.tags:
-						audio.tags.pop(opt_tag, None)
+						del audio.tags[opt_tag]
 						stale_removed = True
 
 				needs_update = (
