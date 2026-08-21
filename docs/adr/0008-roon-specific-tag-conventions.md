@@ -22,8 +22,8 @@ authority, etc.) and does not restate them.
 ### 1. `ALBUM` / `VERSION` — clean title vs. release decoration
 * `fixtags.py` and `migrate_tags.py` populate `ALBUM` with the clean master
   title only (no brackets or decoration, e.g. `Brothers in Arms`) and `VERSION`
-  with a plain-text release decoration string (e.g. `2025 Blu-ray (40th
-  Anniversary Edition) DR09 (DGCD 12345)`).
+  with a plain-text release decoration string (e.g. `2025 DR09 Blu-ray (40th
+  Anniversary Edition) (DGCD 12345)`).
 * Roon renders `VERSION` as its "Version" line whenever multiple editions of
   the same album exist in the library, letting the user tell pressings apart
   (remaster, deluxe edition, high-resolution transfer, etc.) without cluttering

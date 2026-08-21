@@ -299,7 +299,7 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 		fmt_str = f' {album_format}' if album_format else ''
 		dr_part = f' {dr_str}' if dr_str else ''
 		cat_part = f' ({catalog_number})' if catalog_number else ''
-		version_str = f'{yr_str}{fmt_str}{ed_str}{dr_part}{cat_part}'.strip()
+		version_str = f'{yr_str}{dr_part}{fmt_str}{ed_str}{cat_part}'.strip()
 
 		new_tags = {
 			'RELEASEDATE': [str(album_year_release)],
