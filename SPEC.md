@@ -196,6 +196,7 @@ At least one of the two must be provided; otherwise help is printed.
    - `ALBUM_DR` — album dynamic range score (mirrored from ALBUM DYNAMIC RANGE)
    - `ALBUM` — clean master release title for players (e.g. `Brothers in Arms`). Taken from `ALBUM_TITLE_OVERRIDE` if present, otherwise clean `ALBUM_MASTER_TITLE` or `ORIGINAL_TITLE`.
    - `VERSION` — release decoration string for Roon version display: `<year> DR<xx> <format> (<edition>) (<catalog number>)` (e.g., `2025 DR09 Blu-ray (40th Anniversary Edition) (DGCD 12345)`). `DR<xx>` (two-digit, zero-padded) and the parenthesized catalog number are each appended only when available.
+   - `ALBUMARTIST` — only when `ALBUM_ARTIST_OVERRIDE` is set: written verbatim (a manual correction, not derived from Discogs), permanently replacing whatever was there. Left completely untouched when the override is absent.
 5. Writes the following tags **per track** (not uniformly — each file's own value, independent of step 4's album-wide set), for Roon box-set grouping (see ADR 0008):
    - `PART` — always that track's own `TITLE`.
    - `WORK` — that track's own `SET SUBTITLE` when present (a tag the user sets manually, per disc, within multi-disc editions); removed if `SET SUBTITLE` is later cleared on that track.
@@ -207,7 +208,7 @@ At least one of the two must be provided; otherwise help is printed.
 **Tags written:** `RELEASEDATE`, `DATE`, `YEAR`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`, `ORIGINAL DATE`, `ORIGINAL YEAR`,
 `ALBUM`, `VERSION`, `ALBUM_MASTER_TITLE`, `ALBUM_MASTER_YEAR`, `ALBUM_RELEASE_TITLE`,
 `ALBUM_RELEASE_YEAR`, `ALBUM_EDITION`, `ALBUM_RELEASE_COUNTRY`, `ALBUM_RELEASE_LABEL`,
-`ALBUM_FORMAT`, `ALBUM_MAX_RESOLUTION`, `ALBUM_DR`, `PART`, `WORK` (per-track)
+`ALBUM_FORMAT`, `ALBUM_MAX_RESOLUTION`, `ALBUM_DR`, `ALBUMARTIST` (only when `ALBUM_ARTIST_OVERRIDE` is set), `PART`, `WORK` (per-track)
 
 **External service:** Discogs REST API — requires `api_key` in `config.py`.
 

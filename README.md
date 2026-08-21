@@ -94,7 +94,7 @@ All config values are also editable via the Settings modal in the web UI.
 - **Edition Tag**: Set `ALBUM_EDITION` for special pressings (e.g. `"Deluxe Edition"`, `"40th Anniversary Remaster"`).
 - **User Overrides**:
   - `ALBUM_TITLE_OVERRIDE`: Custom title to override the Discogs master album title.
-  - `ALBUM_ARTIST_OVERRIDE`: Custom artist name to override Discogs artist in player displays, bliss paths, and album lists.
+  - `ALBUM_ARTIST_OVERRIDE`: Manual correction for a wrong `ALBUMARTIST`, applied only by `fixtags.py` (writes the override straight into `ALBUMARTIST`, permanently replacing whatever was there — not derived from or checked against Discogs). Everywhere else — player displays, bliss paths, album lists — reads the real `ALBUMARTIST`/`ARTIST` tags directly; none of them consult the override tag itself.
 
 ## Typical Workflow
 

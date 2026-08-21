@@ -185,6 +185,10 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 	when present, letting Roon group/identify individual discs of a box set
 	that this codebase otherwise treats as one flat album directory.
 
+	If ALBUM_ARTIST_OVERRIDE is set, it's written into ALBUMARTIST (uniformly,
+	like ALBUM/VERSION) -- a manual correction, not something derived from
+	Discogs. Left entirely untouched when the override is absent.
+
 	Skips the directory silently if no FLAC files exist or if DISCOGS_RELEASE_ID is
 	missing / non-numeric. Sleeps 1 second after each Discogs API call to respect the
 	rate limit.
@@ -232,6 +236,11 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 
 		album_override = first_tags.get('ALBUM_TITLE_OVERRIDE', [''])[0]
 		album_name = album_override or master_title
+
+		# ALBUM_ARTIST_OVERRIDE only ever corrects a wrong ALBUMARTIST manually --
+		# no Discogs-derived artist data is fetched or stored for this. When absent,
+		# ALBUMARTIST is left entirely alone (not part of new_tags at all).
+		album_artist_override = first_tags.get('ALBUM_ARTIST_OVERRIDE', [''])[0].strip()
 
 		# Sample rate & resolution
 		def _read_sr(filepath: str) -> int:
@@ -323,6 +332,8 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 			new_tags['ALBUM_EDITION'] = [album_edition]
 		if dr_rating:
 			new_tags['ALBUM_DR'] = [dr_rating]
+		if album_artist_override:
+			new_tags['ALBUMARTIST'] = [album_artist_override]
 
 		try:
 			country = discogs_fetch(lambda: drelease.country.strip())

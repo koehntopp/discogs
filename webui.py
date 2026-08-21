@@ -841,9 +841,6 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 		row['Format'] = format_val
 		row['Version'] = version_val
 
-		artist_override = raw.get('ALBUM_ARTIST_OVERRIDE', [''])[0]
-		if artist_override:
-			row['Album Artist'] = artist_override
 		title_override = raw.get('ALBUM_TITLE_OVERRIDE', [''])[0]
 		master_title = raw.get('ALBUM_MASTER_TITLE', [''])[0]
 		orig_title = raw.get('ORIGINAL_TITLE', [''])[0]

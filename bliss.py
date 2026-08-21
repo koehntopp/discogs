@@ -128,11 +128,7 @@ def get_target_path_and_filename(flac_file: str, root_dir: str) -> tuple[str, st
 
 	track_title = clean(tags.get('TITLE', ['Unknown Title'])[0])
 	album_title = clean(full_album_name)
-	artist = clean(
-		tags.get(
-			'ALBUM_ARTIST_OVERRIDE', tags.get('ALBUMARTIST', tags.get('ARTIST', ['Unknown Artist']))
-		)[0]
-	)
+	artist = clean(tags.get('ALBUMARTIST', tags.get('ARTIST', ['Unknown Artist']))[0])
 
 	disc = tags.get('DISCNUMBER', ['01'])[0].split('/')[0].zfill(2)
 	track = tags.get('TRACKNUMBER', ['00'])[0].split('/')[0].zfill(2)
@@ -220,11 +216,7 @@ def movefiles(flacroot: str, full: bool = False) -> None:
 
 			stracktitle = clean(tags.get('TITLE', [''])[0])
 			salbumtitle = clean(full_album_name)
-			sartist = clean(
-				tags.get(
-					'ALBUM_ARTIST_OVERRIDE', tags.get('ALBUMARTIST', tags.get('ARTIST', ['']))
-				)[0]
-			)
+			sartist = clean(tags.get('ALBUMARTIST', tags.get('ARTIST', ['']))[0])
 			disc = tags.get('DISCNUMBER', ['0'])[0].split('/')[0].zfill(2)
 			track = tags.get('TRACKNUMBER', ['0'])[0].split('/')[0].zfill(2)
 			tobefilename = f'{disc}_{track}_{stracktitle}.flac'

@@ -22,7 +22,7 @@ We establish the following binding rules and standards for all FLAC tag handling
 * **Vorbis Comment Format**: All FLAC tag keys must be read and written using **UPPERCASE** string keys.
 * **Standard Tag Inventory**:
   * **User Anchor Tag (Read-Only by scripts)**: `DISCOGS_RELEASE_ID` (anchors album to exact Discogs version).
-  * **Ripping/Tagger Metadata (Read-Only by scripts)**: `ALBUMARTIST`, `ARTIST`, `TITLE`, `TRACKNUMBER`, `DISCNUMBER`, `CATALOGNUMBER`, `MUSICBRAINZ_ALBUMID`, `SUBTITLE`, `SET SUBTITLE` (user-set, per-track, on discs within multi-disc editions — see §5a).
+  * **Ripping/Tagger Metadata (Read-Only by scripts)**: `ARTIST`, `TITLE`, `TRACKNUMBER`, `DISCNUMBER`, `CATALOGNUMBER`, `MUSICBRAINZ_ALBUMID`, `SUBTITLE`, `SET SUBTITLE` (user-set, per-track, on discs within multi-disc editions — see §5a). `ALBUMARTIST` is normally in this category too, but `fixtags.py` overwrites it when `ALBUM_ARTIST_OVERRIDE` is set (see §5).
   * **Enriched Metadata (Managed by `fixtags.py`)**: `ALBUM`, `VERSION`, `DATE`, `RELEASEDATE`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`.
   * **Structured Custom Metadata (Managed by `fixtags.py`)**: `ALBUM_MASTER_TITLE`, `ALBUM_MASTER_YEAR`, `ALBUM_RELEASE_TITLE`, `ALBUM_RELEASE_YEAR`, `ALBUM_MAX_RESOLUTION`, `ALBUM_EDITION`, `ALBUM_FORMAT`, `ALBUM_RELEASE_COUNTRY`, `ALBUM_RELEASE_LABEL`.
   * **Per-Track Structured Metadata (Managed by `fixtags.py`)**: `PART`, `WORK` — unlike everything else in this table, set independently per track rather than uniformly across the album directory. See §5a.
@@ -59,6 +59,7 @@ We establish the following binding rules and standards for all FLAC tag handling
   * Example `ALBUM`: `Brothers in Arms`
   * Example `VERSION`: `2025 DR09 Blu-ray (40th Anniversary Edition) (DGCD 12345)`
 * `bliss.py` combines `clean(f"{ALBUM} {VERSION}".strip())` to compute directory names on disk, preserving 100% backward compatibility with existing folder names.
+* **`ALBUM_ARTIST_OVERRIDE`**: A manual correction for a wrong `ALBUMARTIST`, not a Discogs-derived value — `fixtags.py` doesn't fetch or track any artist data from Discogs. When set, it's written straight into `ALBUMARTIST` (uniformly across the album directory, like `ALBUM`/`VERSION`), permanently replacing whatever was there; left completely untouched when absent. No other script consults `ALBUM_ARTIST_OVERRIDE` directly — `bliss.py`, `album_list.py`, and `webui.py` all read `ALBUMARTIST` itself, which `fixtags.py` keeps corrected.
 
 ### 5a. Per-Track Box-Set Grouping (`PART` and `WORK`)
 * `fixtags.py` writes `PART` and `WORK` **per track**, inside the same per-file

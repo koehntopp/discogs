@@ -83,9 +83,6 @@ def read_album(directory: str) -> dict[str, str] | None:
 		return None
 
 	album_result = {tag: (tags.get(tag, [''])[0] or '') for tag in ALBUM_TAGS}
-	artist_override = tags.get('ALBUM_ARTIST_OVERRIDE', [''])[0]
-	if artist_override:
-		album_result['ALBUMARTIST'] = artist_override
 	title_override = tags.get('ALBUM_TITLE_OVERRIDE', [''])[0]
 	master_title = tags.get('ALBUM_MASTER_TITLE', [''])[0]
 	orig_title = tags.get('ORIGINAL_TITLE', [''])[0]
