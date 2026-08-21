@@ -23,11 +23,16 @@ authority, etc.) and does not restate them.
 * `fixtags.py` and `migrate_tags.py` populate `ALBUM` with the clean master
   title only (no brackets or decoration, e.g. `Brothers in Arms`) and `VERSION`
   with a plain-text release decoration string (e.g. `2025 Blu-ray (40th
-  Anniversary Edition)`).
+  Anniversary Edition) DR09 [DGCD 12345]`).
 * Roon renders `VERSION` as its "Version" line whenever multiple editions of
   the same album exist in the library, letting the user tell pressings apart
   (remaster, deluxe edition, high-resolution transfer, etc.) without cluttering
   the album title itself.
+* `VERSION` also carries the album's `DR<xx>` Dynamic Range score and, in
+  square brackets, its catalog number — both appended only when available.
+  Roon's own UI doesn't surface either at a glance, so folding them into the
+  Version line makes them visible without an extra lookup, at the cost of the
+  directory rename (below) whenever `ALBUM_DR` changes.
 * `bliss.py` combines the same pair (`clean(f"{ALBUM} {VERSION}")`) to compute
   on-disk directory names — a filesystem consequence of these Roon-facing
   values, not an independent naming decision. See ADR 0002 §5 for the full

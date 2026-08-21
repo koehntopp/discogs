@@ -279,10 +279,27 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 			or ''
 		)
 
+		catalog_number = (
+			first_tags.get('CATALOGNUMBER', [''])[0]
+			or first_tags.get('CATALOG NUMBER', [''])[0]
+			or first_tags.get('CATALOG_NUMBER', [''])[0]
+			or first_tags.get('CATALOGNO', [''])[0]
+			or ''
+		).strip()
+
+		dr_str = ''
+		if dr_rating:
+			try:
+				dr_str = f'DR{int(dr_rating):02d}'
+			except ValueError:
+				dr_str = ''
+
 		ed_str = f' ({album_edition})' if album_edition else ''
 		yr_str = f'{album_year_release}' if album_year_release else ''
 		fmt_str = f' {album_format}' if album_format else ''
-		version_str = f'{yr_str}{fmt_str}{ed_str}'.strip()
+		dr_part = f' {dr_str}' if dr_str else ''
+		cat_part = f' [{catalog_number}]' if catalog_number else ''
+		version_str = f'{yr_str}{fmt_str}{ed_str}{dr_part}{cat_part}'.strip()
 
 		new_tags = {
 			'RELEASEDATE': [str(album_year_release)],

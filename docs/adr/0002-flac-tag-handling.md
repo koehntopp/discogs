@@ -55,9 +55,9 @@ We establish the following binding rules and standards for all FLAC tag handling
 ### 5. Album Tag Formatting (`ALBUM` and `VERSION`)
 * `fixtags.py` and `migrate_tags.py` populate clean `ALBUM` and plain `VERSION` tags:
   * **`ALBUM` Tag:** Stores the clean master title only (no brackets or decoration), e.g., `Fatal Mistakes`.
-  * **`VERSION` Tag:** Stores the plain-text release decoration string (without square brackets), e.g., `2021 CD (Deluxe Digital Album)` or `1988 CD`.
+  * **`VERSION` Tag:** Stores the plain-text release decoration string: `<year> <format> (<edition>) DR<xx> [<catalog number>]`, e.g., `2021 CD (Deluxe Digital Album) DR11 [XLCD313X]` or `1988 CD DR09`. `DR<xx>` (two-digit, zero-padded) and the bracketed catalog number are each appended only when available — `ALBUM_DR` (or the deprecated `ALBUM DYNAMIC RANGE` fallback) for DR, and `CATALOGNUMBER`/`CATALOG NUMBER`/`CATALOG_NUMBER`/`CATALOGNO` (first present) for the catalog number.
   * Example `ALBUM`: `Brothers in Arms`
-  * Example `VERSION`: `2025 Blu-ray (40th Anniversary Edition)`
+  * Example `VERSION`: `2025 Blu-ray (40th Anniversary Edition) DR09 [DGCD 12345]`
 * `bliss.py` combines `clean(f"{ALBUM} {VERSION}".strip())` to compute directory names on disk, preserving 100% backward compatibility with existing folder names.
 
 ### 5a. Per-Track Box-Set Grouping (`PART` and `WORK`)

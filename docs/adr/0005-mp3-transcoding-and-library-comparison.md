@@ -24,7 +24,7 @@ We establish the following architectural rules for library organization, MP3 mir
 
 * **Component Derivation & `clean()` Sanitization**:
   * **`<Artist>`**: Derived from `clean(ALBUM_ARTIST_OVERRIDE or ALBUMARTIST or ARTIST or "Unknown Artist")`.
-  * **`<Album_Version>`**: Derived from `clean(f"{ALBUM} {VERSION}".strip())`. Combines clean master title and plain-text version tag.
+  * **`<Album_Version>`**: Derived from `clean(f"{ALBUM} {VERSION}".strip())`. Combines clean master title and plain-text version tag. Since `VERSION` includes a `DR<xx>` score and a bracketed catalog number when available (ADR 0002 §5), directory names change whenever `ALBUM_DR` is recalculated — an accepted trade-off for making that information visible in Roon.
   * **`<disc_zz>`**: 2-digit zero-padded `DISCNUMBER` (`01`, `02`). Splits total track strings (e.g. `1/2` $\rightarrow$ `01`). Defaults to `01`.
   * **`<track_zz>`**: 2-digit zero-padded `TRACKNUMBER` (`01`, `07`). Splits total track strings (e.g. `7/12` $\rightarrow$ `07`). Defaults to `00`.
   * **`<Title>`**: Derived from `clean(TITLE or "Unknown Title")`.
