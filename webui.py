@@ -1064,6 +1064,7 @@ async def sync_start():
 			+ [
 				'--exclude',
 				'@eaDir/**',
+				'--inplace',
 				'--log-file',
 				str(rclone_log),
 				'--log-level',
