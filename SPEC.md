@@ -195,7 +195,7 @@ At least one of the two must be provided; otherwise help is printed.
    - `ALBUM_MAX_RESOLUTION` — maximum sample rate of tracks in the folder (e.g., 44.1kHz, 96kHz)
    - `ALBUM_DR` — album dynamic range score (mirrored from ALBUM DYNAMIC RANGE)
    - `ALBUM` — clean master release title for players (e.g. `Brothers in Arms`). Taken from `ALBUM_TITLE_OVERRIDE` if present, otherwise clean `ALBUM_MASTER_TITLE` or `ORIGINAL_TITLE`.
-   - `VERSION` — release decoration string for Roon version display: `<year> <format> (<edition>) DR<xx> [<catalog number>]` (e.g., `2025 Blu-ray (40th Anniversary Edition) DR09 [DGCD 12345]`). `DR<xx>` (two-digit, zero-padded) and the bracketed catalog number are each appended only when available.
+   - `VERSION` — release decoration string for Roon version display: `<year> <format> (<edition>) DR<xx> (<catalog number>)` (e.g., `2025 Blu-ray (40th Anniversary Edition) DR09 (DGCD 12345)`). `DR<xx>` (two-digit, zero-padded) and the parenthesized catalog number are each appended only when available.
 5. Writes the following tags **per track** (not uniformly — each file's own value, independent of step 4's album-wide set), for Roon box-set grouping (see ADR 0008):
    - `PART` — always that track's own `TITLE`.
    - `WORK` — that track's own `SET SUBTITLE` when present (a tag the user sets manually, per disc, within multi-disc editions); removed if `SET SUBTITLE` is later cleared on that track.
