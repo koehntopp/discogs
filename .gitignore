@@ -24,3 +24,4 @@ koehntopp@*
 *.log
 lyrics/
 album_cache.json
+audiophile_cache.json

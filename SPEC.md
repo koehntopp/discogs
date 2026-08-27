@@ -70,7 +70,7 @@ tag names consistently:
 
 | Service            | Script         | Protocol | Rate limit           |
 |--------------------|----------------|----------|----------------------|
-| Discogs REST API   | fixtags        | HTTPS    | 1 req/s (sleep 1 s)  |
+| Discogs REST API   | fixtags, find_audiophile_upgrades | HTTPS    | 1 req/s (sleep 1.1 s)  |
 | lrclib.net REST API| update_lyrics, lrclib_submitter | HTTPS    | PoW challenge token required for publish |
 | OpenAI Whisper     | align_lyrics   | local    | —                    |
 | AcoustID / fpcalc  | calculate_fp   | local    | —                    |
@@ -554,7 +554,32 @@ uv run lrclib_submitter.py TARGET_FLAC [OPTIONS]
 
 ---
 
+### `find_audiophile_upgrades.py` — Audiophile Album Upgrade Recommendations
 
+**Purpose:** Scans `albums.csv`, identifies albums with format `CD` or `Qobuz`, queries the Discogs API (with rate limiting and persistent local caching) to discover higher-quality audiophile versions (SACD, SHM-CD, UDCD, UHQCD, MFSL, Gold CD, etc.) that are not already in the library, and outputs recommendations with links to CSV.
+
+```bash
+uv run find_audiophile_upgrades.py [OPTIONS]
+```
+
+| Argument / Option | Default | Description |
+| --- | --- | --- |
+| `--input`, `-i` | `config_dir/albums.csv` | Input CSV containing library inventory. |
+| `--output`, `-o` | `config_dir/audiophile_upgrades.csv` | Target CSV path for upgrade recommendations. |
+| `--cache`, `-c` | `config_dir/audiophile_cache.json` | Persistent JSON cache for Discogs API responses. |
+| `--limit`, `-l` | `None` | Limit search to first N target CD/Qobuz albums. |
+| `--offline` | `off` | Rely strictly on cached API responses without making network requests. |
+
+**Behaviour:**
+1. Loads library inventory from `albums.csv` and indexes existing album formats and Discogs Release IDs.
+2. Filters albums with format `CD` or `Qobuz`.
+3. Checks local cache (`audiophile_cache.json`) for cached Discogs release/master data.
+4. If uncached, queries Discogs API with 1.1s rate limiting and exponential backoff retry on HTTP 429 errors.
+5. Resolves candidate pressings via Discogs Master Release versions (`/masters/{master_id}/versions`).
+6. Filters candidates matching audiophile format patterns (SACD, SHM-CD, MFSL, UHQCD, Gold CD, XRCD, K2 HD, Blu-spec CD, HDCD, HQCD, DVD-Audio, Blu-ray Audio) while excluding versions already in the user's library.
+7. Outputs recommendations with Discogs URLs to `audiophile_upgrades.csv`.
+
+**Dependencies:** `requests`, `rich`, `structlog`
 
 ---
 
