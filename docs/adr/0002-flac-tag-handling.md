@@ -81,6 +81,14 @@ We establish the following binding rules and standards for all FLAC tag handling
   Roon-specific tagging decisions.
 
 ### 6. Lyrics Tag Management (`LYRICS`)
+* **Artist Source**: `update_lyrics.py` sources the "artist" it uses everywhere
+  — the lrclib.net search query, the `[ar:]` LRC header, and log messages —
+  from `ALBUMARTIST`, falling back to `ARTIST` only when `ALBUMARTIST` is
+  empty. This deliberately differs from §1's general read-only `ARTIST`
+  metadata: a track's own `ARTIST` credit can carry rip-specific billing
+  (e.g. `Roy Orbison With Guests` on a live album where `ALBUMARTIST` is the
+  plain `Roy Orbison`) that lrclib.net's artist index doesn't recognize,
+  causing otherwise-findable lyrics to 404.
 * **Format Distinction**: Synced LRC (`[MM:SS.xx]`) vs Plain Text TXT.
 * **Header Preservation**: `update_lyrics.py` owns only the `ar`/`ti`/`al`/`length` header lines and updates their values **in place**, wherever they already sit in the tag; any id-tag line it doesn't own (e.g. a `[re:...]` line written by an external re-alignment tool, or `[by:...]`/`[offset:...]`) is left completely untouched, in its original position, rather than stripped and rebuilt at a fixed offset. Managed headers that are entirely missing are inserted at the top. This in-place merge (as opposed to a prior strip-and-rebuild design) is required so `update_lyrics.py` converges to a stable tag instead of perpetually re-ordering headers against any other tool that also writes id-tag lines to `LYRICS`.
 * **Capitalization Normalization**: The first non-whitespace character of every lyric line (new or already embedded) is uppercased, both for synced LRC (text following the `[MM:SS.xx]` timestamp) and plain TXT. LRC header lines are left untouched. Existing embedded lyrics that need only this fix are rewritten in place rather than skipped.

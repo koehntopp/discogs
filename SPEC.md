@@ -291,6 +291,7 @@ uv run update_lyrics.py [FLAC_DIR]
 
 1. Walks `FLAC_DIR` recursively to find all album directories.
 2. For each FLAC:
+   - The "artist" used for the lrclib.net query, the `[ar:]` LRC header, and log messages is sourced from `ALBUMARTIST`, falling back to `ARTIST` only when `ALBUMARTIST` is empty — not the track's own `ARTIST` credit, which can carry rip-specific billing (e.g. `Roy Orbison With Guests`) that lrclib.net's artist index won't match.
    - If the `LYRICS` tag already contains valid LRC-format content (timestamp pattern `[mm:ss.xx]`), refreshes the `[ar:]`/`[ti:]`/`[al:]`/`[length:]` headers and re-normalizes line capitalization in place instead of querying lrclib.net.
    - If the `LYRICS` tag already contains the instrumental marker (`[instrumental:true]`), skips it without querying lrclib.net.
    - Otherwise, Stage 1: Queries lrclib.net with artist, title, the FLAC's own `ALBUM` tag, and duration.

@@ -158,7 +158,7 @@ def _fetch_one(
 
 	try:
 		song = FLAC(flac_path)
-		artist = flactag(song, 'ARTIST')
+		artist = flactag(song, 'ALBUMARTIST') or flactag(song, 'ARTIST')
 		title = flactag(song, 'TITLE')
 		discogs_id = flactag(song, 'DISCOGS_RELEASE_ID')
 		track = flactag(song, 'TRACKNUMBER')
@@ -170,7 +170,7 @@ def _fetch_one(
 		return flac_path, '', '', '', 'none', 'error', '', ''
 
 	if not artist or not title:
-		logger.info(f'Missing ARTIST or TITLE tag in {flac_path}')
+		logger.info(f'Missing ALBUMARTIST/ARTIST or TITLE tag in {flac_path}')
 		return flac_path, artist, title, '', 'none', 'error', discogs_id, track
 
 	# Check existing embedded FLAC lyrics
