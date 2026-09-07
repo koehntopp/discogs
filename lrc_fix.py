@@ -67,8 +67,11 @@ logging.getLogger("speechbrain").setLevel(logging.ERROR)
 
 from mutagen.flac import FLAC
 
+from lrc_format import ID_TAG_LINE as LRC_ID_TAG_RE
+from lrc_format import build_instrumental_marker, capitalize_line, refresh_headers, resolve_artist
+from lrc_format import is_bare_instrumental_placeholder as is_instrumental
+
 LRC_TIMESTAMP_RE = re.compile(r"^\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]\s*")
-LRC_ID_TAG_RE = re.compile(r"^\[[a-zA-Z]{2,20}:[^\]]*\]$")
 
 
 def find_flac_files(path: Path) -> list[Path]:
@@ -87,14 +90,6 @@ def read_lyrics_tag(flac: FLAC) -> str | None:
 def is_lrc(raw: str) -> bool:
     """True if any line already carries an [mm:ss.xx]-style timestamp."""
     return any(LRC_TIMESTAMP_RE.match(line.strip()) for line in raw.splitlines())
-
-
-_INSTRUMENTAL_RE = re.compile(r"^[\[(]?\s*instrumental\s*[\])]?$", re.IGNORECASE)
-
-
-def is_instrumental(lyric_lines: list[str]) -> bool:
-    """True if the tag is just a placeholder like 'Instrumental'/'[Instrumental]'."""
-    return len(lyric_lines) == 1 and bool(_INSTRUMENTAL_RE.match(lyric_lines[0]))
 
 
 def strip_lyric_lines(raw: str) -> tuple[list[str], list[str]]:
@@ -147,9 +142,6 @@ def split_id_tags(raw: str) -> tuple[list[str], list[str]]:
     return id_tags, body
 
 
-_STANDARD_ID_TAGS = [("ar", "ARTIST"), ("ti", "TITLE"), ("al", "ALBUM")]
-_ID_TAG_KEY_RE = re.compile(r"^\[([a-zA-Z]+):")
-
 # LRC spec's [re:] tag identifies the player/editor that created the file.
 # Only stamped when a run actually changes lyric content - see
 # stamp_creator_tag / _strip_metadata_lines - never for a metadata-only
@@ -158,68 +150,37 @@ _ID_TAG_KEY_RE = re.compile(r"^\[([a-zA-Z]+):")
 # needed correcting.
 CREATOR_TAG = "https://github.com/koehntopp/lrc_fix"
 
-# Keys ensure_id_tags manages directly, plus "re" (handled separately by
-# stamp_creator_tag/_strip_metadata_lines rather than here).
+# Keys ensure_id_tags manages directly (via lrc_format.refresh_headers), plus
+# "re" (handled separately by stamp_creator_tag/_strip_metadata_lines rather
+# than here).
 _METADATA_KEYS = {"ar", "ti", "al", "length", "re"}
 
 
-def format_length_tag(seconds: float) -> str:
-    minutes = int(seconds // 60)
-    secs = int(seconds - minutes * 60)
-    return f"[length:{minutes:02d}:{secs:02d}]"
+def _flac_value(flac: FLAC, key: str) -> str:
+    values = flac.get(key)
+    return values[0] if values and values[0] else ""
 
 
 def ensure_id_tags(id_tags: list[str], flac: FLAC) -> list[str]:
     """Refresh [ar:]/[ti:]/[al:]/[length:] header lines from the FLAC's own
-    tags/audio duration. Every other pre-existing id tag line - including
-    [re:], [by:...], etc. - passes through unchanged, in original order.
-    [re:] is handled separately, by stamp_creator_tag, and only when a run
-    actually changes lyric content (see CLAUDE.md).
-
-    ar/ti/al/length always prefer the FLAC's *current* value over whatever was
-    already in the tag, so a value that's gone stale since it was last written
-    (e.g. by another tool, or an earlier lrc_fix.py run before a retag) gets
-    corrected here rather than carried forward silently. The pre-existing line
-    is used only as a fallback when the FLAC itself has nothing for that key
-    (never regress to a blank header where something existed before). This
-    matches discogs/update_lyrics.py's own header-refresh behavior exactly, so
-    that tool never needs to re-touch a file lrc_fix.py just wrote.
-
-    Original line order is preserved (values are substituted in place, not
-    rearranged into a fixed template) - a fixed output order would make any
-    tag not in that exact position (e.g. an existing [re:] line sitting
-    before [length:] rather than after it) look like a content change and
-    force a rewrite even when nothing actually changed.
+    tags/audio duration, via lrc_format.refresh_headers - shared with
+    discogs/update_lyrics.py so that tool never needs to re-touch a file
+    lrc_fix.py just wrote. [ar:] sources ALBUMARTIST, falling back to ARTIST
+    only when ALBUMARTIST is empty (lrc_format.resolve_artist) - a track's own
+    ARTIST can carry rip-specific billing lrclib.net's artist index won't
+    match. Every other pre-existing id tag line - including [re:], [by:...],
+    etc. - passes through unchanged, in original order; [re:] is handled
+    separately, by stamp_creator_tag, and only when a run actually changes
+    lyric content (see CLAUDE.md).
     """
-    standard = dict(_STANDARD_ID_TAGS)
-    present_keys = set()
-    result = []
-    for line in id_tags:
-        m = _ID_TAG_KEY_RE.match(line)
-        key = m.group(1).lower() if m else None
-        if key in standard:
-            present_keys.add(key)
-            values = flac.get(standard[key])
-            result.append(f"[{key}:{values[0]}]" if values and values[0] else line)
-        elif key == "length":
-            present_keys.add("length")
-            length = getattr(flac.info, "length", None)
-            result.append(format_length_tag(length) if length else line)
-        else:
-            result.append(line)
-
-    for key, vorbis_key in _STANDARD_ID_TAGS:
-        if key in present_keys:
-            continue
-        values = flac.get(vorbis_key)
-        if values and values[0]:
-            result.append(f"[{key}:{values[0]}]")
-    if "length" not in present_keys and getattr(flac.info, "length", None):
-        result.append(format_length_tag(flac.info.length))
-
-    return result
+    artist = resolve_artist(_flac_value(flac, "ALBUMARTIST"), _flac_value(flac, "ARTIST"))
+    title = _flac_value(flac, "TITLE")
+    album = _flac_value(flac, "ALBUM")
+    length = getattr(flac.info, "length", None) or 0.0
+    return refresh_headers(id_tags, artist, title, album, length)
 
 
+_ID_TAG_KEY_RE = re.compile(r"^\[([a-zA-Z]+):")
 _RE_TAG_KEY_RE = re.compile(r"^\[re:", re.IGNORECASE)
 
 
@@ -463,41 +424,23 @@ def format_lrc_timestamp(seconds: float) -> str:
     return f"[{minutes:02d}:{secs:05.2f}]"
 
 
-def _capitalize_line(text: str) -> str:
-    """Uppercase the first non-whitespace character, preserving leading whitespace.
-
-    Whisper's raw transcription isn't reliably capitalized at line starts (e.g.
-    mid-song continuations like "no, never alone,"). Matches
-    discogs/update_lyrics.py's own normalization exactly, so a line lrc_fix.py
-    just capitalized is never re-flagged as needing a fix there.
-    """
-    m = re.match(r"^(\s*)(\S)(.*)$", text, re.DOTALL)
-    return m.group(1) + m.group(2).upper() + m.group(3) if m else text
-
-
 def build_lrc(id_tags: list[str], lyric_lines: list[str], times: list[float]) -> str:
     timed = (
-        f"{format_lrc_timestamp(t)}{_capitalize_line(line)}"
+        f"{format_lrc_timestamp(t)}{capitalize_line(line)}"
         for line, t in zip(lyric_lines, times)
     )
     return "\n".join([*id_tags, *timed])
 
 
-_LA_OR_INSTRUMENTAL_TAG_RE = re.compile(r"^\[(la|instrumental):", re.IGNORECASE)
-
-
 def build_instrumental_lrc(id_tags: list[str]) -> str:
-    """Canonical instrumental marker, matching
-    discogs/update_lyrics.py's _make_instrumental_lrc() exactly.
-
-    Strips any pre-existing la:/instrumental: lines from id_tags first, so
-    this is idempotent rather than duplicating the sentinel when called on a
-    file that's already canonically marked (id_tags can contain them because
-    LRC_ID_TAG_RE now recognizes [instrumental:true] as a header line and
-    ensure_id_tags() preserves unrecognized id tags it doesn't own).
+    """Canonical instrumental marker, via lrc_format.build_instrumental_marker
+    (shared with discogs/update_lyrics.py). Strips any pre-existing
+    la:/instrumental: lines from id_tags first, so this is idempotent rather
+    than duplicating the sentinel when called on a file that's already
+    canonically marked, and preserves any other header line (e.g. [re:])
+    already in id_tags.
     """
-    filtered = [line for line in id_tags if not _LA_OR_INSTRUMENTAL_TAG_RE.match(line)]
-    return "\n".join([*filtered, "[la:zxx]", "[instrumental:true]", "[00:00.00](Instrumental)"])
+    return build_instrumental_marker(id_tags)
 
 
 def write_lyrics_tag(flac: FLAC, new_lrc: str, dry_run: bool) -> None:

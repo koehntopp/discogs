@@ -32,7 +32,6 @@ alongside the CSV (same path, .xlsx extension).
 
 import csv
 import os
-import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -41,9 +40,7 @@ from mutagen.flac import FLAC
 from openpyxl import Workbook
 
 from log import logger
-
-LRC_TIMESTAMP = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]')
-INSTRUMENTAL_MARKER = '[instrumental:true]'
+from lrc_format import INSTRUMENTAL_MARKER, LRC_TIMESTAMP
 
 
 def _flactag(song: FLAC, tag: str) -> str:

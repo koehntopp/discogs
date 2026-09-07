@@ -28,101 +28,20 @@ from rich.progress import (
 )
 
 from log import _console_handler, logger
-
-LRC_TIMESTAMP = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]')  # valid: [MM:SS.xx]
-LRC_BAD_TS = re.compile(r'\[\d{3,}:\d{2}:\d{2}\.\d{2}\]')  # invalid: [HH:MM:SS.xx]
-ID_TAG_LINE = re.compile(r'^\[([a-zA-Z]{2,10}):.*\]\s*$')
-MANAGED_HEADER_KEYS = ('ar', 'ti', 'al', 'length')
-LRC_LINE = re.compile(r'^(\[\d{2}:\d{2}\.\d{2}\])(.*)$')
-USER_AGENT = 'DiscogsMusicManager/1.0 (+https://github.com/koehntopp/discogs)'
-MAX_WORKERS = 8
-INSTRUMENTAL_MARKER = '[instrumental:true]'
-MANUAL_INSTRUMENTAL_MARKER = re.compile(
-	r'\[\d{2}:\d{2}\.\d{2}\]\s*(?:\[instrumental\]|\(instrumental\))', re.IGNORECASE
+from lrc_format import (
+	apply_headers,
+	capitalize_lrc,
+	capitalize_txt,
+	has_manual_instrumental_marker,
+	is_instrumental_marker,
+	is_invalid_lrc,
+	is_lrc,
+	make_instrumental_lrc,
+	resolve_artist,
 )
 
-
-def _is_lrc(text: str) -> bool:
-	return bool(LRC_TIMESTAMP.search(text))
-
-
-def _is_invalid_lrc(text: str) -> bool:
-	return bool(LRC_BAD_TS.search(text))
-
-
-def _make_headers(artist: str, title: str, album: str, length_secs: float) -> str:
-	mins, secs = divmod(int(length_secs), 60)
-	return f'[ar:{artist}]\n[ti:{title}]\n[al:{album}]\n[length:{mins:02d}:{secs:02d}]\n'
-
-
-def _apply_headers(lrc: str, artist: str, title: str, album: str, length_secs: float) -> str:
-	"""Update ar/ti/al/length header values in place, wherever they already sit in the
-	tag. Any other line (lyric lines, or header lines this tool doesn't own — e.g. a
-	[re:] line from another tool) is left completely untouched, in its original
-	position. Managed headers not yet present are inserted at the top, in
-	ar/ti/al/length order — matching behavior for brand-new lyrics.
-	"""
-	mins, secs = divmod(int(length_secs), 60)
-	values = {'ar': artist, 'ti': title, 'al': album, 'length': f'{mins:02d}:{secs:02d}'}
-	seen = set()
-	out = []
-	for line in lrc.splitlines():
-		m = ID_TAG_LINE.match(line)
-		key = m.group(1).lower() if m else None
-		if key in values:
-			out.append(f'[{key}:{values[key]}]')
-			seen.add(key)
-		else:
-			out.append(line)
-	missing = [k for k in MANAGED_HEADER_KEYS if k not in seen]
-	if missing:
-		out = [f'[{k}:{values[k]}]' for k in missing] + out
-	return '\n'.join(line for line in out if line).strip()
-
-
-def _is_instrumental(text: str) -> bool:
-	return INSTRUMENTAL_MARKER in text
-
-
-def _has_manual_instrumental_marker(text: str) -> bool:
-	"""Detect an informal instrumental marker a human (or another tool) left behind:
-	'[00:00.00][Instrumental]' (hand-typed) or a bare '[00:00.00](Instrumental)' line
-	missing the '[la:zxx]'/'[instrumental:true]' sentinel that makes it canonical.
-
-	Distinct from the canonical '[instrumental:true]' block that update_lyrics.py
-	itself always writes in full — this catches anything that looks like someone's
-	intent to mark a track instrumental without actually being the real sentinel.
-	"""
-	return bool(MANUAL_INSTRUMENTAL_MARKER.search(text))
-
-
-def _make_instrumental_lrc(artist: str, title: str, album: str, length_secs: float) -> str:
-	return (
-		_make_headers(artist, title, album, length_secs)
-		+ '[la:zxx]\n[instrumental:true]\n[00:00.00](Instrumental)\n'
-	)
-
-
-def _capitalize_line(text: str) -> str:
-	"""Uppercase the first non-whitespace character of a line, preserving leading whitespace."""
-	m = re.match(r'^(\s*)(\S)(.*)$', text, re.DOTALL)
-	return m.group(1) + m.group(2).upper() + m.group(3) if m else text
-
-
-def _capitalize_lrc(lrc: str) -> str:
-	"""Strip whitespace after each [MM:SS.xx] timestamp and capitalize the lyric text.
-
-	Header lines ([ar:..], [ti:..], etc.) don't match LRC_LINE and pass through untouched.
-	"""
-	out = []
-	for line in lrc.splitlines():
-		m = LRC_LINE.match(line)
-		out.append(m.group(1) + _capitalize_line(m.group(2).lstrip()) if m else line)
-	return '\n'.join(out)
-
-
-def _capitalize_txt(text: str) -> str:
-	return '\n'.join(_capitalize_line(line) for line in text.splitlines())
+USER_AGENT = 'DiscogsMusicManager/1.0 (+https://github.com/koehntopp/discogs)'
+MAX_WORKERS = 8
 
 
 def flactag(song: FLAC | dict, tag: str) -> str:
@@ -158,7 +77,7 @@ def _fetch_one(
 
 	try:
 		song = FLAC(flac_path)
-		artist = flactag(song, 'ALBUMARTIST') or flactag(song, 'ARTIST')
+		artist = resolve_artist(flactag(song, 'ALBUMARTIST'), flactag(song, 'ARTIST'))
 		title = flactag(song, 'TITLE')
 		discogs_id = flactag(song, 'DISCOGS_RELEASE_ID')
 		track = flactag(song, 'TRACKNUMBER')
@@ -174,27 +93,27 @@ def _fetch_one(
 		return flac_path, artist, title, '', 'none', 'error', discogs_id, track
 
 	# Check existing embedded FLAC lyrics
-	if existing_lyrics and _is_instrumental(existing_lyrics):
+	if existing_lyrics and is_instrumental_marker(existing_lyrics):
 		return flac_path, artist, title, existing_lyrics, 'instrumental', 'skip', discogs_id, track
 
-	if existing_lyrics and _has_manual_instrumental_marker(existing_lyrics):
+	if existing_lyrics and has_manual_instrumental_marker(existing_lyrics):
 		# User (or another tool) left an informal/incomplete instrumental marker —
 		# normalize to the canonical block without hitting lrclib.net. This is a
 		# syntax fix, not new information, so it's counted as 'fix' not 'new'.
-		marker_lrc = _make_instrumental_lrc(artist, title, album, length)
+		marker_lrc = make_instrumental_lrc(artist, title, album, length)
 		return flac_path, artist, title, marker_lrc, 'instrumental', 'fix', discogs_id, track
 
 	had_invalid_lrc = False
 	if existing_lyrics:
-		if _is_invalid_lrc(existing_lyrics):
+		if is_invalid_lrc(existing_lyrics):
 			logger.warning(
 				f'Found invalid LRC timestamp in FLAC tags for {title}, attempting refetch'
 			)
 			had_invalid_lrc = True
-		elif _is_lrc(existing_lyrics):
+		elif is_lrc(existing_lyrics):
 			# Re-apply updated headers if missing/stale, and normalize line capitalization
-			updated_lrc = _apply_headers(existing_lyrics, artist, title, album, length)
-			updated_lrc = _capitalize_lrc(updated_lrc)
+			updated_lrc = apply_headers(existing_lyrics, artist, title, album, length)
+			updated_lrc = capitalize_lrc(updated_lrc)
 			if updated_lrc != existing_lyrics:
 				return flac_path, artist, title, updated_lrc, 'lrc', 'fix', discogs_id, track
 			return flac_path, artist, title, existing_lyrics, 'lrc', 'skip', discogs_id, track
@@ -256,7 +175,7 @@ def _fetch_one(
 				)
 
 	if data.get('instrumental'):
-		marker_lrc = _make_instrumental_lrc(artist, title, album, length)
+		marker_lrc = make_instrumental_lrc(artist, title, album, length)
 		if marker_lrc == existing_lyrics:
 			return (
 				flac_path,
@@ -272,16 +191,16 @@ def _fetch_one(
 
 	if data.get('syncedLyrics'):
 		lrc = re.sub(r'\[(\d{2}:\d{2}\.\d{2})\d\]', r'[\1]', data['syncedLyrics'])
-		if _is_invalid_lrc(lrc):
+		if is_invalid_lrc(lrc):
 			logger.warning(f'Invalid LRC timestamps from lrclib, skipping: {title} ({artist})')
 		else:
-			lrc = _apply_headers(lrc, artist, title, album, length)
-			lrc = _capitalize_lrc(lrc)
+			lrc = apply_headers(lrc, artist, title, album, length)
+			lrc = capitalize_lrc(lrc)
 			if lrc == existing_lyrics:
 				return flac_path, artist, title, existing_lyrics, 'lrc', 'skip', discogs_id, track
 			return flac_path, artist, title, lrc, 'lrc', 'new', discogs_id, track
 	if data.get('plainLyrics') and not existing_lyrics:
-		txt = _capitalize_txt(data['plainLyrics'])
+		txt = capitalize_txt(data['plainLyrics'])
 		return flac_path, artist, title, txt, 'txt', 'new', discogs_id, track
 
 	if had_invalid_lrc:
@@ -289,11 +208,9 @@ def _fetch_one(
 
 	# Nothing new fetched — fall back to what's on disk, normalizing capitalization if needed.
 	if existing_lyrics:
-		is_lrc_existing = _is_lrc(existing_lyrics)
+		is_lrc_existing = is_lrc(existing_lyrics)
 		fixed = (
-			_capitalize_lrc(existing_lyrics)
-			if is_lrc_existing
-			else _capitalize_txt(existing_lyrics)
+			capitalize_lrc(existing_lyrics) if is_lrc_existing else capitalize_txt(existing_lyrics)
 		)
 		lyric_type = 'lrc' if is_lrc_existing else 'txt'
 		if fixed != existing_lyrics:

@@ -304,9 +304,11 @@ uv run update_lyrics.py [FLAC_DIR]
 3. Saves modified files immediately after each successful fetch or fix.
 4. Prints summary totals: LRC count, plain-text count, no-lyrics count, instrumental count, and separate new/fixed/cleared write counts.
 
-**Tags read:** `LYRICS`, `DISCOGS_RELEASE_ID`, `ARTIST`, `TITLE`, `TRACKNUMBER`, `ALBUM`
+**Tags read:** `LYRICS`, `DISCOGS_RELEASE_ID`, `ALBUMARTIST`, `ARTIST`, `TITLE`, `TRACKNUMBER`, `ALBUM`
 
 **Tags written:** `LYRICS`
+
+**Shared with `lrc_fix.py`:** header build/refresh, instrumental marker format, and capitalization normalization live in `lrc_format.py` (sibling module, no CLI of its own) — see ADR 0002 §6.
 
 **External service:** lrclib.net REST API (`GET /api/get`)
 
@@ -485,11 +487,13 @@ APIs, no LLM in the timing path. Supersedes the earlier `align_lyrics.py`
 Full usage, flags, and pipeline details: `README-lrc_fix.md` (own documentation,
 not duplicated here).
 
-**Tags read:** `LYRICS`, `ARTIST`, `TITLE`, `ALBUM`
+**Tags read:** `LYRICS`, `ALBUMARTIST`, `ARTIST`, `TITLE`, `ALBUM`
 
 **Tags written:** `LYRICS`
 
 **Dependencies:** `mutagen`, `whisperx`, `demucs`, `librosa`, `torch>=2.4,<2.6`, `torchaudio>=2.4,<2.6`, `numpy<2`
+
+**Shared with `update_lyrics.py`:** header build/refresh, instrumental marker format, and capitalization normalization live in `lrc_format.py` — see ADR 0002 §6.
 
 ---
 
