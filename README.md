@@ -65,6 +65,20 @@ docker compose up --build
 
 Then use `docker-compose-synology.yml` as a reference for container settings.
 
+### Linux server (managed via Dockge)
+
+```bash
+./deploy-linux.sh            # builds, ships, and reloads the image over SSH
+```
+
+Builds a `linux/amd64` image, transfers it via SCP, and runs `docker compose up -d
+--remove-orphans` in `REMOTE_DIR` on the remote host. `REMOTE_DIR` (`/opt/stacks/discogs`
+by default) must already contain a `compose.yaml` — this is Dockge's stacks directory, so
+placing the compose file there makes the stack visible and manageable from Dockge's own UI
+without any extra hand-off step. Use **absolute** host paths for volume mounts in that
+compose file (not relative ones like `./config`), so the mount doesn't break if Dockge later
+relocates or renames the stack folder.
+
 ## Configuration
 
 Copy `config_demo.py` to `config/config.py` and set:
@@ -123,6 +137,7 @@ All config values are also editable via the Settings modal in the web UI.
 | `calculate_fp.py` | AcoustID fingerprint generation |
 | `migrate_tags.py` | Tag schema migration to discrete `ALBUM_*` tags |
 | `build_synology.sh` | Build Docker image tar for Synology upload |
+| `deploy-linux.sh` | Build, ship, and reload the Docker image on a Linux server via SSH (Dockge-managed) |
 
 All Python scripts feature executable shebang lines (`#!/usr/bin/env -S uv run`) and declare dependencies via PEP 723 headers — run them directly from your shell:
 
