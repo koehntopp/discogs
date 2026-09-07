@@ -59,6 +59,7 @@ metadata, paired with a FastAPI/HTMX web UI. Full CLI/API/tag reference: `SPEC.m
 - `calculate_dr.py`: Dynamic Range calculation per track and album (`drmeter`).
 - `calculate_fp.py`: AcoustID acoustic fingerprint generation (`fpcalc` / `pyacoustid`).
 - `convert_opus.py`: Transcodes FLAC to Opus format.
+- `lrc_fix.py`: Local (no cloud API) LRC realignment via demucs vocal isolation + whisperx transcription + onset snapping. Own docs: `README-lrc_fix.md`.
 - `log.py`: Central structured logging (`structlog`).
 - `SPEC.md`: Full CLI, API, tag contract, and web UI specification.
 
@@ -74,3 +75,11 @@ Detailed architectural standards and design contracts, loaded automatically as p
 @docs/adr/0006-whisper-lrc-alignment-and-fallback.md
 @docs/adr/0007-lrclib-lyrics-submission-proof-of-work.md
 @docs/adr/0008-roon-specific-tag-conventions.md
+
+## Approach
+- Read existing files before writing. Don't re-read unless changed.
+- Thorough in reasoning, concise in output.
+- Skip files over 100KB unless required.
+- No sycophantic openers or closing fluff.
+- No emojis or em-dashes.
+- Do not guess APIs, versions, flags, commit SHAs, or package names. Verify by reading code or docs before asserting.

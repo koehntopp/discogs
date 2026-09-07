@@ -530,6 +530,26 @@ uv run align_lyrics.py [TARGET] [OPTIONS]
 
 ---
 
+### `lrc_fix.py` — Local LRC realignment (demucs + whisperx)
+
+**Purpose:** A second, independent approach to the same problem `align_lyrics.py`
+solves — realigning `LYRICS` tag timestamps to the actual audio — using a different
+local pipeline: demucs vocal isolation, whisperx transcription, difflib sequence
+matching against the known lyric lines, and librosa onset-snapping. No cloud APIs,
+no LLM in the timing path. Kept as a separate tool rather than merged into
+`align_lyrics.py`; not resolved which one is canonical.
+
+Full usage, flags, and pipeline details: `README-lrc_fix.md` (own documentation,
+not duplicated here).
+
+**Tags read:** `LYRICS`, `ARTIST`, `TITLE`, `ALBUM`
+
+**Tags written:** `LYRICS`
+
+**Dependencies:** `mutagen`, `whisperx`, `demucs`, `librosa`, `torch>=2.4,<2.6`, `torchaudio>=2.4,<2.6`, `numpy<2`
+
+---
+
 ### `lrclib_submitter.py` — LRCLIB Lyrics Publisher
 
 **Purpose:** Submits the `LYRICS` tag from a single `.flac` file to the LRCLIB API (`lrclib.net`), solving LRCLIB's Proof-of-Work (PoW) challenge automatically.
