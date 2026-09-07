@@ -1,6 +1,6 @@
 # ADR 0006: Whisper Speech-to-Text LRC Lyrics Alignment, Time-Anchor Search, and Fallback Architecture
 
-- **Status**: Accepted
+- **Status**: Superseded by `lrc_fix.py` (see ADR 0009) — `align_lyrics.py` was deleted 2026-09-07. Kept here as historical record; no longer auto-loaded via `CLAUDE.md`.
 - **Date**: 2026-08-05
 - **Authors**: Discogs Project Maintainers
 

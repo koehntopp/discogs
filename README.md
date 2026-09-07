@@ -131,7 +131,7 @@ All config values are also editable via the Settings modal in the web UI.
 | `bliss.py` | File organisation + MP3 sync (with overwrite protection) |
 | `album_list.py` | Album inventory scan → CSV + DR chart |
 | `update_lyrics.py` | Parallel lyrics fetch from lrclib.net (32 workers) |
-| `align_lyrics.py` | Whisper-based LRC timestamp alignment / correction |
+| `lrc_fix.py` | Local LRC realignment (demucs vocal isolation + whisperx + onset-snapping) |
 | `lrclib_submitter.py` | Submit FLAC file lyrics to LRCLIB (lrclib.net) with PoW challenge solver |
 | `calculate_dr.py` | Dynamic Range calculation |
 | `calculate_fp.py` | AcoustID fingerprint generation |
@@ -146,9 +146,9 @@ All Python scripts feature executable shebang lines (`#!/usr/bin/env -S uv run`)
 ./nzbfix.py /path/to/staging
 ./bliss.py
 
-# Align timestamps or auto-generate LRC lyrics with Whisper:
-uv run align_lyrics.py /path/to/album_or_song.flac --dry-run
-uv run align_lyrics.py /path/to/album_or_song.flac --write
+# Realign LRC timestamps locally (demucs + whisperx):
+uv run lrc_fix.py /path/to/album_or_song.flac --dry-run
+uv run lrc_fix.py /path/to/album_or_song.flac
 
 # Submit a FLAC file's LYRICS tag to LRCLIB:
 uv run lrclib_submitter.py /path/to/song.flac --dry-run

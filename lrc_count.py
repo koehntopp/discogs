@@ -14,7 +14,7 @@ lyric status and outputs a CSV row with:
     album_artist, lrc, txt, instrumental, no_lyrics
 
 Rows are sorted by highest TXT count first (artists most in need of an LRC upgrade
-pass, e.g. via align_lyrics.py).
+pass, e.g. via lrc_fix.py).
 
 With --tracks, outputs one row per track instead, with columns:
     album_artist, album, song, lyrics_type

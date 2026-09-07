@@ -72,7 +72,6 @@ Detailed architectural standards and design contracts, loaded automatically as p
 @docs/adr/0003-webui-architecture-and-subprocess-management.md
 @docs/adr/0004-performance-caching-and-lyrics-export-architecture.md
 @docs/adr/0005-mp3-transcoding-and-library-comparison.md
-@docs/adr/0006-whisper-lrc-alignment-and-fallback.md
 @docs/adr/0007-lrclib-lyrics-submission-proof-of-work.md
 @docs/adr/0008-roon-specific-tag-conventions.md
 
