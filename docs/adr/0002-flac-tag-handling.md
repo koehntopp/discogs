@@ -12,6 +12,8 @@ A core design principle of this repository is **user tag authority**: users set 
 
 To prevent metadata loss, tag key casing discrepancies, corrupted tag formatting, and duplicate header accumulation, a strict contract for reading, writing, formatting, and preserving FLAC tags is required.
 
+See [docs/tag-schema.md](../tag-schema.md) for a visual ERD of the tag relationships this ADR defines — a derived reference, not a replacement for the text below.
+
 ---
 
 ## Decision

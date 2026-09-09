@@ -89,6 +89,8 @@ Detailed architectural standards and design contracts are maintained in `docs/ad
 - [ADR 0007: LRCLIB Lyrics Submission & Proof-of-Work Challenge Solver Architecture](file:///Users/koehntopp/src/discogs/docs/adr/0007-lrclib-lyrics-submission-proof-of-work.md)
 - [ADR 0008: Roon-Specific Tag Conventions](file:///Users/koehntopp/src/discogs/docs/adr/0008-roon-specific-tag-conventions.md)
 
+Also see [docs/tag-schema.md](file:///Users/koehntopp/src/discogs/docs/tag-schema.md) — a Mermaid ERD of the FLAC tag relationships defined in ADR 0002/0008.
+
 ---
 
 ## Scripts
