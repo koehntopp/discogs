@@ -85,15 +85,25 @@ Copy `config_demo.py` to `config/config.py` and set:
 
 | Key | Description |
 |-----|-------------|
+| `config_dir` | Base directory for config, logs, and data files (`/config` in Docker; must match `CONFIG_DIR` env var) |
 | `discogs_api_key` | From https://www.discogs.com/settings/developers |
+| `tagger_scheme` | URL scheme for deep-linking into your tagger app (e.g. `yate://load`) |
 | `flacroot` | Root of your organised FLAC library (container-internal path) |
 | `mp3root` | MP3 mirror root |
 | `nzbdir` | Staging directory for newly tagged FLACs |
 | `flacroot_local` | Path as seen by the browser (for tagger deep links) |
 | `flacroot_remote` | rclone destination remote (e.g. `ROCK:/mnt/flac`) |
 | `rclone_source` | rclone source remote (e.g. `FLAC:/flac`) |
+| `rclone_flags` | rclone subcommand, e.g. `sync` |
+| `rclone_transfers` / `rclone_checkers` | Parallel transfer / checker counts |
+| `rclone_buffer_size` | rclone transfer buffer size (e.g. `128M`) |
+| `rclone_stats` | rclone stats-reporting interval (e.g. `5s`) |
+| `cover_max_size` | Resize embedded cover art above this dimension (px) |
+| `rsgain_loudness` / `rsgain_clip_mode` / `rsgain_max_peak` / `rsgain_true_peak` / `rsgain_skip` | ReplayGain tagging settings passed to `rsgain` |
 | `syslog_host` / `syslog_port` | Optional Synology log server |
 | `log_file` | Log filename (written to `config_dir`) |
+| `log_level` | Log verbosity: `INFO`, `SUCCESS`, `WARNING`, or `ERROR` |
+| `log_rotation` / `log_retention` | Log file rotation size and retention period |
 
 All config values are also editable via the Settings modal in the web UI.
 
@@ -149,6 +159,17 @@ All Python scripts feature executable shebang lines (`#!/usr/bin/env -S uv run`)
 # Realign LRC timestamps locally (demucs + whisperx):
 uv run lrc_fix.py /path/to/album_or_song.flac --dry-run
 uv run lrc_fix.py /path/to/album_or_song.flac
+
+# Key options:
+#   --whisper-model medium   Whisper model size (default: medium)
+#   --device cpu|cuda|mps    Compute device (default: cpu)
+#   --jobs / -j N            Parallel demucs jobs (default: min(4, cpu count))
+#   --all                    Also reprocess files already LRC-timestamped
+#   --no-isolate-vocals      Skip demucs vocal separation
+#   --no-snap-onsets         Skip onset-snapping
+#   --no-vocal-check         Skip the VAD fallback check on zero-match alignment
+#   --find-missing-lyrics    Scan for/tag tracks with no LYRICS tag at all
+#   --dump-words             Print the raw ASR word/timestamp transcript
 
 # Submit a FLAC file's LYRICS tag to LRCLIB:
 uv run lrclib_submitter.py /path/to/song.flac --dry-run
