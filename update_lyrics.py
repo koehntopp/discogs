@@ -42,6 +42,12 @@ from lrc_format import (
 
 USER_AGENT = 'DiscogsMusicManager/1.0 (+https://github.com/koehntopp/discogs)'
 MAX_WORKERS = 8
+TRAILING_BRACKET_RE = re.compile(r'\s*[\(\[][^()\[\]]*[\)\]]\s*$')
+
+
+def strip_trailing_bracket(title: str) -> str:
+	"""Strip one trailing (...)/[...] group, e.g. '(Live at Wembley)'."""
+	return TRAILING_BRACKET_RE.sub('', title).strip()
 
 
 def flactag(song: FLAC | dict, tag: str) -> str:
@@ -118,61 +124,78 @@ def _fetch_one(
 				return flac_path, artist, title, updated_lrc, 'lrc', 'fix', discogs_id, track
 			return flac_path, artist, title, existing_lyrics, 'lrc', 'skip', discogs_id, track
 
-	params = {
-		'artist_name': artist,
-		'track_name': title,
-		'album_name': album,
-		'duration': str(round(length)),
-	}
+	stripped_title = strip_trailing_bracket(title)
+	track_names = [title] if stripped_title == title else [title, stripped_title]
+	duration = str(round(length))
+
+	# Try each track_name (full title, then stripped) with album_name, then without.
+	variants = [
+		v
+		for track_name in track_names
+		for v in (
+			{
+				'artist_name': artist,
+				'track_name': track_name,
+				'album_name': album,
+				'duration': duration,
+			},
+			{'artist_name': artist, 'track_name': track_name, 'duration': duration},
+		)
+	]
+
 	data = {}
 	max_retries = 5
 	backoff = 2.0
-	for attempt in range(max_retries + 1):
-		try:
-			time.sleep(0.1)  # Smooth inter-request throttling delay
-			response = session.get(
-				'https://lrclib.net/api/get',
-				params=params,
-				headers={'User-Agent': USER_AGENT},
-				timeout=10,
-			)
-			if response.status_code == 200:
-				data = response.json()
-				break
-			elif response.status_code == 404:
-				# If album_name exact match was not found on lrclib, fallback to artist + title + duration
-				if 'album_name' in params:
-					params.pop('album_name')
-					continue
-				break
-			elif response.status_code == 429:
-				retry_after = response.headers.get('Retry-After')
-				if retry_after and retry_after.replace('.', '', 1).isdigit():
-					sleep_time = float(retry_after) + 0.5
-				else:
-					sleep_time = backoff * (2**attempt)
-				if attempt < max_retries:
-					time.sleep(sleep_time)
-				else:
-					logger.warning(
-						f"Rate limited (429) fetching lyrics for '{title}', retries exhausted"
-					)
-			else:
-				if attempt < max_retries:
-					sleep_time = backoff * (2**attempt)
-					time.sleep(sleep_time)
-				else:
-					logger.warning(
-						f"Server error ({response.status_code}) fetching lyrics for '{title}', retries exhausted"
-					)
-		except requests.RequestException as e:
-			if attempt < max_retries:
-				sleep_time = backoff * (2**attempt)
-				time.sleep(sleep_time)
-			else:
-				logger.warning(
-					f"Request error ({type(e).__name__}) fetching lyrics for '{title}', retries exhausted"
+	found_via_stripped = False
+	for params in variants:
+		for attempt in range(max_retries + 1):
+			try:
+				time.sleep(0.1)  # Smooth inter-request throttling delay
+				response = session.get(
+					'https://lrclib.net/api/get',
+					params=params,
+					headers={'User-Agent': USER_AGENT},
+					timeout=10,
 				)
+				if response.status_code == 200:
+					data = response.json()
+					found_via_stripped = params['track_name'] != title
+					break
+				elif response.status_code == 404:
+					break  # try the next variant
+				elif response.status_code == 429:
+					retry_after = response.headers.get('Retry-After')
+					if retry_after and retry_after.replace('.', '', 1).isdigit():
+						sleep_time = float(retry_after) + 0.5
+					else:
+						sleep_time = backoff * (2**attempt)
+					if attempt < max_retries:
+						time.sleep(sleep_time)
+					else:
+						logger.warning(
+							f"Rate limited (429) fetching lyrics for '{title}', retries exhausted"
+						)
+				else:
+					if attempt < max_retries:
+						sleep_time = backoff * (2**attempt)
+						time.sleep(sleep_time)
+					else:
+						logger.warning(
+							f"Server error ({response.status_code}) fetching lyrics for '{title}', retries exhausted"
+						)
+			except requests.RequestException as e:
+				if attempt < max_retries:
+					sleep_time = backoff * (2**attempt)
+					time.sleep(sleep_time)
+				else:
+					logger.warning(
+						f"Request error ({type(e).__name__}) fetching lyrics for '{title}', retries exhausted"
+					)
+		if data:
+			break
+
+	if found_via_stripped:
+		logger.info(f"Lyrics found via stripped title '{stripped_title}' (original: '{title}')")
 
 	if data.get('instrumental'):
 		marker_lrc = make_instrumental_lrc(artist, title, album, length)
