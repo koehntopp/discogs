@@ -25,3 +25,4 @@ koehntopp@*
 lyrics/
 album_cache.json
 audiophile_cache.json
+check_catalog_discrepancies.py
