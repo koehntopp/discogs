@@ -258,12 +258,10 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 			f'{max_rate_hz / 1000:.1f}kHz'.replace('.0kHz', 'kHz') if max_rate_hz > 0 else '44.1kHz'
 		)
 
-		try:
-			album_year_release = int(
-				first_tags.get('ALBUM_RELEASE_YEAR', [''])[0] or first_tags.get('DATE', [''])[0]
-			)
-		except ValueError:
-			album_year_release = drelease.year
+		# Tool-written tags are never read back as input: the release year comes only from
+		# the Discogs release, so it always follows DISCOGS_RELEASE_ID.
+		release_year = int(drelease.year or 0)
+		album_year_release = release_year
 		try:
 			album_year_master = (
 				discogs_fetch(lambda: master.main_release.year) if master else album_year_release
@@ -321,13 +319,14 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 			'ALBUM_MASTER_TITLE': [master_title],
 			'ALBUM_RELEASE_TITLE': [release_title],
 			'ALBUM_MASTER_YEAR': [str(album_year_master)],
-			'ALBUM_RELEASE_YEAR': [str(album_year_release)],
 			'ALBUM_FORMAT': [album_format],
 			'ALBUM_MAX_RESOLUTION': [max_res_str],
 			'ALBUM': [album_name],
 			'VERSION': [version_str],
 			'ORIGINAL_TITLE': [master_title],
 		}
+		if release_year:
+			new_tags['ALBUM_RELEASE_YEAR'] = [str(release_year)]
 		if album_edition:
 			new_tags['ALBUM_EDITION'] = [album_edition]
 		if dr_rating:
@@ -354,6 +353,7 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 		managed_optional = [
 			'ALBUM_EDITION',
 			'ALBUM_DR',
+			'ALBUM_RELEASE_YEAR',
 			'ALBUM_RELEASE_COUNTRY',
 			'ALBUM_RELEASE_LABEL',
 		]

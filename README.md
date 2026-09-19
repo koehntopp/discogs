@@ -2,7 +2,7 @@
 
 A collection of Python scripts and a web UI for managing a local FLAC music library using [Discogs](https://www.discogs.com) metadata.
 
-**Core philosophy:** tags are set by the user via a dedicated tagger (e.g. [Yate](https://2manyrobots.com/yate/) on macOS). Scripts enrich and organise — they never overwrite user-set tags arbitrarily. The `DISCOGS_RELEASE_ID` tag anchors every album to an exact Discogs release, eliminating the ambiguity that automated taggers introduce.
+**Core philosophy:** tags are set by the user via a dedicated tagger (e.g. [Yate](https://2manyrobots.com/yate/) on macOS). Scripts enrich and organise — they never overwrite user-set tags arbitrarily, and everything else they write is derived from Discogs and refreshed whenever it disagrees. The `DISCOGS_RELEASE_ID` tag anchors every album to an exact Discogs release, eliminating the ambiguity that automated taggers introduce.
 
 ## Why?
 

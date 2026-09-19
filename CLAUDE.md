@@ -6,8 +6,17 @@ metadata, paired with a FastAPI/HTMX web UI. Full CLI/API/tag reference: `SPEC.m
 ## Core Philosophy
 
 - **User Tag Authority**: All metadata enrichment is anchored by user-set tags (e.g.
-  `DISCOGS_RELEASE_ID`). No script is allowed to overwrite user-set tags arbitrarily or
-  destructively.
+  `DISCOGS_RELEASE_ID`). User-set tags lead wherever they are present, and no script is
+  allowed to overwrite them arbitrarily or destructively. User-set tags include
+  `DISCOGS_RELEASE_ID`, `CATALOGNUMBER`, `MUSICBRAINZ_ALBUMID`, `ALBUM_FORMAT`,
+  `ALBUM_EDITION`, `ALBUM_TITLE_OVERRIDE`, `ALBUM_ARTIST_OVERRIDE`, `SET SUBTITLE`,
+  `SUBTITLE` and the ripper tags (`ARTIST`, `TITLE`, `ALBUMARTIST`, ...).
+- **Discogs Is the System of Record**: Every other tag `fixtags.py` writes is derived from
+  the Discogs release (and its master) and is overwritten on every run whenever it
+  disagrees with the Discogs data, so changing `DISCOGS_RELEASE_ID` always updates them.
+  A tag the tool wrote must never be read back as input for itself; the value must come
+  from Discogs. If Discogs has data for a field, it is taken in. `ALBUM_RELEASE_YEAR` is
+  taken only from the Discogs release's own year, never from any tag.
 
 ## Agent Guidelines & Approval Workflow
 

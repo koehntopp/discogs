@@ -184,12 +184,12 @@ At least one of the two must be provided; otherwise help is printed.
 2. For each album directory, reads `DISCOGS_RELEASE_ID` from the first FLAC found.
 3. Queries the Discogs API (1 s sleep per album) for release and master-release metadata.
 4. Writes the following tags to every FLAC file in the directory if any value changed:
-   - `RELEASEDATE`, `DATE`, `YEAR` — year of this specific pressing
+   - `RELEASEDATE`, `DATE`, `YEAR` — year of this specific pressing, from the Discogs release (Discogs master year only if the release has none); overwritten on every run when it disagrees, never read back from the tags
    - `ORIGINALDATE`, `ORIGINALRELEASEDATE`, `ORIGINAL DATE`, `ORIGINAL YEAR` — year of the original master release
    - `ALBUM_MASTER_TITLE` — canonical master release title from Discogs
    - `ALBUM_MASTER_YEAR` — original release year
    - `ALBUM_RELEASE_TITLE` — specific release title
-   - `ALBUM_RELEASE_YEAR` — pressing release year
+   - `ALBUM_RELEASE_YEAR` — pressing release year, taken only from the Discogs release's own year; not written (and removed) if Discogs has none
    - `ALBUM_EDITION` — edition information (e.g. Deluxe Edition, Remaster; extracted from `()` brackets in existing `ALBUM` titles if tag is missing)
    - `ALBUM_RELEASE_COUNTRY` — pressing release country
    - `ALBUM_RELEASE_LABEL` — pressing record label
