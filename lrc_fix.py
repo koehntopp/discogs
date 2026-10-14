@@ -9,6 +9,7 @@
 #     "torch>=2.4,<2.6",
 #     "torchaudio>=2.4,<2.6",
 #     "numpy<2",
+#     "transformers<5",
 # ]
 # ///
 """lrc_fix.py

@@ -493,7 +493,7 @@ not duplicated here).
 
 **Tags written:** `LYRICS`
 
-**Dependencies:** `mutagen`, `whisperx`, `demucs`, `librosa`, `torch>=2.4,<2.6`, `torchaudio>=2.4,<2.6`, `numpy<2`
+**Dependencies:** `mutagen`, `whisperx`, `demucs`, `librosa`, `torch>=2.4,<2.6`, `torchaudio>=2.4,<2.6`, `numpy<2`, `transformers<5`
 
 **Shared with `update_lyrics.py`:** header build/refresh, instrumental marker format, and capitalization normalization live in `lrc_format.py` — see ADR 0002 §6.
 

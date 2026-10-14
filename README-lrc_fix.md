@@ -123,6 +123,11 @@ always processes it. The tool logs `[i/N] <path>` as each file starts.
   and silero-vad (only used for the VAD fallback / `--find-missing-lyrics`)
   from GitHub via `torch.hub` — all cached (`~/.cache/torch`,
   `~/.cache/huggingface`) so later runs are fast to start.
+- Dependency pins are load-bearing: `torch<2.6` (2.6 flips the `torch.load`
+  `weights_only` default and breaks pyannote checkpoint loading) and
+  `transformers<5` (5.x calls `torch.accelerator`, added in torch 2.6, so
+  importing `Wav2Vec2ForCTC` fails under the pinned torch with "Could not
+  import module 'Wav2Vec2ForCTC'").
 - `--whisper-model large*` is rarely worth it here: since the correct
   lyrics text is already known, the alignment step only needs *usable*
   ASR output to match against, not maximally accurate transcription.
