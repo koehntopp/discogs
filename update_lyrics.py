@@ -66,114 +66,149 @@ def flactag(song: FLAC | dict, tag: str) -> str:
 
 
 LRCLIB_GET_URL = 'https://lrclib.net/api/get'
-MAX_ATTEMPTS = 4  # per request; the shared Throttle does the real pacing
+MAX_ATTEMPTS = 4  # per request; the shared Pacer spaces the attempts
 MAX_RETRY_AFTER = 300.0
-DOWN_AFTER = 5  # consecutive escalating pauses before lrclib is treated as down
+BASE_INTERVAL = 0.5  # seconds between request starts (all workers together) when lrclib is happy
+MAX_INTERVAL = 8.0
+RELAX_AFTER = 10  # consecutive successes before the interval shrinks again
+DOWN_AFTER = 5  # failures in a row, with no success for DOWN_WINDOW seconds, open the circuit
+DOWN_WINDOW = 60.0
 # (cool-down seconds, workers) for each pass over tracks that lrclib failed to answer
 RETRY_ROUNDS = ((30, 2), (60, 2))
 
 
-class Throttle:
-	"""Shared back-off: a 429/5xx/network error on any worker pauses every worker."""
+class Pacer:
+	"""Shared request pacing: one request start per interval across all workers.
+
+	The interval doubles on a 429/5xx/network error and shrinks again after a run of
+	successes, so it settles at whatever rate lrclib tolerates instead of bursting.
+	"""
 
 	def __init__(self) -> None:
 		self._lock = threading.Lock()
-		self._not_before = 0.0
-		self._episode_failures = 0
+		self._interval = BASE_INTERVAL
+		self._next_start = 0.0
+		self._floor_until = 0.0  # Retry-After: no request may start before this
+		self._raised_at = 0.0
+		self._successes = 0
+		self._fail_streak = 0
+		self._last_success = time.monotonic()
+		self._down_reported = False
 
-	def wait(self) -> None:
-		while True:
-			with self._lock:
-				delay = self._not_before - time.monotonic()
-			if delay <= 0:
-				return
-			time.sleep(delay)
+	def acquire(self) -> float:
+		"""Block until this worker may start a request; return the start time."""
+		with self._lock:
+			now = time.monotonic()
+			start = max(now, self._next_start, self._floor_until)
+			self._next_start = start + self._interval
+		if start > now:
+			time.sleep(start - now)
+		return start
 
-	def penalize(self, retry_after: float | None = None) -> tuple[float, bool]:
-		"""Pause all workers; return (pause seconds, whether this started a new pause).
+	def failure(self, started_at: float, retry_after: float | None = None) -> tuple[float, bool]:
+		"""Record a failed request; return (interval, whether this raised it).
 
-		Failures that land while a pause is already running belong to the same episode and
-		do not escalate it, so eight workers failing together count once.
+		A request that started before the last raise cannot escalate it again, so eight
+		in-flight requests failing together count once.
 		"""
 		with self._lock:
 			now = time.monotonic()
-			new_episode = now >= self._not_before
-			if new_episode:
-				self._episode_failures += 1
+			self._successes = 0
+			self._fail_streak += 1
+			raised = False
+			if started_at > self._raised_at and self._interval < MAX_INTERVAL:
+				self._interval = min(self._interval * 2, MAX_INTERVAL)
+				self._raised_at = now
+				self._next_start = max(self._next_start, now + self._interval)
+				raised = True
 			if retry_after is not None:
-				delay = min(retry_after, MAX_RETRY_AFTER)
-			else:
-				delay = min(2.0 * 2 ** (self._episode_failures - 1), 60.0)
-			self._not_before = max(self._not_before, now + delay)
-		return delay, new_episode
+				self._floor_until = max(self._floor_until, now + min(retry_after, MAX_RETRY_AFTER))
+			return self._interval, raised
 
-	def success(self) -> None:
+	def success(self) -> tuple[float, bool]:
+		"""Record a good answer; return (interval, whether this relaxed it)."""
 		with self._lock:
-			self._episode_failures = 0
+			self._fail_streak = 0
+			self._last_success = time.monotonic()
+			self._successes += 1
+			relaxed = False
+			if self._successes >= RELAX_AFTER and self._interval > BASE_INTERVAL:
+				self._interval = max(BASE_INTERVAL, self._interval * 0.75)
+				self._successes = 0
+				relaxed = True
+			return self._interval, relaxed
 
 	def is_down(self) -> bool:
-		"""True after DOWN_AFTER pauses in a row with no success in between."""
+		"""True after DOWN_AFTER failures in a row with no success for DOWN_WINDOW seconds."""
 		with self._lock:
-			return self._episode_failures >= DOWN_AFTER
+			return (
+				self._fail_streak >= DOWN_AFTER
+				and time.monotonic() - self._last_success >= DOWN_WINDOW
+			)
 
-	def reset(self) -> None:
+	def report_down_once(self) -> bool:
+		"""True the first time it is called while the circuit is open (for one log line)."""
+		if not self.is_down():
+			return False
 		with self._lock:
-			self._not_before = 0.0
-			self._episode_failures = 0
+			first = not self._down_reported
+			self._down_reported = True
+			return first
+
+	def close_circuit(self) -> None:
+		"""Forget the failure streak before a retry round; keep the learned interval."""
+		with self._lock:
+			self._fail_streak = 0
+			self._last_success = time.monotonic()
+			self._down_reported = False
+			self._floor_until = 0.0
 
 
-def _lrclib_get(
-	session: requests.Session, throttle: Throttle, params: dict, title: str
-) -> dict | None:
+def _lrclib_get(session: requests.Session, pacer: Pacer, params: dict, title: str) -> dict | None:
 	"""One lrclib lookup: the JSON body on 200, {} on 404, None if lrclib kept failing."""
 	reason = ''
-	if throttle.is_down():
+	if pacer.is_down():
 		return None  # circuit open: defer to the retry rounds instead of waiting again
 	for _ in range(MAX_ATTEMPTS):
-		throttle.wait()
-		time.sleep(0.1)  # smooth inter-request spacing
+		started_at = pacer.acquire()
 		retry_after = None
 		try:
 			response = session.get(
 				LRCLIB_GET_URL, params=params, headers={'User-Agent': USER_AGENT}, timeout=10
 			)
-			if response.status_code == 200:
-				body = response.json()
-				throttle.success()
+			if response.status_code in (200, 404):
+				body = response.json() if response.status_code == 200 else {}
+				interval, relaxed = pacer.success()
+				if relaxed:
+					logger.info(f'lrclib is answering again; one request per {interval:.1f} s')
 				return body
-			if response.status_code == 404:
-				throttle.success()
-				return {}
 			reason = f'HTTP {response.status_code}'
 			header = response.headers.get('Retry-After')
 			if response.status_code == 429 and header and header.replace('.', '', 1).isdigit():
 				retry_after = float(header) + 0.5
 		except requests.RequestException as e:
 			reason = type(e).__name__
-		delay, new_episode = throttle.penalize(retry_after)
-		if throttle.is_down():
-			if new_episode:
-				logger.warning(
-					f'lrclib looks down ({reason}); deferring the remaining tracks to the retry rounds'
-				)
-			break
-		if new_episode:
+		interval, raised = pacer.failure(started_at, retry_after)
+		if raised:
 			logger.warning(
-				f'lrclib is limiting requests ({reason}); pausing all workers for {delay:.0f} s'
+				f'lrclib is limiting requests ({reason}); slowing to one request per {interval:.1f} s'
 			)
-	logger.warning(f"lrclib unavailable ({reason}) for '{title}', will retry later")
+		if pacer.report_down_once():
+			logger.warning('lrclib looks down; deferring the remaining tracks to the retry rounds')
+		if pacer.is_down():
+			break
 	return None
 
 
 def _fetch_one(
-	flac_path: str, session: requests.Session, throttle: Throttle | None = None
+	flac_path: str, session: requests.Session, pacer: Pacer | None = None
 ) -> tuple[str, str, str, str, str, str, str, str]:
 	"""Read tags, fetch/upgrade lyrics, apply LRC metadata headers from FLAC tags.
 
 	Returns:
 	    (flac_path, artist, title, lyrics_text, lyrics_type, status, discogs_id, track)
 	"""
-	throttle = throttle or Throttle()
+	pacer = pacer or Pacer()
 	if not os.path.isfile(flac_path):
 		return flac_path, '', '', '', 'none', 'skip', '', ''
 
@@ -248,7 +283,7 @@ def _fetch_one(
 	data = {}
 	found_via_stripped = False
 	for params in variants:
-		body = _lrclib_get(session, throttle, params, title)
+		body = _lrclib_get(session, pacer, params, title)
 		if body is None:
 			# lrclib is throttling or down, which is not the same as "not found": stop probing
 			# further variants and never write or clear anything for this track.
@@ -304,6 +339,9 @@ def _fetch_one(
 			return flac_path, artist, title, fixed, lyric_type, 'fix', discogs_id, track
 		return flac_path, artist, title, existing_lyrics, lyric_type, 'skip', discogs_id, track
 
+	logger.warning(
+		f"No lyrics found at lrclib: '{title}' (artist searched: '{artist}', album: '{album}')"
+	)
 	return flac_path, artist, title, '', 'none', 'skip', discogs_id, track
 
 
@@ -392,12 +430,7 @@ def _apply_result(result: tuple, stats: dict, lyrics_dir: Path) -> None:
 
 
 def _run_pass(
-	paths: list[str],
-	workers: int,
-	session: requests.Session,
-	throttle: Throttle,
-	handle,
-	on_interrupt,
+	paths: list[str], workers: int, session: requests.Session, pacer: Pacer, handle, on_interrupt
 ) -> list[str]:
 	"""Fetch lyrics for paths on a thread pool; pass each result to handle().
 
@@ -406,7 +439,7 @@ def _run_pass(
 	"""
 	failed = []
 	with ThreadPoolExecutor(max_workers=workers) as executor:
-		futures = {executor.submit(_fetch_one, path, session, throttle): path for path in paths}
+		futures = {executor.submit(_fetch_one, path, session, pacer): path for path in paths}
 		try:
 			for future in as_completed(futures):
 				try:
@@ -459,7 +492,7 @@ def main() -> None:
 	session = requests.Session()
 	adapter = requests.adapters.HTTPAdapter(pool_connections=MAX_WORKERS, pool_maxsize=MAX_WORKERS)
 	session.mount('https://', adapter)
-	throttle = Throttle()
+	pacer = Pacer()
 
 	console = Console(stderr=True)
 	progress = Progress(
@@ -524,7 +557,7 @@ def main() -> None:
 			_console_handler.stream = sys.stderr
 		try:
 			failed = _run_pass(
-				tracks, MAX_WORKERS, session, throttle, lambda r: handle(r, True), on_interrupt
+				tracks, MAX_WORKERS, session, pacer, lambda r: handle(r, True), on_interrupt
 			)
 			for cooldown, workers in RETRY_ROUNDS:
 				if not failed:
@@ -534,9 +567,9 @@ def main() -> None:
 					f'retrying in {cooldown} s with {workers} workers'
 				)
 				time.sleep(cooldown)
-				throttle.reset()
+				pacer.close_circuit()
 				failed = _run_pass(
-					failed, workers, session, throttle, lambda r: handle(r, False), on_interrupt
+					failed, workers, session, pacer, lambda r: handle(r, False), on_interrupt
 				)
 		except KeyboardInterrupt:
 			logger.warning('Interrupted by user (Ctrl+C). Exiting...')

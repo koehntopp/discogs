@@ -15,7 +15,7 @@ If you have multiple versions of the same album (original, remaster, SACD, Qobuz
 - **Tag enrichment** — pulls release date, original release date, and format info from the Discogs API
 - **File organisation** — moves FLACs into `Artist/Album/track_title.flac`, creates MP3 mirrors via ffmpeg
 - **Dynamic Range scoring** — per-track and per-album DR values written as FLAC tags; DR column links to loudness-war.info
-- **Lyrics** — parallel fetching (8 workers) from lrclib.net with a shared back-off, deferred retry of tracks lrclib could not answer, LRC upgrade and invalid-LRC detection
+- **Lyrics** — parallel fetching (8 workers) from lrclib.net with shared adaptive request pacing, deferred retry of tracks lrclib could not answer, a warning for every track with no match, LRC upgrade and invalid-LRC detection
 - **AcoustID fingerprinting** — generates and stores acoustic fingerprints
 - **rclone sync** — mirrors the FLAC library to a remote destination
 - **Syslog forwarding** — optional structured log forwarding to a Synology log server
@@ -151,7 +151,7 @@ All config values are also editable via the Settings modal in the web UI.
 | `fixtags.py` | Discogs API tag enrichment & date tag mapping |
 | `bliss.py` | File organisation + MP3 sync (with overwrite protection) |
 | `album_list.py` | Album inventory scan → CSV + DR chart |
-| `update_lyrics.py` | Parallel lyrics fetch from lrclib.net (8 workers, shared back-off, retries failed tracks) |
+| `update_lyrics.py` | Parallel lyrics fetch from lrclib.net (8 workers, adaptive pacing, retries failed tracks, warns when nothing is found) |
 | `lrc_fix.py` | Local LRC realignment (demucs vocal isolation + whisperx + onset-snapping) |
 | `lrclib_submitter.py` | Submit FLAC file lyrics to LRCLIB (lrclib.net) with PoW challenge solver |
 | `calculate_dr.py` | Dynamic Range calculation |
