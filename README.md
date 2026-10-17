@@ -15,7 +15,7 @@ If you have multiple versions of the same album (original, remaster, SACD, Qobuz
 - **Tag enrichment** — pulls release date, original release date, and format info from the Discogs API
 - **File organisation** — moves FLACs into `Artist/Album/track_title.flac`, creates MP3 mirrors via ffmpeg
 - **Dynamic Range scoring** — per-track and per-album DR values written as FLAC tags; DR column links to loudness-war.info
-- **Lyrics** — parallel fetching (32 workers) from lrclib.net; LRC upgrade and invalid-LRC detection
+- **Lyrics** — parallel fetching (8 workers) from lrclib.net with a shared back-off, deferred retry of tracks lrclib could not answer, LRC upgrade and invalid-LRC detection
 - **AcoustID fingerprinting** — generates and stores acoustic fingerprints
 - **rclone sync** — mirrors the FLAC library to a remote destination
 - **Syslog forwarding** — optional structured log forwarding to a Synology log server
@@ -71,13 +71,24 @@ Then use `docker-compose-synology.yml` as a reference for container settings.
 ./deploy-linux.sh            # builds, ships, and reloads the image over SSH
 ```
 
-Builds a `linux/amd64` image, transfers it via SCP, and runs `docker compose up -d
---remove-orphans` in `REMOTE_DIR` on the remote host. `REMOTE_DIR` (`/opt/stacks/discogs`
-by default) must already contain a `compose.yaml` — this is Dockge's stacks directory, so
-placing the compose file there makes the stack visible and manageable from Dockge's own UI
-without any extra hand-off step. Use **absolute** host paths for volume mounts in that
-compose file (not relative ones like `./config`), so the mount doesn't break if Dockge later
-relocates or renames the stack folder.
+Builds a `linux/amd64` image, copies the tarball via SCP to `/tmp` on the Docker host
+(192.168.1.97), loads it, deletes the tarball, and then has **Dockge** recreate the stack:
+`docker exec dockge-dockge-agent-1 sh -c 'cd /opt/stacks/discogs && docker compose up -d --remove-orphans'`.
+
+The stack's `compose.yml` and `.env` are managed in Dockge, and its stacks folder lives on the
+NAS (only visible inside the Dockge container). Don't keep a copy of the compose file on the
+host: an old copy in `/opt/stacks/discogs` used to silently overwrite the Dockge stack with
+stale local mounts. To change volumes or environment variables, edit the stack in Dockge.
+
+The container's persistent data is on the NAS (NFS), not on the host:
+
+| Container path | NAS path |
+|---|---|
+| `/config` | `/volume1/docker/discogs/discogs/config` (config.py, logs, albums.csv, rclone.conf, lyrics/) |
+| `/root/.ssh/known_hosts` | `/volume1/docker/discogs/discogs/ssh/known_hosts` (read-only) |
+| `/flac` | SMB share `//192.168.1.98/flac` |
+
+The full host setup is documented in `AGENTS.md` in the `docker discogs` folder.
 
 ## Configuration
 
@@ -140,7 +151,7 @@ All config values are also editable via the Settings modal in the web UI.
 | `fixtags.py` | Discogs API tag enrichment & date tag mapping |
 | `bliss.py` | File organisation + MP3 sync (with overwrite protection) |
 | `album_list.py` | Album inventory scan → CSV + DR chart |
-| `update_lyrics.py` | Parallel lyrics fetch from lrclib.net (32 workers) |
+| `update_lyrics.py` | Parallel lyrics fetch from lrclib.net (8 workers, shared back-off, retries failed tracks) |
 | `lrc_fix.py` | Local LRC realignment (demucs vocal isolation + whisperx + onset-snapping) |
 | `lrclib_submitter.py` | Submit FLAC file lyrics to LRCLIB (lrclib.net) with PoW challenge solver |
 | `calculate_dr.py` | Dynamic Range calculation |

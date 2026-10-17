@@ -298,13 +298,15 @@ uv run update_lyrics.py [FLAC_DIR]
    - If the `LYRICS` tag already contains the instrumental marker (`[instrumental:true]`), skips it without querying lrclib.net.
    - Otherwise, Stage 1: Queries lrclib.net with artist, title, the FLAC's own `ALBUM` tag, and duration.
    - Stage 2: If Stage 1 returns 404, retries lrclib.net with artist, title, and duration (omitting album).
+   - Stage 3/4: If the title ends in a bracketed group (e.g. `(Live at Wembley)`), repeats Stages 1-2 with that group stripped from the search title only; the tag keeps the full title.
+   - **Failure handling**: a 429, 5xx or network error is not "not found". All 8 workers share one back-off (`Throttle`): any such error pauses every worker (the `Retry-After` value if sent, otherwise 2 s doubling up to 60 s), failures landing during a pause count once, and after 5 escalating pauses without a success lrclib is treated as down and the remaining tracks are deferred. A track whose request keeps failing (4 attempts) is marked `failed`: nothing is written or cleared for it (an existing invalid LRC is never deleted because of a server error) and no further title variants are tried. Failed tracks are retried after the main pass, after a 30 s and then a 60 s cool-down, with 2 workers each. Tracks still failing are listed by artist, title and path in a warning; the exit code stays 0 so `nzbfix.py` continues, and re-running picks them up again.
    - If lrclib.net's response flags the track `instrumental: true`, writes a fixed-format LRC marker (`[la:zxx]` / `[instrumental:true]` / `[00:00.00](Instrumental)`) instead of lyrics.
    - Otherwise writes synced LRC lyrics if available, otherwise plain-text lyrics when the tag was empty.
    - **Capitalization normalization**: every lyric line — newly fetched or already embedded — has its first non-whitespace character uppercased (LRC header lines are left untouched).
    - **Timestamp whitespace stripping**: for LRC lines, any whitespace between the `[MM:SS.xx]` timestamp and the lyric text is removed (`[MM:SS.xx]Text`, not `[MM:SS.xx] Text`).
    - **Manual instrumental marking**: if the `LYRICS` tag contains a hand-typed `[MM:SS.xx][Instrumental]` marker (case-insensitive), it's normalized to the canonical instrumental block without an lrclib.net request, as if the API had reported `instrumental: true`.
 3. Saves modified files immediately after each successful fetch or fix.
-4. Prints summary totals: LRC count, plain-text count, no-lyrics count, instrumental count, and separate new/fixed/cleared write counts.
+4. Prints summary totals: LRC count, plain-text count, no-lyrics count, instrumental count, separate new/fixed/cleared write counts, and the number of tracks still failed after the retry rounds.
 
 **Tags read:** `LYRICS`, `DISCOGS_RELEASE_ID`, `ALBUMARTIST`, `ARTIST`, `TITLE`, `TRACKNUMBER`, `ALBUM`
 
