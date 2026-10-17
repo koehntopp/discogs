@@ -30,8 +30,8 @@ from mutagen.flac import FLAC
 from rich.console import Console
 
 from log import logger
+from lrclib_client import lrclib_headers
 
-USER_AGENT = 'DiscogsMusicManager/1.0 (+https://github.com/koehntopp/discogs)'
 API_URL = 'https://lrclib.net/api'
 LRC_TIMESTAMP = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]')
 
@@ -91,7 +91,7 @@ def submit_to_lrclib(
 		'plainLyrics': None if is_synced else lyrics,
 	}
 
-	headers = {'User-Agent': USER_AGENT}
+	headers = lrclib_headers()
 
 	if dry_run:
 		console.print(

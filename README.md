@@ -154,6 +154,7 @@ All config values are also editable via the Settings modal in the web UI.
 | `update_lyrics.py` | Parallel lyrics fetch from lrclib.net (8 workers, adaptive pacing, retries failed tracks, warns when nothing is found) |
 | `lrc_fix.py` | Local LRC realignment (demucs vocal isolation + whisperx + onset-snapping) |
 | `lrclib_submitter.py` | Submit FLAC file lyrics to LRCLIB (lrclib.net) with PoW challenge solver |
+| `lrclib_client.py` | Shared lrclib.net client identification (User-Agent + public `Lrclib-App-Id`); no CLI |
 | `calculate_dr.py` | Dynamic Range calculation |
 | `calculate_fp.py` | AcoustID fingerprint generation |
 | `migrate_tags.py` | Tag schema migration to discrete `ALBUM_*` tags |

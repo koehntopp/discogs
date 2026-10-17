@@ -315,7 +315,7 @@ uv run update_lyrics.py [FLAC_DIR]
 
 **Shared with `lrc_fix.py`:** header build/refresh, instrumental marker format, and capitalization normalization live in `lrc_format.py` (sibling module, no CLI of its own) — see ADR 0002 §6.
 
-**External service:** lrclib.net REST API (`GET /api/get`)
+**External service:** lrclib.net REST API (`GET /api/get`). Requests identify the application with `User-Agent` and the public `Lrclib-App-Id` header from `lrclib_client.py` (client identification and rate limits: https://lrclib.net/docs#implementation-requirements-client-identification); an invalid id gives `401`, which is logged once and not retried. Request spacing starts at 0.4 s (150 requests/min, under the ~180/min allowed for a registered app), and `Retry-After` is honored with up to 30% random jitter.
 
 ---
 
@@ -498,7 +498,7 @@ not duplicated here).
 
 **Dependencies:** `mutagen`, `whisperx`, `demucs`, `librosa`, `torch>=2.4,<2.6`, `torchaudio>=2.4,<2.6`, `numpy<2`, `transformers<5`
 
-**Shared with `update_lyrics.py`:** header build/refresh, instrumental marker format, and capitalization normalization live in `lrc_format.py` — see ADR 0002 §6.
+**Shared with `update_lyrics.py`:** header build/refresh, instrumental marker format, and capitalization normalization live in `lrc_format.py` — see ADR 0002 §6. Both scripts send the same client-identification headers (`User-Agent` and the public `Lrclib-App-Id`) from `lrclib_client.py` — see ADR 0007 §4.
 
 ---
 

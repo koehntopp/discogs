@@ -51,7 +51,7 @@ We adopt the following general Python standards and architectural rules across a
 
 ### 6. Concurrency & Network Operations
 * **Parallel Execution**: Network-bound or batch tasks (e.g. lyrics fetching) must use `concurrent.futures.ThreadPoolExecutor` paired with thread-safe `requests.Session` and connection pooling (`HTTPAdapter`).
-* **Resilience**: Network integrations must implement exponential backoff retries for rate-limiting (HTTP 429) and transient server errors. With parallel workers the back-off is shared (a single pacer spaces every worker's requests and widens the spacing on 429/5xx, so workers do not pause and then burst together), and a request that still fails is reported as failed, never as "not found": it is retried in a later pass, nothing is written or deleted on its behalf, and what remains failed is listed by name (`update_lyrics.py` is the reference implementation).
+* **Resilience**: Network integrations must implement exponential backoff retries for rate-limiting (HTTP 429) and transient server errors. With parallel workers the back-off is shared (a single pacer spaces every worker's requests and widens the spacing on 429/5xx, so workers do not pause and then burst together), and a request that still fails is reported as failed, never as "not found": it is retried in a later pass, nothing is written or deleted on its behalf, and what remains failed is listed by name (`update_lyrics.py` is the reference implementation). Request rates follow the service's documented limits; for lrclib.net see ADR 0007 §4 (https://lrclib.net/docs#implementation-requirements-client-identification).
 
 ### 7. Configuration & Secret Isolation
 * **Config File**: Configuration is managed via `config.py` (copied from `config_demo.py`).

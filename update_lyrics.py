@@ -9,6 +9,7 @@
 # ///
 
 import os
+import random
 import re
 import sys
 import threading
@@ -40,8 +41,8 @@ from lrc_format import (
 	make_instrumental_lrc,
 	resolve_artist,
 )
+from lrclib_client import lrclib_headers
 
-USER_AGENT = 'DiscogsMusicManager/1.0 (+https://github.com/koehntopp/discogs)'
 MAX_WORKERS = 8
 TRAILING_BRACKET_RE = re.compile(r'\s*[\(\[][^()\[\]]*[\)\]]\s*$')
 
@@ -68,7 +69,9 @@ def flactag(song: FLAC | dict, tag: str) -> str:
 LRCLIB_GET_URL = 'https://lrclib.net/api/get'
 MAX_ATTEMPTS = 4  # per request; the shared Pacer spaces the attempts
 MAX_RETRY_AFTER = 300.0
-BASE_INTERVAL = 0.5  # seconds between request starts (all workers together) when lrclib is happy
+# Seconds between request starts (all workers together) when lrclib is happy: 0.4 s is 150
+# requests/min, under the ~180/min allowed for a registered Lrclib-App-Id (see lrclib_client.py).
+BASE_INTERVAL = 0.4
 MAX_INTERVAL = 8.0
 RELAX_AFTER = 10  # consecutive successes before the interval shrinks again
 DOWN_AFTER = 5  # failures in a row, with no success for DOWN_WINDOW seconds, open the circuit
@@ -94,6 +97,8 @@ class Pacer:
 		self._fail_streak = 0
 		self._last_success = time.monotonic()
 		self._down_reported = False
+		self._auth_failed = False
+		self._auth_reported = False
 
 	def acquire(self) -> float:
 		"""Block until this worker may start a request; return the start time."""
@@ -139,12 +144,21 @@ class Pacer:
 			return self._interval, relaxed
 
 	def is_down(self) -> bool:
-		"""True after DOWN_AFTER failures in a row with no success for DOWN_WINDOW seconds."""
+		"""True after DOWN_AFTER failures in a row with no success for DOWN_WINDOW seconds,
+		or once lrclib has rejected the app id (retrying cannot help)."""
 		with self._lock:
-			return (
+			return self._auth_failed or (
 				self._fail_streak >= DOWN_AFTER
 				and time.monotonic() - self._last_success >= DOWN_WINDOW
 			)
+
+	def reject_credentials(self) -> bool:
+		"""Record a 401; True only the first time, so the error is logged once."""
+		with self._lock:
+			first = not self._auth_reported
+			self._auth_failed = True
+			self._auth_reported = True
+			return first
 
 	def report_down_once(self) -> bool:
 		"""True the first time it is called while the circuit is open (for one log line)."""
@@ -161,6 +175,7 @@ class Pacer:
 			self._fail_streak = 0
 			self._last_success = time.monotonic()
 			self._down_reported = False
+			self._auth_failed = False  # a retry round probes once more
 			self._floor_until = 0.0
 
 
@@ -174,8 +189,14 @@ def _lrclib_get(session: requests.Session, pacer: Pacer, params: dict, title: st
 		retry_after = None
 		try:
 			response = session.get(
-				LRCLIB_GET_URL, params=params, headers={'User-Agent': USER_AGENT}, timeout=10
+				LRCLIB_GET_URL, params=params, headers=lrclib_headers(), timeout=10
 			)
+			if response.status_code == 401:
+				if pacer.reject_credentials():
+					logger.error(
+						'lrclib rejected the Lrclib-App-Id header (401); see lrclib_client.py'
+					)
+				return None
 			if response.status_code in (200, 404):
 				body = response.json() if response.status_code == 200 else {}
 				interval, relaxed = pacer.success()
@@ -185,7 +206,8 @@ def _lrclib_get(session: requests.Session, pacer: Pacer, params: dict, title: st
 			reason = f'HTTP {response.status_code}'
 			header = response.headers.get('Retry-After')
 			if response.status_code == 429 and header and header.replace('.', '', 1).isdigit():
-				retry_after = float(header) + 0.5
+				# lrclib requires honoring Retry-After plus up to 30% random jitter
+				retry_after = float(header) * (1 + random.uniform(0, 0.3))
 		except requests.RequestException as e:
 			reason = type(e).__name__
 		interval, raised = pacer.failure(started_at, retry_after)

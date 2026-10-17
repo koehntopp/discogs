@@ -70,6 +70,7 @@ metadata, paired with a FastAPI/HTMX web UI. Full CLI/API/tag reference: `SPEC.m
 - `convert_opus.py`: Transcodes FLAC to Opus format.
 - `lrc_fix.py`: Local (no cloud API) LRC realignment via demucs vocal isolation + whisperx transcription + onset snapping. Own docs: `README-lrc_fix.md`.
 - `lrc_format.py`: Shared LRC id-tag/header formatting (no CLI) — imported by `update_lyrics.py`, `lrc_fix.py`, and `lrc_count.py`.
+- `lrclib_client.py`: Shared lrclib.net client identification (`User-Agent` + public `Lrclib-App-Id`, no CLI) — imported by `update_lyrics.py` and `lrclib_submitter.py`. Limits/requirements: ADR 0007 §4.
 - `log.py`: Central structured logging (`structlog`).
 - `SPEC.md`: Full CLI, API, tag contract, and web UI specification.
 - `docs/tag-schema.md`: Mermaid ERD of the FLAC tag relationships (derived reference for ADR 0002/0008).
