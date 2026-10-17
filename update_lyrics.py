@@ -69,9 +69,11 @@ def flactag(song: FLAC | dict, tag: str) -> str:
 LRCLIB_GET_URL = 'https://lrclib.net/api/get'
 MAX_ATTEMPTS = 4  # per request; the shared Pacer spaces the attempts
 MAX_RETRY_AFTER = 300.0
-# Seconds between request starts (all workers together) when lrclib is happy: 0.4 s is 150
-# requests/min, under the ~180/min allowed for a registered Lrclib-App-Id (see lrclib_client.py).
-BASE_INTERVAL = 0.4
+# Seconds between request starts (all workers together) when lrclib is happy: 0.5 s is 120
+# requests/min, two thirds of the ~180/min allowed for a registered Lrclib-App-Id and inside the
+# 200-500 ms between requests that lrclib recommends (see lrclib_client.py).
+BASE_INTERVAL = 0.5
+RETRY_BACKOFF = 1.0  # seconds before the 2nd attempt after a 5xx/network error; doubles each time
 MAX_INTERVAL = 8.0
 RELAX_AFTER = 10  # consecutive successes before the interval shrinks again
 DOWN_AFTER = 5  # failures in a row, with no success for DOWN_WINDOW seconds, open the circuit
@@ -81,14 +83,16 @@ RETRY_ROUNDS = ((30, 2), (60, 2))
 
 
 class Pacer:
-	"""Shared request pacing: one request start per interval across all workers.
+	"""Shared request pacing: one request in flight, one request start per interval.
 
-	The interval doubles on a 429/5xx/network error and shrinks again after a run of
-	successes, so it settles at whatever rate lrclib tolerates instead of bursting.
+	lrclib asks clients to send requests sequentially. The interval doubles only when lrclib
+	answers 429 (a real rate limit) and shrinks again after a run of successes, so it settles
+	at whatever rate lrclib tolerates. 5xx and network errors do not change it.
 	"""
 
 	def __init__(self) -> None:
 		self._lock = threading.Lock()
+		self._slot = threading.Semaphore(1)
 		self._interval = BASE_INTERVAL
 		self._next_start = 0.0
 		self._floor_until = 0.0  # Retry-After: no request may start before this
@@ -101,7 +105,11 @@ class Pacer:
 		self._auth_reported = False
 
 	def acquire(self) -> float:
-		"""Block until this worker may start a request; return the start time."""
+		"""Wait for the single request slot and for the next start time; return the start time.
+
+		Every acquire() must be paired with a release() once the request has finished.
+		"""
+		self._slot.acquire()
 		with self._lock:
 			now = time.monotonic()
 			start = max(now, self._next_start, self._floor_until)
@@ -110,18 +118,23 @@ class Pacer:
 			time.sleep(start - now)
 		return start
 
-	def failure(self, started_at: float, retry_after: float | None = None) -> tuple[float, bool]:
+	def release(self) -> None:
+		self._slot.release()
+
+	def failure(
+		self, started_at: float, retry_after: float | None = None, rate_limited: bool = False
+	) -> tuple[float, bool]:
 		"""Record a failed request; return (interval, whether this raised it).
 
-		A request that started before the last raise cannot escalate it again, so eight
-		in-flight requests failing together count once.
+		Only a rate limit (429) widens the interval; other failures just count towards the
+		circuit breaker. A request that started before the last raise cannot escalate it again.
 		"""
 		with self._lock:
 			now = time.monotonic()
 			self._successes = 0
 			self._fail_streak += 1
 			raised = False
-			if started_at > self._raised_at and self._interval < MAX_INTERVAL:
+			if rate_limited and started_at > self._raised_at and self._interval < MAX_INTERVAL:
 				self._interval = min(self._interval * 2, MAX_INTERVAL)
 				self._raised_at = now
 				self._next_start = max(self._next_start, now + self._interval)
@@ -184,41 +197,53 @@ def _lrclib_get(session: requests.Session, pacer: Pacer, params: dict, title: st
 	reason = ''
 	if pacer.is_down():
 		return None  # circuit open: defer to the retry rounds instead of waiting again
-	for _ in range(MAX_ATTEMPTS):
+	for attempt in range(MAX_ATTEMPTS):
 		started_at = pacer.acquire()
 		retry_after = None
+		rate_limited = False
 		try:
-			response = session.get(
-				LRCLIB_GET_URL, params=params, headers=lrclib_headers(), timeout=10
-			)
-			if response.status_code == 401:
-				if pacer.reject_credentials():
-					logger.error(
-						'lrclib rejected the Lrclib-App-Id header (401); see lrclib_client.py'
-					)
-				return None
-			if response.status_code in (200, 404):
-				body = response.json() if response.status_code == 200 else {}
-				interval, relaxed = pacer.success()
-				if relaxed:
-					logger.info(f'lrclib is answering again; one request per {interval:.1f} s')
-				return body
-			reason = f'HTTP {response.status_code}'
-			header = response.headers.get('Retry-After')
-			if response.status_code == 429 and header and header.replace('.', '', 1).isdigit():
-				# lrclib requires honoring Retry-After plus up to 30% random jitter
-				retry_after = float(header) * (1 + random.uniform(0, 0.3))
-		except requests.RequestException as e:
-			reason = type(e).__name__
-		interval, raised = pacer.failure(started_at, retry_after)
+			try:
+				response = session.get(
+					LRCLIB_GET_URL, params=params, headers=lrclib_headers(), timeout=10
+				)
+				if response.status_code == 401:
+					if pacer.reject_credentials():
+						logger.error(
+							'lrclib rejected the Lrclib-App-Id header (401); see lrclib_client.py'
+						)
+					return None
+				if response.status_code in (200, 404):
+					body = response.json() if response.status_code == 200 else {}
+					interval, relaxed = pacer.success()
+					if relaxed:
+						logger.info(f'lrclib is answering again; one request per {interval:.1f} s')
+					return body
+				reason = f'HTTP {response.status_code}'
+				rate_limited = response.status_code == 429
+				header = response.headers.get('Retry-After')
+				if (
+					response.status_code in (429, 503)
+					and header
+					and header.replace('.', '', 1).isdigit()
+				):
+					# lrclib requires honoring Retry-After plus up to 30% random jitter
+					retry_after = float(header) * (1 + random.uniform(0, 0.3))
+			except requests.RequestException as e:
+				reason = type(e).__name__
+		finally:
+			pacer.release()
+		interval, raised = pacer.failure(started_at, retry_after, rate_limited)
 		if raised:
 			logger.warning(
-				f'lrclib is limiting requests ({reason}); slowing to one request per {interval:.1f} s'
+				f'lrclib rate limit hit ({reason}); slowing to one request per {interval:.1f} s'
 			)
 		if pacer.report_down_once():
 			logger.warning('lrclib looks down; deferring the remaining tracks to the retry rounds')
 		if pacer.is_down():
 			break
+		if not rate_limited and retry_after is None and attempt < MAX_ATTEMPTS - 1:
+			# 5xx / network error: plain backoff, the pacing interval stays as it is
+			time.sleep(RETRY_BACKOFF * 2**attempt * (1 + random.uniform(0, 0.3)))
 	return None
 
 
@@ -489,7 +514,9 @@ def main() -> None:
 	logger.info(f'Scanning tracks in {flacdir}')
 	tracks = _collect_tracks(flacdir)
 	total = len(tracks)
-	logger.info(f'Fetching lyrics for {total} tracks with up to {MAX_WORKERS} parallel requests')
+	logger.info(
+		f'Fetching lyrics for {total} tracks with {MAX_WORKERS} workers (lrclib requests go one at a time)'
+	)
 
 	stats = {
 		'lrc': 0,
