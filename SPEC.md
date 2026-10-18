@@ -497,8 +497,13 @@ APIs, no LLM in the timing path. Supersedes the earlier `align_lyrics.py`
 Full usage, flags, and pipeline details: `README-lrc_fix.md` (own documentation,
 not duplicated here).
 
-**Quality gate:** unmatched lines are filled with a neighbour's time, so a weak alignment used
-to stamp many lines with one timestamp. `lrc_fix.py` now skips a file, leaving its tag unchanged,
+**Unmatched lines:** a line the transcript cannot match gets an estimated time: interpolated between
+matched lines, and spread at the song's median seconds-per-line (at most 8 s, kept inside the track
+length) before the first and after the last matched line, so timestamps are distinct and strictly
+increasing at 0.01 s resolution (a matched line not later than the previous one is treated as unmatched).
+They used to copy the neighbouring line's time, which stacked a failed head or tail on one timestamp.
+
+**Quality gate:** a weak alignment used to stamp many lines with one timestamp. `lrc_fix.py` skips a file, leaving its tag unchanged,
 when fewer than `--min-match` (default 0.6) of its lyric lines matched the transcript (lines
 without any word are not counted), or when the result would have a `one_timestamp` or
 `shared_timestamps` pile-up per `lrc_format.lrc_suspect_reasons`. `--no-quality-gate` bypasses

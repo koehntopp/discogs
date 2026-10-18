@@ -52,10 +52,12 @@ import difflib
 import logging
 import os
 import re
+import statistics
 import subprocess
 import sys
 import tempfile
 import warnings
+from itertools import pairwise
 from pathlib import Path
 
 # Silence harmless version-mismatch / deprecation noise from whisperx's deps
@@ -77,6 +79,10 @@ from lrc_format import (
     resolve_artist,
 )
 from lrc_format import is_bare_instrumental_placeholder as is_instrumental
+
+DEFAULT_LINE_GAP = 4.0  # seconds per line when fewer than two lines matched
+TRAILING_MARGIN = 0.5  # keep spread tail lines this far before the end of the track
+MAX_SPREAD_STEP = 8.0  # never spread head/tail lines further apart than this, in seconds
 
 LRC_TIMESTAMP_RE = re.compile(r"^\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]\s*")
 
@@ -409,45 +415,79 @@ def snap_to_onsets(times: list[float | None], onsets: list[float],
         times[i] = max(before) if before else min(candidates)
 
 
-def finalize_times(times: list[float | None], onsets: list[float] | None = None) -> list[float]:
+def finalize_times(times: list[float | None], onsets: list[float] | None = None,
+                   length: float | None = None) -> list[float]:
     times = list(times)
     if onsets:
         snap_to_onsets(times, onsets)
-    _fill_and_clamp(times)
+    _fill_and_clamp(times, length)
     return times  # type: ignore[return-value]
 
 
-def _fill_and_clamp(times: list[float | None]) -> None:
+def _fill_and_clamp(times: list[float | None], length: float | None = None) -> None:
+    """Give every unmatched line (None) a distinct, increasing time, in place.
+
+    Matched lines are the anchors. One that is not later than the previous anchor (two lines
+    snapped onto one onset, or a matcher that went backwards) is treated as unmatched, so the
+    anchors strictly increase. Unmatched lines between anchors are interpolated; lines before the
+    first anchor and after the last one are spread at the song's typical seconds-per-line instead
+    of all copying the neighbouring anchor's time, which used to stack a failed head or tail onto
+    one timestamp. Everything ends strictly increasing at the 0.01 s resolution LRC can express.
+    """
     n = len(times)
-    known = [i for i, t in enumerate(times) if t is not None]
-    if not known:
+    anchors: list[int] = []
+    prev = None
+    for i, t in enumerate(times):
+        if t is None:
+            continue
+        if prev is not None and t <= prev:
+            times[i] = None
+            continue
+        anchors.append(i)
+        prev = t
+    if not anchors:
         for i in range(n):
             times[i] = 0.0
         return
 
-    for i in range(known[0]):
-        times[i] = times[known[0]]
-    for a, b in zip(known, known[1:]):
+    per_line = [(times[b] - times[a]) / (b - a) for a, b in pairwise(anchors)]
+    gap = min(statistics.median(per_line) if per_line else DEFAULT_LINE_GAP, MAX_SPREAD_STEP)
+
+    n_lead = anchors[0]
+    if n_lead:
+        first = times[anchors[0]]
+        step = min(gap, first / (n_lead + 1))
+        for i in range(n_lead):
+            times[i] = first - (n_lead - i) * step
+    for a, b in pairwise(anchors):
         if b - a > 1:
             t0, t1 = times[a], times[b]
             for i in range(a + 1, b):
                 frac = (i - a) / (b - a)
                 times[i] = t0 + frac * (t1 - t0)
-    for i in range(known[-1] + 1, n):
-        times[i] = times[known[-1]]
+    n_trail = n - 1 - anchors[-1]
+    if n_trail:
+        last_anchor = times[anchors[-1]]
+        if length is not None and length > last_anchor:
+            room = max(length - last_anchor - TRAILING_MARGIN, 0.0)
+            step = min(gap, room / (n_trail + 1))
+        else:
+            step = gap
+        for k in range(1, n_trail + 1):
+            times[anchors[-1] + k] = last_anchor + k * step
 
-    last = 0.0
+    last_cs = None
     for i, t in enumerate(times):
-        if t < last:
-            t = last
-        times[i] = t
-        last = t
+        cs = round(t * 100)
+        if last_cs is not None and cs <= last_cs:
+            cs = last_cs + 1
+        times[i] = cs / 100
+        last_cs = cs
 
 
 def format_lrc_timestamp(seconds: float) -> str:
-    minutes = int(seconds // 60)
-    secs = seconds - minutes * 60
-    return f"[{minutes:02d}:{secs:05.2f}]"
+    minutes, centis = divmod(round(seconds * 100), 6000)  # round first: 59.996 must not print 60.00
+    return f"[{minutes:02d}:{centis / 100:05.2f}]"
 
 
 def build_lrc(id_tags: list[str], lyric_lines: list[str], times: list[float]) -> str:
@@ -542,7 +582,7 @@ def process_file(path: Path, args: argparse.Namespace, index: int, total: int) -
             print("   detecting vocal onsets...")
             onsets = detect_onsets(audio_path)
 
-    times = finalize_times(raw_times, onsets)
+    times = finalize_times(raw_times, onsets, float(flac.info.length) if flac.info else None)
 
     new_lrc = build_lrc(id_tags, lyric_lines, times)
     if not args.no_quality_gate:

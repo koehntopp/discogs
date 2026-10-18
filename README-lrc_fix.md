@@ -121,10 +121,13 @@ always processes it. The tool logs `[i/N] <path>` as each file starts.
 
 ## Quality gate
 
-Lines the transcript cannot match are filled with a copy of a neighbouring line's time, so a
-weak alignment used to stamp many lines with one timestamp (and, with junk in the source text,
-replace a harmless plain tag with misleading ones). Two checks now leave the tag untouched with a
-`skip:` message instead: fewer than `--min-match` of the lyric lines matched, or the result would
+Lines the transcript cannot match get an estimated time: between two matched lines they are
+interpolated; before the first and after the last matched line they are spread at the song's typical
+seconds-per-line (at most 8 s apart, kept inside the track), so every line has its own, increasing
+timestamp. (They used to copy the nearest matched line's time, which stacked a failed head or tail
+onto one moment.) Estimated times are still guesses. A weak alignment (and, with junk in the source
+text, a harmless plain tag replaced by misleading timestamps) is caught by two checks that leave the
+tag untouched with a `skip:` message instead: fewer than `--min-match` of the lyric lines matched, or the result would
 put 5 or more lines (and at least 20% of them) on one timestamp. `--no-quality-gate` bypasses both.
 `lrc_count.py --suspects` lists existing tags that show these signs.
 
