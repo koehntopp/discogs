@@ -21,8 +21,16 @@ With --tracks, outputs one row per track instead, with columns:
 `album` is the decorated album title (ALBUM + VERSION, as bliss.py uses for its
 directory names). Rows are sorted by album, then disc/track number.
 
+With --suspects, lists the tracks whose synced LRC shows signs of a failed alignment
+(see lrc_format.lrc_suspect_reasons: one_timestamp, shared_timestamps, ends_early,
+junk_glyphs), one row per track, with columns:
+    album_artist, album, song, reasons, lines, last_timestamp, length, directory
+Rows with the most reasons come first. Report only: no tag is written. `directory`
+can be passed to lrc_fix.py. ends_early and junk_glyphs are hints, not proof (a long
+instrumental outro is legitimate).
+
 Usage:
-    uv run lrc_count.py [<flacdir>] [--output <file.csv>] [--tracks]
+    uv run lrc_count.py [<flacdir>] [--output <file.csv>] [--tracks | --suspects]
 
 If <flacdir> is omitted, config.flacroot is used.
 If --output is omitted, the CSV is written to stdout (no .xlsx is written).
@@ -40,7 +48,7 @@ from mutagen.flac import FLAC
 from openpyxl import Workbook
 
 from log import logger
-from lrc_format import INSTRUMENTAL_MARKER, LRC_TIMESTAMP
+from lrc_format import INSTRUMENTAL_MARKER, LRC_TIMESTAMP, lrc_body, lrc_suspect_reasons
 
 
 def _flactag(song: FLAC, tag: str) -> str:
@@ -125,16 +133,7 @@ def scan_album_tracks(directory: str) -> list[dict]:
 		if not album_artist:
 			album_artist = _flactag(song, 'ALBUMARTIST') or _flactag(song, 'ARTIST')
 
-		disc_str = _flactag(song, 'DISCNUMBER').split('/')[0]
-		track_str = _flactag(song, 'TRACKNUMBER').split('/')[0]
-		try:
-			disc = int(disc_str)
-		except ValueError:
-			disc = 1
-		try:
-			track = int(track_str)
-		except ValueError:
-			track = 999
+		disc, track = _disc_track(song)
 
 		rows.append(
 			{
@@ -146,6 +145,76 @@ def scan_album_tracks(directory: str) -> list[dict]:
 				'_track': track,
 			}
 		)
+	return rows
+
+
+def _mmss(seconds: float) -> str:
+	return f'{int(seconds) // 60:02d}:{int(seconds) % 60:02d}'
+
+
+def _disc_track(song: FLAC) -> tuple[int, int]:
+	"""(disc, track) sort key from DISCNUMBER/TRACKNUMBER, tolerating 'n/total' and junk."""
+	disc_str = _flactag(song, 'DISCNUMBER').split('/')[0]
+	track_str = _flactag(song, 'TRACKNUMBER').split('/')[0]
+	try:
+		disc = int(disc_str)
+	except ValueError:
+		disc = 1
+	try:
+		track = int(track_str)
+	except ValueError:
+		track = 999
+	return disc, track
+
+
+def scan_album_suspects(directory: str) -> list[dict]:
+	"""Rows for the tracks of one album whose synced LRC looks like a failed alignment.
+
+	Each row has the CSV columns plus internal '_n'/'_disc'/'_track' sort keys.
+	"""
+	rows = []
+	for filename in sorted(f for f in os.listdir(directory) if f.lower().endswith('.flac')):
+		track_path = os.path.join(directory, filename)
+		try:
+			song = FLAC(track_path)
+		except Exception as e:  # noqa: BLE001
+			logger.warning(f'Could not read {track_path}: {e}')
+			continue
+		if _lyric_status(song) != 'lrc':
+			continue
+		lyrics = _flactag(song, 'LYRICS')
+		length = float(song.info.length) if song.info else 0.0
+		reasons = lrc_suspect_reasons(lyrics, length)
+		if not reasons:
+			continue
+		times, _ = lrc_body(lyrics)
+		disc, track = _disc_track(song)
+		rows.append(
+			{
+				'album_artist': _flactag(song, 'ALBUMARTIST') or _flactag(song, 'ARTIST'),
+				'album': _decorated_album(song, directory),
+				'song': _flactag(song, 'TITLE') or filename,
+				'reasons': '; '.join(reasons),
+				'lines': len(times),
+				'last_timestamp': _mmss(times[-1]),
+				'length': _mmss(length),
+				'directory': directory,
+				'_n': len(reasons),
+				'_disc': disc,
+				'_track': track,
+			}
+		)
+	return rows
+
+
+def scan_library_suspects(flacdir: str) -> list[dict]:
+	"""Walk the library root, returning the suspect-LRC rows of every album."""
+	rows: list[dict] = []
+	for root, dirs, files in os.walk(flacdir):
+		dirs.sort()  # deterministic traversal order
+		if any(f.lower().endswith('.flac') for f in files):
+			rows.extend(scan_album_suspects(root))
+			dirs.clear()  # don't descend further into an album directory
 	return rows
 
 
@@ -220,8 +289,9 @@ def main() -> None:
 	flacdir: str | None = None
 	output_path: str | None = None
 	tracks_mode = False
+	suspects_mode = False
 
-	# Simple arg parsing: [flacdir] [--output file] [--tracks]
+	# Simple arg parsing: [flacdir] [--output file] [--tracks | --suspects]
 	i = 0
 	while i < len(args):
 		if args[i] == '--output' and i + 1 < len(args):
@@ -229,6 +299,9 @@ def main() -> None:
 			i += 2
 		elif args[i] == '--tracks':
 			tracks_mode = True
+			i += 1
+		elif args[i] == '--suspects':
+			suspects_mode = True
 			i += 1
 		elif not args[i].startswith('--'):
 			flacdir = args[i]
@@ -250,7 +323,23 @@ def main() -> None:
 
 	logger.info(f'Scanning FLAC library: {flacdir}')
 
-	if tracks_mode:
+	if suspects_mode:
+		suspect_rows = scan_library_suspects(flacdir)
+		logger.info(f'Found {len(suspect_rows)} tracks with a suspect LRC')
+		suspect_rows.sort(key=lambda r: (-r['_n'], r['album'].lower(), r['_disc'], r['_track']))
+		fieldnames = [
+			'album_artist',
+			'album',
+			'song',
+			'reasons',
+			'lines',
+			'last_timestamp',
+			'length',
+			'directory',
+		]
+		rows = [{k: r[k] for k in fieldnames} for r in suspect_rows]
+		write_csv(rows, fieldnames, output_path)
+	elif tracks_mode:
 		track_rows = scan_library_tracks(flacdir)
 		logger.info(f'Found {len(track_rows)} tracks')
 		track_rows.sort(key=lambda r: (r['album'].lower(), r['_disc'], r['_track']))

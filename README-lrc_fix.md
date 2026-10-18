@@ -114,8 +114,19 @@ always processes it. The tool logs `[i/N] <path>` as each file starts.
 | `--no-isolate-vocals` | off | Skip demucs separation, transcribe the full mix |
 | `--no-snap-onsets` | off | Skip onset detection/snapping |
 | `--no-vocal-check` | off | Skip the VAD fallback when alignment finds zero matches |
+| `--min-match` | `0.6` | Minimum share of lyric lines (those with at least one word) that must match the transcript; a weaker alignment is skipped and the tag left unchanged |
+| `--no-quality-gate` | off | Write the alignment even when too few lines matched or the result piles lines onto one timestamp |
 | `--find-missing-lyrics` | off | Scan for files with no `LYRICS` tag; VAD-tag instrumentals, log the rest |
 | `--dump-words` | off | Print the raw ASR word/timestamp transcript (debugging) |
+
+## Quality gate
+
+Lines the transcript cannot match are filled with a copy of a neighbouring line's time, so a
+weak alignment used to stamp many lines with one timestamp (and, with junk in the source text,
+replace a harmless plain tag with misleading ones). Two checks now leave the tag untouched with a
+`skip:` message instead: fewer than `--min-match` of the lyric lines matched, or the result would
+put 5 or more lines (and at least 20% of them) on one timestamp. `--no-quality-gate` bypasses both.
+`lrc_count.py --suspects` lists existing tags that show these signs.
 
 ## Notes
 

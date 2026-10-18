@@ -10,6 +10,7 @@ own FLAC tag reads and passes plain strings in.
 """
 
 import re
+from collections import Counter
 
 LRC_TIMESTAMP = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]')  # valid: [MM:SS.xx]
 LRC_BAD_TS = re.compile(r'\[\d{3,}:\d{2}:\d{2}\.\d{2}\]')  # invalid: [HH:MM:SS.xx]
@@ -23,6 +24,15 @@ MANUAL_INSTRUMENTAL_MARKER = re.compile(
 BARE_INSTRUMENTAL_PLACEHOLDER = re.compile(r'^[\[(]?\s*instrumental\s*[\])]?$', re.IGNORECASE)
 LA_OR_INSTRUMENTAL_TAG = re.compile(r'^\[(la|instrumental):', re.IGNORECASE)
 INSTRUMENTAL_SUFFIX_LINES = ('[la:zxx]', '[instrumental:true]', '[00:00.00](Instrumental)')
+LRC_BODY_LINE = re.compile(r'^\[(\d{2}):(\d{2})\.(\d{2})\](.*)$')
+# Hearts and music notes inside lyric text: credit/decoration lines from the source text
+JUNK_GLYPHS = re.compile('[\u2661\u266a\u266b\u266c\u2665]')
+SUSPECT_MIN_LINES = 3  # a synced LRC with fewer timestamped lines is not judged
+# A pile-up is a failed alignment: this many lines AND this share of the lines on one timestamp.
+# (2 lines copying the last time is a normal unmatched tail, so a group of 3-4 is not judged.)
+SUSPECT_SHARED_TIMESTAMP = 5
+SUSPECT_SHARED_SHARE = 0.2
+SUSPECT_END_RATIO = 0.5  # last timestamp before this share of the track length
 
 
 def is_lrc(text: str) -> bool:
@@ -158,3 +168,48 @@ def capitalize_lrc(lrc: str) -> str:
 
 def capitalize_txt(text: str) -> str:
 	return '\n'.join(capitalize_line(line) for line in text.splitlines())
+
+
+def lrc_body(lrc: str) -> tuple[list[float], list[str]]:
+	"""Timestamps (in seconds) and text of every timestamped line of an LRC, in order."""
+	times: list[float] = []
+	texts: list[str] = []
+	for line in lrc.split('\n'):
+		m = LRC_BODY_LINE.match(line.rstrip())
+		if m:
+			times.append(int(m.group(1)) * 60 + int(m.group(2)) + int(m.group(3)) / 100)
+			texts.append(m.group(4))
+	return times, texts
+
+
+def lrc_suspect_reasons(lrc: str, length_secs: float = 0.0) -> list[str]:
+	"""Signs that a synced LRC's timestamps cannot be trusted, empty if it looks sound.
+
+	Shared by lrc_fix.py (refuses to write such a result) and lrc_count.py --suspects (reports
+	existing ones), so the two cannot disagree. Instrumental markers and LRCs with fewer than
+	SUSPECT_MIN_LINES timestamped lines are never judged. Reasons:
+	  one_timestamp      every lyric line has the same timestamp
+	  shared_timestamps  a pile-up: SUSPECT_SHARED_TIMESTAMP or more lines, and at least
+	                     SUSPECT_SHARED_SHARE of all lines, share one timestamp
+	  ends_early         last timestamp before SUSPECT_END_RATIO of length_secs (report-only:
+	                     a long instrumental outro is legitimate)
+	  junk_glyphs        hearts/music notes inside lyric lines (report-only: source-text junk)
+	"""
+	if INSTRUMENTAL_MARKER in lrc:
+		return []
+	times, texts = lrc_body(lrc)
+	if len(times) < SUSPECT_MIN_LINES:
+		return []
+	reasons = []
+	counts = Counter(times)
+	if len(counts) == 1:
+		reasons.append('one_timestamp')
+	else:
+		biggest = max(counts.values())
+		if biggest >= SUSPECT_SHARED_TIMESTAMP and biggest / len(times) >= SUSPECT_SHARED_SHARE:
+			reasons.append('shared_timestamps')
+		if length_secs > 0 and times[-1] < SUSPECT_END_RATIO * length_secs:
+			reasons.append('ends_early')
+	if any(JUNK_GLYPHS.search(t) for t in texts):
+		reasons.append('junk_glyphs')
+	return reasons

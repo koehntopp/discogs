@@ -455,7 +455,7 @@ uv run migrate_tags.py [--write] [DIR]
 **Usage:**
 
 ```bash
-uv run lrc_count.py [<flacdir>] [--output <file.csv>]
+uv run lrc_count.py [<flacdir>] [--output <file.csv>] [--tracks | --suspects]
 ```
 
 | Argument | Required | Description |
@@ -463,6 +463,7 @@ uv run lrc_count.py [<flacdir>] [--output <file.csv>]
 | `flacdir` | No | Root directory to scan (defaults to `config.flacroot`). |
 | `--output` | No | Output CSV file path (defaults to stdout). Also writes a sibling `.xlsx` workbook with the same rows/columns next to it. |
 | `--tracks` | No | Output one row per track instead of aggregated per-artist counts. |
+| `--suspects` | No | List tracks whose synced LRC shows signs of a failed alignment (read-only report). |
 
 **Behaviour:**
 
@@ -474,6 +475,10 @@ uv run lrc_count.py [<flacdir>] [--output <file.csv>]
 **Output columns (default):** `album_artist`, `lrc`, `txt`, `instrumental`, `no_lyrics`
 
 **Output columns (`--tracks`):** `album_artist`, `album`, `song`, `lyrics_type`
+
+5. `--suspects` mode: for every synced-LRC track runs `lrc_format.lrc_suspect_reasons` (the same function `lrc_fix.py` uses as its quality gate) and writes one row per track with at least one reason, most reasons first: `one_timestamp` (every line on one timestamp), `shared_timestamps` (5+ lines and at least 20% of the lines on one timestamp), `ends_early` (last timestamp before 50% of the track length) and `junk_glyphs` (hearts/music notes in lyric lines). `ends_early` and `junk_glyphs` are hints, not proof: a long instrumental outro is legitimate. Instrumental markers and LRCs with fewer than 3 timestamped lines are never judged. Heuristics catch pile-ups, not every bad alignment.
+
+**Output columns (`--suspects`):** `album_artist`, `album`, `song`, `reasons`, `lines`, `last_timestamp`, `length`, `directory` (pass `directory` to `lrc_fix.py`)
 
 **Tags read:** `LYRICS`, `ALBUMARTIST`, `ARTIST`
 
@@ -491,6 +496,13 @@ APIs, no LLM in the timing path. Supersedes the earlier `align_lyrics.py`
 
 Full usage, flags, and pipeline details: `README-lrc_fix.md` (own documentation,
 not duplicated here).
+
+**Quality gate:** unmatched lines are filled with a neighbour's time, so a weak alignment used
+to stamp many lines with one timestamp. `lrc_fix.py` now skips a file, leaving its tag unchanged,
+when fewer than `--min-match` (default 0.6) of its lyric lines matched the transcript (lines
+without any word are not counted), or when the result would have a `one_timestamp` or
+`shared_timestamps` pile-up per `lrc_format.lrc_suspect_reasons`. `--no-quality-gate` bypasses
+both checks. See ADR 0002 section 6.
 
 **Tags read:** `LYRICS`, `ALBUMARTIST`, `ARTIST`, `TITLE`, `ALBUM`
 

@@ -69,7 +69,13 @@ logging.getLogger("speechbrain").setLevel(logging.ERROR)
 from mutagen.flac import FLAC
 
 from lrc_format import ID_TAG_LINE as LRC_ID_TAG_RE
-from lrc_format import build_instrumental_marker, capitalize_line, refresh_headers, resolve_artist
+from lrc_format import (
+    build_instrumental_marker,
+    capitalize_line,
+    lrc_suspect_reasons,
+    refresh_headers,
+    resolve_artist,
+)
 from lrc_format import is_bare_instrumental_placeholder as is_instrumental
 
 LRC_TIMESTAMP_RE = re.compile(r"^\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]\s*")
@@ -350,6 +356,25 @@ def match_line_times(lyric_lines: list[str], words: list[dict]) -> list[float | 
     return [s if s is not None else weak[i] for i, s in enumerate(strong)]
 
 
+def alignment_rejection(lyric_lines: list[str], raw_times: list[float | None],
+                        min_match: float) -> str | None:
+    """Why this alignment is too weak to write, or None if it is good enough.
+
+    Unmatched lines later get a copy of a neighbouring line's time (_fill_and_clamp), so a
+    mostly-unmatched alignment would stamp many lines with one timestamp and replace a harmless
+    tag with misleading ones. Lines without any word token at all (a lone "♪" or "***") are
+    not counted, so decoration in the source text cannot sink an otherwise good alignment.
+    """
+    counted = [t for line, t in zip(lyric_lines, raw_times) if _tokenize(line)]
+    if not counted:
+        return None
+    matched = sum(t is not None for t in counted)
+    if matched / len(counted) < min_match:
+        return (f"only {matched} of {len(counted)} lines matched "
+                f"({matched / len(counted):.0%}, minimum {min_match:.0%})")
+    return None
+
+
 def detect_onsets(audio_path: Path) -> list[float]:
     """Detect vocal onset times (seconds) in an audio file via librosa.
 
@@ -506,6 +531,12 @@ def process_file(path: Path, args: argparse.Namespace, index: int, total: int) -
                       "possibly mislabeled instrumental; tag left unchanged")
                 return
 
+        if not args.no_quality_gate:
+            reason = alignment_rejection(lyric_lines, raw_times, args.min_match)
+            if reason:
+                print(f"   skip: {reason} - tag left unchanged")
+                return
+
         onsets = []
         if not args.no_snap_onsets:
             print("   detecting vocal onsets...")
@@ -514,6 +545,12 @@ def process_file(path: Path, args: argparse.Namespace, index: int, total: int) -
     times = finalize_times(raw_times, onsets)
 
     new_lrc = build_lrc(id_tags, lyric_lines, times)
+    if not args.no_quality_gate:
+        broken = [r for r in lrc_suspect_reasons(new_lrc)
+                  if r in ("one_timestamp", "shared_timestamps")]
+        if broken:
+            print(f"   skip: result would have {' and '.join(broken)} - tag left unchanged")
+            return
     if _strip_metadata_lines(new_lrc) != _strip_metadata_lines(raw):
         id_tags = stamp_creator_tag(id_tags)
         new_lrc = build_lrc(id_tags, lyric_lines, times)
@@ -603,6 +640,13 @@ def main() -> int:
                          help="don't run a VAD fallback check when alignment finds zero "
                               "matches (which otherwise warns about a possibly mislabeled "
                               "instrumental instead of writing a useless tag)")
+    parser.add_argument("--min-match", type=float, default=0.6, metavar="FRACTION",
+                         help="minimum share of lyric lines that must match the transcript "
+                              "(default 0.6); a weaker alignment is skipped and the tag left "
+                              "unchanged instead of being stamped with copied timestamps")
+    parser.add_argument("--no-quality-gate", action="store_true",
+                         help="write the alignment even when too few lines matched or the "
+                              "result piles lines onto one timestamp")
     parser.add_argument("--find-missing-lyrics", action="store_true",
                          help="instead of the normal pipeline, scan for files with no "
                               "LYRICS tag at all and use VAD to tell instrumentals (tagged "
@@ -610,6 +654,8 @@ def main() -> int:
     parser.add_argument("--dump-words", action="store_true",
                          help="print the raw ASR word/timestamp transcript for debugging")
     args = parser.parse_args()
+    if not 0.0 <= args.min_match <= 1.0:
+        parser.error("--min-match must be between 0 and 1")
 
     files = find_flac_files(args.path)
     if not files:

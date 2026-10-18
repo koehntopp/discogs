@@ -180,6 +180,8 @@ uv run lrc_fix.py /path/to/album_or_song.flac
 #   --no-isolate-vocals      Skip demucs vocal separation
 #   --no-snap-onsets         Skip onset-snapping
 #   --no-vocal-check         Skip the VAD fallback check on zero-match alignment
+#   --min-match FRACTION     Skip files where fewer lines matched (default 0.6), tag left unchanged
+#   --no-quality-gate        Write the alignment even if too few lines matched
 #   --find-missing-lyrics    Scan for/tag tracks with no LYRICS tag at all
 #   --dump-words             Print the raw ASR word/timestamp transcript
 
