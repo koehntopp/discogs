@@ -23,14 +23,14 @@ directory names). Rows are sorted by album, then disc/track number.
 
 With --suspects, lists the tracks whose synced LRC shows signs of a failed alignment
 (see lrc_format.lrc_suspect_reasons: one_timestamp, shared_timestamps, ends_early,
-junk_glyphs), one row per track, with columns:
+junk_hearts), one row per track, with columns:
     album_artist, album, song, reasons, lines, problem_lines, last_timestamp, length,
     directory, yate_link
 `problem_lines` counts the lines that are wrong on their own (lines stacked 3+ on one
-timestamp, lines with hearts/music notes; see lrc_format.lrc_problem_line_count).
+timestamp, lines with hearts; see lrc_format.lrc_problem_line_count).
 `directory` can be passed to lrc_fix.py; `yate_link` opens the album in Yate (built from
 config tagger_scheme/flacroot/flacroot_local, empty if they are missing). Rows with the most
-reasons come first. Report only: no tag is written. ends_early and junk_glyphs are hints, not proof (a long
+reasons come first. Report only: no tag is written. ends_early and junk_hearts are hints, not proof (a long
 instrumental outro is legitimate).
 
 Usage:

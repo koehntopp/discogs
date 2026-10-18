@@ -15,7 +15,7 @@ If you have multiple versions of the same album (original, remaster, SACD, Qobuz
 - **Tag enrichment** — pulls release date, original release date, and format info from the Discogs API
 - **File organisation** — moves FLACs into `Artist/Album/track_title.flac`, creates MP3 mirrors via ffmpeg
 - **Dynamic Range scoring** — per-track and per-album DR values written as FLAC tags; DR column links to loudness-war.info
-- **Lyrics** — parallel tag reading (8 workers) with lrclib requests sent one at a time under shared adaptive pacing, deferred retry of tracks lrclib could not answer, a warning for every track with no match, LRC upgrade and invalid-LRC detection
+- **Lyrics** — parallel tag reading (8 workers) with lrclib requests sent one at a time under shared adaptive pacing, deferred retry of tracks lrclib could not answer, a warning for every track with no match, TXT-to-LRC upgrade (an existing LRC is never replaced, only corrected in place: headers, characters, capitalization), and a lyrics cache that is written only on change and pruned of stale entries
 - **AcoustID fingerprinting** — generates and stores acoustic fingerprints
 - **rclone sync** — mirrors the FLAC library to a remote destination
 - **Syslog forwarding** — optional structured log forwarding to a Synology log server

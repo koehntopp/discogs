@@ -39,6 +39,8 @@ from lrc_format import (
 	is_invalid_lrc,
 	is_lrc,
 	make_instrumental_lrc,
+	normalize_lrc_text,
+	normalize_text,
 	resolve_artist,
 )
 from lrclib_client import lrclib_headers
@@ -293,20 +295,14 @@ def _fetch_one(
 		marker_lrc = make_instrumental_lrc(artist, title, album, length)
 		return flac_path, artist, title, marker_lrc, 'instrumental', 'fix', discogs_id, track
 
-	had_invalid_lrc = False
-	if existing_lyrics:
-		if is_invalid_lrc(existing_lyrics):
-			logger.warning(
-				f'Found invalid LRC timestamp in FLAC tags for {title}, attempting refetch'
-			)
-			had_invalid_lrc = True
-		elif is_lrc(existing_lyrics):
-			# Re-apply updated headers if missing/stale, and normalize line capitalization
-			updated_lrc = apply_headers(existing_lyrics, artist, title, album, length)
-			updated_lrc = capitalize_lrc(updated_lrc)
-			if updated_lrc != existing_lyrics:
-				return flac_path, artist, title, updated_lrc, 'lrc', 'fix', discogs_id, track
-			return flac_path, artist, title, existing_lyrics, 'lrc', 'skip', discogs_id, track
+	if existing_lyrics and is_lrc(existing_lyrics):
+		# An existing LRC is never replaced by another source (no lrclib request at all); it is only
+		# corrected in place: headers, typographic characters and line capitalization.
+		updated_lrc = apply_headers(existing_lyrics, artist, title, album, length)
+		updated_lrc = capitalize_lrc(normalize_lrc_text(updated_lrc))
+		if updated_lrc != existing_lyrics:
+			return flac_path, artist, title, updated_lrc, 'lrc', 'fix', discogs_id, track
+		return flac_path, artist, title, existing_lyrics, 'lrc', 'skip', discogs_id, track
 
 	stripped_title = strip_trailing_bracket(title)
 	track_names = [title] if stripped_title == title else [title, stripped_title]
@@ -333,7 +329,7 @@ def _fetch_one(
 		body = _lrclib_get(session, pacer, params, title)
 		if body is None:
 			# lrclib is throttling or down, which is not the same as "not found": stop probing
-			# further variants and never write or clear anything for this track.
+			# further variants and never write or remove anything for this track.
 			return flac_path, artist, title, '', 'none', 'failed', discogs_id, track
 		if body:
 			data = body
@@ -364,27 +360,21 @@ def _fetch_one(
 			logger.warning(f'Invalid LRC timestamps from lrclib, skipping: {title} ({artist})')
 		else:
 			lrc = apply_headers(lrc, artist, title, album, length)
-			lrc = capitalize_lrc(lrc)
+			lrc = capitalize_lrc(normalize_lrc_text(lrc))
 			if lrc == existing_lyrics:
 				return flac_path, artist, title, existing_lyrics, 'lrc', 'skip', discogs_id, track
 			return flac_path, artist, title, lrc, 'lrc', 'new', discogs_id, track
 	if data.get('plainLyrics') and not existing_lyrics:
-		txt = capitalize_txt(data['plainLyrics'])
+		txt = capitalize_txt(normalize_text(data['plainLyrics']))
 		return flac_path, artist, title, txt, 'txt', 'new', discogs_id, track
 
-	if had_invalid_lrc:
-		return flac_path, artist, title, '', 'none', 'clear', discogs_id, track
-
-	# Nothing new fetched — fall back to what's on disk, normalizing capitalization if needed.
+	# Nothing new fetched — keep what is on disk (only TXT reaches this point: an existing LRC was
+	# handled above), normalizing characters and capitalization if needed.
 	if existing_lyrics:
-		is_lrc_existing = is_lrc(existing_lyrics)
-		fixed = (
-			capitalize_lrc(existing_lyrics) if is_lrc_existing else capitalize_txt(existing_lyrics)
-		)
-		lyric_type = 'lrc' if is_lrc_existing else 'txt'
+		fixed = capitalize_txt(normalize_text(existing_lyrics))
 		if fixed != existing_lyrics:
-			return flac_path, artist, title, fixed, lyric_type, 'fix', discogs_id, track
-		return flac_path, artist, title, existing_lyrics, lyric_type, 'skip', discogs_id, track
+			return flac_path, artist, title, fixed, 'txt', 'fix', discogs_id, track
+		return flac_path, artist, title, existing_lyrics, 'txt', 'skip', discogs_id, track
 
 	logger.warning(
 		f"No lyrics found at lrclib: '{title}' (artist searched: '{artist}', album: '{album}')"
@@ -411,6 +401,46 @@ def _collect_tracks(flacdir: str) -> list[str]:
 	return tracks
 
 
+def _write_if_changed(path: Path, text: str) -> bool:
+	"""Write text to path unless it already holds exactly that; True if it was written."""
+	try:
+		if path.read_text(encoding='utf-8') == text:
+			return False
+	except (OSError, UnicodeDecodeError):
+		pass
+	path.write_text(text, encoding='utf-8')
+	return True
+
+
+def prune_cache(
+	lyrics_dir: Path, tracks: dict[str, list[tuple[str, str]]], broken_dirs: set[str]
+) -> list[Path]:
+	"""Remove lyrics cache files {id}_{key}.lrc|txt whose key no track of that id has any more.
+
+	tracks maps a directory to the (discogs_id, track) of every track collected from it, including
+	tracks whose lookup failed. The cache key has no disc number, so an id is only pruned when all
+	of its tracks come from one directory (an id spread over disc subfolders, or a partial run of
+	one of them, cannot be judged) and no track of that directory was unreadable.
+	"""
+	keys_by_id: dict[str, set[str]] = {}
+	dirs_by_id: dict[str, set[str]] = {}
+	for directory, entries in tracks.items():
+		for discogs_id, track in entries:
+			if discogs_id:
+				keys_by_id.setdefault(discogs_id, set()).add(track)
+				dirs_by_id.setdefault(discogs_id, set()).add(directory)
+	removed: list[Path] = []
+	for discogs_id, keys in keys_by_id.items():
+		dirs = dirs_by_id[discogs_id]
+		if len(dirs) != 1 or dirs & broken_dirs:
+			continue
+		for path in sorted(lyrics_dir.glob(f'{discogs_id}_*')):
+			if path.suffix in ('.lrc', '.txt') and path.stem[len(discogs_id) + 1 :] not in keys:
+				path.unlink()
+				removed.append(path)
+	return removed
+
+
 def _apply_result(result: tuple, stats: dict, lyrics_dir: Path) -> None:
 	"""Count one finished track and write its lyrics to the FLAC tag and the lyrics cache."""
 	flac_path, artist, title, lyrics, lyric_type, action, discogs_id, track = result
@@ -423,57 +453,44 @@ def _apply_result(result: tuple, stats: dict, lyrics_dir: Path) -> None:
 	else:
 		stats['none'] += 1
 
-	if action in ('new', 'fix', 'clear'):
-		if action == 'new':
-			stats['new'] += 1
-		elif action == 'fix':
-			stats['fixed'] += 1
-		else:  # 'clear'
-			stats['cleared'] += 1
+	if action in ('new', 'fix'):
+		stats['new' if action == 'new' else 'fixed'] += 1
 		try:
 			t = FLAC(flac_path)
 			if not t.tags:
 				t.add_tags()
-			if action == 'clear':
-				if 'LYRICS' in t.tags:
-					del t.tags['LYRICS']
-				t.save()
-				try:
-					os.utime(flac_path, None)
-				except OSError as e:
-					logger.warning(f'Could not touch file mtime for {flac_path}: {e}')
-				logger.warning(f'Invalid LRC cleared (no replacement found): {title} ({artist})')
+			t['LYRICS'] = [lyrics]
+			t.save()
+			try:
+				os.utime(flac_path, None)
+			except OSError as e:
+				logger.warning(f'Could not touch file mtime for {flac_path}: {e}')
+			if lyric_type == 'instrumental':
+				logger.success(f'Instrumental track marked: {title} ({artist})')
+			elif action == 'fix':
+				logger.success(f'Lyrics fixed: {title} ({artist})')
 			else:
-				t['LYRICS'] = [lyrics]
-				t.save()
-				try:
-					os.utime(flac_path, None)
-				except OSError as e:
-					logger.warning(f'Could not touch file mtime for {flac_path}: {e}')
-				if lyric_type == 'instrumental':
-					logger.success(f'Instrumental track marked: {title} ({artist})')
-				elif action == 'fix':
-					logger.success(f'Lyrics fixed: {title} ({artist})')
-				else:
-					kind = 'LRC' if lyric_type == 'lrc' else 'TXT'
-					logger.success(f'{kind} lyrics added: {title} ({artist})')
+				kind = 'LRC' if lyric_type == 'lrc' else 'TXT'
+				logger.success(f'{kind} lyrics added: {title} ({artist})')
 		except OSError as e:
 			logger.error(f'Could not save lyrics for {flac_path}: {e}')
 
 	if discogs_id:
 		lrc_file = lyrics_dir / f'{discogs_id}_{track}.lrc'
 		txt_file = lyrics_dir / f'{discogs_id}_{track}.txt'
-		if action == 'clear' or not lyrics:
+		if not lyrics:
 			lrc_file.unlink(missing_ok=True)
 			txt_file.unlink(missing_ok=True)
-		elif lyrics:
+		else:
 			ext = (
 				'lrc' if lyric_type in ('lrc', 'instrumental') or lyrics.startswith('[') else 'txt'
 			)
 			target_file = lyrics_dir / f'{discogs_id}_{track}.{ext}'
 			other_file = txt_file if ext == 'lrc' else lrc_file
 			other_file.unlink(missing_ok=True)
-			target_file.write_text(lyrics, encoding='utf-8')
+			stats[
+				'cache_written' if _write_if_changed(target_file, lyrics) else 'cache_unchanged'
+			] += 1
 
 
 def _run_pass(
@@ -493,11 +510,11 @@ def _run_pass(
 					result = future.result()
 				except Exception as e:  # noqa: BLE001
 					logger.error(f'Fetch error: {e}')
-					handle(None)
+					handle(None, futures[future])
 					continue
 				if result[5] == 'failed':
 					failed.append(futures[future])
-				handle(result)
+				handle(result, futures[future])
 		except KeyboardInterrupt:
 			logger.warning('Interrupted by user (Ctrl+C). Exiting...')
 			executor.shutdown(wait=False, cancel_futures=True)
@@ -525,8 +542,10 @@ def main() -> None:
 		'instrumental': 0,
 		'new': 0,
 		'fixed': 0,
-		'cleared': 0,
 		'failed': 0,
+		'cache_written': 0,
+		'cache_unchanged': 0,
+		'cache_pruned': 0,
 	}
 	done = 0
 	last_report = time.monotonic()
@@ -555,7 +574,6 @@ def main() -> None:
 		TextColumn('[yellow]Instrumental:[/yellow] {task.fields[instrumental]}'),
 		TextColumn('[magenta]New:[/magenta] {task.fields[new]}'),
 		TextColumn('[blue]Fixed:[/blue] {task.fields[fixed]}'),
-		TextColumn('[red]Cleared:[/red] {task.fields[cleared]}'),
 		TextColumn('[bold red]Failed:[/bold red] {task.fields[failed]}'),
 		TimeRemainingColumn(),
 		console=console,
@@ -565,18 +583,26 @@ def main() -> None:
 
 	orig_stream = _console_handler.stream
 	failed_info: dict[str, tuple[str, str]] = {}
+	cache_tracks: dict[str, list[tuple[str, str]]] = {}  # directory -> (discogs_id, track)
+	broken_dirs: set[str] = set()  # directories with a track whose key is unknown
 
 	def on_interrupt() -> None:
 		if is_tty:
 			_console_handler.stream = orig_stream
 		os._exit(130)
 
-	def handle(result: tuple | None, first_pass: bool) -> None:
+	def handle(result: tuple | None, first_pass: bool, path: str) -> None:
 		nonlocal done, last_report
+		directory = os.path.dirname(path)
+		if result is None or (result[5] == 'error' and not result[6]):
+			broken_dirs.add(directory)  # unreadable track: its cache key is unknown
 		if result is not None:
 			path, artist, title, action = result[0], result[1], result[2], result[5]
+			entries = cache_tracks.setdefault(directory, [])
+			if (result[6], result[7]) not in entries:
+				entries.append((result[6], result[7]))
 			if action == 'failed':
-				# lrclib did not answer: nothing is written or cleared for this track.
+				# lrclib did not answer: nothing is written or removed for this track.
 				if first_pass:
 					stats['failed'] += 1
 				failed_info[path] = (artist, title)
@@ -596,7 +622,7 @@ def main() -> None:
 				f'LRC: {stats["lrc"]} TXT: {stats["txt"]} '
 				f'None: {stats["none"]} Instrumental: {stats["instrumental"]} '
 				f'New: {stats["new"]} Fixed: {stats["fixed"]} '
-				f'Cleared: {stats["cleared"]} Failed: {stats["failed"]}'
+				f'Failed: {stats["failed"]}'
 			)
 			last_report = time.monotonic()
 
@@ -606,7 +632,7 @@ def main() -> None:
 			_console_handler.stream = sys.stderr
 		try:
 			failed = _run_pass(
-				tracks, MAX_WORKERS, session, pacer, lambda r: handle(r, True), on_interrupt
+				tracks, MAX_WORKERS, session, pacer, lambda r, p: handle(r, True, p), on_interrupt
 			)
 			for cooldown, workers in RETRY_ROUNDS:
 				if not failed:
@@ -618,7 +644,7 @@ def main() -> None:
 				time.sleep(cooldown)
 				pacer.close_circuit()
 				failed = _run_pass(
-					failed, workers, session, pacer, lambda r: handle(r, False), on_interrupt
+					failed, workers, session, pacer, lambda r, p: handle(r, False, p), on_interrupt
 				)
 		except KeyboardInterrupt:
 			logger.warning('Interrupted by user (Ctrl+C). Exiting...')
@@ -631,11 +657,18 @@ def main() -> None:
 		artist, title = failed_info.get(path, ('', ''))
 		logger.warning(f'Lyrics not fetched, lrclib unavailable: {artist} - {title} ({path})')
 
+	# Only after a complete run (an interrupted one exits above): drop cache entries of tracks that
+	# no longer exist, e.g. after a TRACKNUMBER retag.
+	for stale in prune_cache(lyrics_dir, cache_tracks, broken_dirs):
+		stats['cache_pruned'] += 1
+		logger.info(f'Removed stale lyrics cache entry: {stale.name}')
+
 	logger.info(
 		f'Done — LRC: {stats["lrc"]} TXT: {stats["txt"]} '
 		f'None: {stats["none"]} Instrumental: {stats["instrumental"]} '
-		f'New: {stats["new"]} Fixed: {stats["fixed"]} Cleared: {stats["cleared"]} '
-		f'Failed: {stats["failed"]}'
+		f'New: {stats["new"]} Fixed: {stats["fixed"]} Failed: {stats["failed"]} — '
+		f'Cache: {stats["cache_written"]} written, {stats["cache_unchanged"]} unchanged, '
+		f'{stats["cache_pruned"]} pruned'
 	)
 
 

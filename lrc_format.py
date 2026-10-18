@@ -25,8 +25,9 @@ BARE_INSTRUMENTAL_PLACEHOLDER = re.compile(r'^[\[(]?\s*instrumental\s*[\])]?$', 
 LA_OR_INSTRUMENTAL_TAG = re.compile(r'^\[(la|instrumental):', re.IGNORECASE)
 INSTRUMENTAL_SUFFIX_LINES = ('[la:zxx]', '[instrumental:true]', '[00:00.00](Instrumental)')
 LRC_BODY_LINE = re.compile(r'^\[(\d{2}):(\d{2})\.(\d{2})\](.*)$')
-# Hearts and music notes inside lyric text: credit/decoration lines from the source text
-JUNK_GLYPHS = re.compile('[\u2661\u266a\u266b\u266c\u2665]')
+# Hearts inside lyric text are credit/decoration from the source text (e.g. '\u2661 J&'). Music notes
+# are NOT junk: a line that is just a note is a legitimate instrumental/music marker.
+JUNK_GLYPHS = re.compile('[\u2661\u2665]')
 SUSPECT_MIN_LINES = 3  # a synced LRC with fewer timestamped lines is not judged
 # A pile-up is a failed alignment: this many lines AND this share of the lines on one timestamp.
 # (2 lines copying the last time is a normal unmatched tail, so a group of 3-4 is not judged.)
@@ -149,6 +150,47 @@ def is_bare_instrumental_placeholder(lyric_lines: list[str]) -> bool:
 	return len(lyric_lines) == 1 and bool(BARE_INSTRUMENTAL_PLACEHOLDER.match(lyric_lines[0]))
 
 
+# Typographic characters mapped to plain ASCII in lyric text. Accented letters, other scripts and
+# music notes are deliberately NOT touched, nor are the joiners U+200C/U+200D (meaningful in some
+# scripts). Header lines ([ti:], [ar:], ...) are never normalized: they come from the user's tags.
+_NORMALIZE_MAP = str.maketrans(
+	{
+		**dict.fromkeys('\u2019\u2018\u201b\u2032', "'"),
+		**dict.fromkeys('\u201c\u201d\u201f\u2033', '"'),
+		**dict.fromkeys('\u2010\u2011\u2012\u2013\u2014', '-'),
+		'\u2026': '...',
+		**dict.fromkeys('\u00a0\u2007\u2009\u202f\u2002\u2003', ' '),
+		# invisible junk: zero-width space, BOM, word joiner, Hangul filler, object replacement
+		**dict.fromkeys('\u200b\ufeff\u2060\u3164\ufffc', None),
+	}
+)
+_ACUTE_BETWEEN_LETTERS = re.compile(r'(?<=[^\W\d_])[\u00b4`](?=[^\W\d_])')  # don´t
+
+
+def normalize_text(text: str) -> str:
+	"""Map typographic quotes, dashes, ellipsis and odd spaces to ASCII and drop invisible junk.
+
+	Idempotent, a no-op on plain text. ´ and ` become ' only between two letters (checked after the
+	invisible characters are removed, so removing one cannot create a new match on a second pass).
+	"""
+	return _ACUTE_BETWEEN_LETTERS.sub("'", text.translate(_NORMALIZE_MAP))
+
+
+def normalize_lrc_text(lrc: str) -> str:
+	"""normalize_text on the lyric text of an LRC: the text after each timestamp and any untimed
+	line, never the id-tag header lines ([ar:], [ti:], [al:], [length:], [re:], ...)."""
+	out = []
+	for line in lrc.splitlines():
+		m = LRC_LINE.match(line)
+		if m:
+			out.append(m.group(1) + normalize_text(m.group(2)))
+		elif ID_TAG_LINE.match(line):
+			out.append(line)
+		else:
+			out.append(normalize_text(line))
+	return '\n'.join(out)
+
+
 def capitalize_line(text: str) -> str:
 	"""Uppercase the first non-whitespace character of a line, preserving leading whitespace."""
 	m = re.match(r'^(\s*)(\S)(.*)$', text, re.DOTALL)
@@ -194,7 +236,7 @@ def lrc_suspect_reasons(lrc: str, length_secs: float = 0.0) -> list[str]:
 	                     SUSPECT_SHARED_SHARE of all lines, share one timestamp
 	  ends_early         last timestamp before SUSPECT_END_RATIO of length_secs (report-only:
 	                     a long instrumental outro is legitimate)
-	  junk_glyphs        hearts/music notes inside lyric lines (report-only: source-text junk)
+	  junk_hearts        hearts inside lyric lines (report-only: source-text junk)
 	"""
 	if INSTRUMENTAL_MARKER in lrc:
 		return []
@@ -212,7 +254,7 @@ def lrc_suspect_reasons(lrc: str, length_secs: float = 0.0) -> list[str]:
 		if length_secs > 0 and times[-1] < SUSPECT_END_RATIO * length_secs:
 			reasons.append('ends_early')
 	if any(JUNK_GLYPHS.search(t) for t in texts):
-		reasons.append('junk_glyphs')
+		reasons.append('junk_hearts')
 	return reasons
 
 
@@ -221,7 +263,7 @@ def lrc_problem_line_count(lrc: str) -> int:
 
 	Counts every line whose timestamp is shared by SUSPECT_STACKED_LINES or more lines (the
 	stacked head/tail of a failed alignment, or every line of a one_timestamp tag) plus every line
-	holding a JUNK_GLYPHS character. A pair of lines on one timestamp is legal and common, so it is
+	holding a heart (JUNK_GLYPHS). A pair of lines on one timestamp is legal and common, so it is
 	not counted; ends_early describes the whole track, so it adds nothing. Same exclusions as
 	lrc_suspect_reasons: instrumental markers and tags with fewer than SUSPECT_MIN_LINES lines.
 	"""

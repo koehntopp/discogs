@@ -131,6 +131,10 @@ tag untouched with a `skip:` message instead: fewer than `--min-match` of the ly
 put 5 or more lines (and at least 20% of them) on one timestamp. `--no-quality-gate` bypasses both.
 `lrc_count.py --suspects` lists existing tags that show these signs.
 
+## Characters
+
+Lyric text is normalized with the shared `lrc_format.normalize_text` (curly quotes, dashes, ellipsis and odd spaces become ASCII; see ADR 0002 section 6), both in the written LRC and when matching lines against the transcript, so a curly apostrophe no longer splits `don’t` into two words.
+
 ## Notes
 
 - First run downloads whisperx/demucs model weights from Hugging Face Hub,

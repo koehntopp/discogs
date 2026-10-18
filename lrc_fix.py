@@ -75,6 +75,7 @@ from lrc_format import (
     build_instrumental_marker,
     capitalize_line,
     lrc_suspect_reasons,
+    normalize_text,
     refresh_headers,
     resolve_artist,
 )
@@ -315,7 +316,9 @@ _WORD_RE = re.compile(r"[^\W_]+(?:'[^\W_]+)*", re.UNICODE)
 
 
 def _tokenize(text: str) -> list[str]:
-    return _WORD_RE.findall(text.lower())
+    # normalize_text first: a curly apostrophe must not split "don’t" into "don" + "t", while the
+    # transcript's "don't" stays one word.
+    return _WORD_RE.findall(normalize_text(text).lower())
 
 
 def match_line_times(lyric_lines: list[str], words: list[dict]) -> list[float | None]:
@@ -492,7 +495,7 @@ def format_lrc_timestamp(seconds: float) -> str:
 
 def build_lrc(id_tags: list[str], lyric_lines: list[str], times: list[float]) -> str:
     timed = (
-        f"{format_lrc_timestamp(t)}{capitalize_line(line)}"
+        f"{format_lrc_timestamp(t)}{capitalize_line(normalize_text(line))}"
         for line, t in zip(lyric_lines, times)
     )
     return "\n".join([*id_tags, *timed])

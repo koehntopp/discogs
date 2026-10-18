@@ -20,7 +20,9 @@ We establish the following architectural refactor:
 
 ### 1. Direct Lyrics Export in `update_lyrics.py`
 * `update_lyrics.py` manages the lyrics cache in `config_dir / 'lyrics'`.
-* When `update_lyrics.py` fetches, updates, or verifies lyrics, it writes `{discogs_id}_{track}.{ext}` directly to `config_dir / 'lyrics'` and removes stale/cleared lyric files.
+* When `update_lyrics.py` fetches, updates, or verifies lyrics, it writes `{discogs_id}_{track}.{ext}` directly to `config_dir / 'lyrics'`. The file is written **only when its content differs**, so unchanged entries keep their modification time (a consumer can use it to detect changes); a tag without lyrics removes its entry, and a type switch removes the other extension.
+* After a complete run, **stale entries are pruned**: for each Discogs ID seen in the run, files whose key no collected track has any more (for example after a `TRACKNUMBER` retag from `8` to `08`) are removed. Tracks whose lookup failed still count as present, so a failed lookup never deletes an entry. An ID is pruned only when all of its tracks in the run come from one directory and none was unreadable, and an interrupted run prunes nothing.
+* **Known limitation**: the key has no disc number. On a multi-disc set whose `TRACKNUMBER` restarts per disc, every disc's track 1 shares `{discogs_id}_1` and the last one processed wins. The key is kept as is for compatibility with existing consumers; such an ID spans several directories, so it is never pruned.
 
 ### 2. Single-Track Scanning in `album_list.py`
 * All track-by-track looping and lyrics disk writing are removed from `album_list.py`.
