@@ -478,7 +478,9 @@ uv run lrc_count.py [<flacdir>] [--output <file.csv>] [--tracks | --suspects]
 
 5. `--suspects` mode: for every synced-LRC track runs `lrc_format.lrc_suspect_reasons` (the same function `lrc_fix.py` uses as its quality gate) and writes one row per track with at least one reason, most reasons first: `one_timestamp` (every line on one timestamp), `shared_timestamps` (5+ lines and at least 20% of the lines on one timestamp), `ends_early` (last timestamp before 50% of the track length) and `junk_glyphs` (hearts/music notes in lyric lines). `ends_early` and `junk_glyphs` are hints, not proof: a long instrumental outro is legitimate. Instrumental markers and LRCs with fewer than 3 timestamped lines are never judged. Heuristics catch pile-ups, not every bad alignment.
 
-**Output columns (`--suspects`):** `album_artist`, `album`, `song`, `reasons`, `lines`, `last_timestamp`, `length`, `directory` (pass `directory` to `lrc_fix.py`)
+**Output columns (`--suspects`):** `album_artist`, `album`, `song`, `reasons`, `lines`, `problem_lines`, `last_timestamp`, `length`, `directory` (pass it to `lrc_fix.py`), `yate_link`
+
+`problem_lines` (`lrc_format.lrc_problem_line_count`) counts the lyric lines that are wrong on their own: every line whose timestamp is shared by 3 or more lines, plus every line with a heart/music-note glyph (counted once). A pair of lines on one timestamp is legal and not counted; `ends_early` describes the whole track and adds nothing, so a track flagged only for it shows 0. `yate_link` is a Yate deep link to the album directory, built like the web UI's tagger link (`tagger_scheme` + the directory with `flacroot` rebased onto `flacroot_local`); it is empty if those `config.py` keys are missing.
 
 **Tags read:** `LYRICS`, `ALBUMARTIST`, `ARTIST`
 

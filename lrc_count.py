@@ -24,9 +24,13 @@ directory names). Rows are sorted by album, then disc/track number.
 With --suspects, lists the tracks whose synced LRC shows signs of a failed alignment
 (see lrc_format.lrc_suspect_reasons: one_timestamp, shared_timestamps, ends_early,
 junk_glyphs), one row per track, with columns:
-    album_artist, album, song, reasons, lines, last_timestamp, length, directory
-Rows with the most reasons come first. Report only: no tag is written. `directory`
-can be passed to lrc_fix.py. ends_early and junk_glyphs are hints, not proof (a long
+    album_artist, album, song, reasons, lines, problem_lines, last_timestamp, length,
+    directory, yate_link
+`problem_lines` counts the lines that are wrong on their own (lines stacked 3+ on one
+timestamp, lines with hearts/music notes; see lrc_format.lrc_problem_line_count).
+`directory` can be passed to lrc_fix.py; `yate_link` opens the album in Yate (built from
+config tagger_scheme/flacroot/flacroot_local, empty if they are missing). Rows with the most
+reasons come first. Report only: no tag is written. ends_early and junk_glyphs are hints, not proof (a long
 instrumental outro is legitimate).
 
 Usage:
@@ -48,7 +52,13 @@ from mutagen.flac import FLAC
 from openpyxl import Workbook
 
 from log import logger
-from lrc_format import INSTRUMENTAL_MARKER, LRC_TIMESTAMP, lrc_body, lrc_suspect_reasons
+from lrc_format import (
+	INSTRUMENTAL_MARKER,
+	LRC_TIMESTAMP,
+	lrc_body,
+	lrc_problem_line_count,
+	lrc_suspect_reasons,
+)
 
 
 def _flactag(song: FLAC, tag: str) -> str:
@@ -148,6 +158,27 @@ def scan_album_tracks(directory: str) -> list[dict]:
 	return rows
 
 
+def tagger_url(directory: str) -> str:
+	"""Yate deep link for an album directory, mirroring webui.py's _tagger_url().
+
+	tagger_scheme + the directory with flacroot rebased onto flacroot_local. Empty if config.py
+	or one of those keys is missing.
+	"""
+	try:
+		import config
+	except ImportError:
+		return ''
+	scheme = getattr(config, 'tagger_scheme', '')
+	flacroot = getattr(config, 'flacroot', '')
+	flacroot_local = getattr(config, 'flacroot_local', flacroot)
+	if not scheme or not directory or not flacroot:
+		return ''
+	rel = (
+		Path(directory).relative_to(flacroot) if directory.startswith(flacroot) else Path(directory)
+	)
+	return f'{scheme}{Path(flacroot_local) / rel}'
+
+
 def _mmss(seconds: float) -> str:
 	return f'{int(seconds) // 60:02d}:{int(seconds) % 60:02d}'
 
@@ -196,9 +227,11 @@ def scan_album_suspects(directory: str) -> list[dict]:
 				'song': _flactag(song, 'TITLE') or filename,
 				'reasons': '; '.join(reasons),
 				'lines': len(times),
+				'problem_lines': lrc_problem_line_count(lyrics),
 				'last_timestamp': _mmss(times[-1]),
 				'length': _mmss(length),
 				'directory': directory,
+				'yate_link': tagger_url(directory),
 				'_n': len(reasons),
 				'_disc': disc,
 				'_track': track,
@@ -333,9 +366,11 @@ def main() -> None:
 			'song',
 			'reasons',
 			'lines',
+			'problem_lines',
 			'last_timestamp',
 			'length',
 			'directory',
+			'yate_link',
 		]
 		rows = [{k: r[k] for k in fieldnames} for r in suspect_rows]
 		write_csv(rows, fieldnames, output_path)

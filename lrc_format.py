@@ -32,6 +32,7 @@ SUSPECT_MIN_LINES = 3  # a synced LRC with fewer timestamped lines is not judged
 # (2 lines copying the last time is a normal unmatched tail, so a group of 3-4 is not judged.)
 SUSPECT_SHARED_TIMESTAMP = 5
 SUSPECT_SHARED_SHARE = 0.2
+SUSPECT_STACKED_LINES = 3  # lines on one timestamp that count as stacked, for problem-line counts
 SUSPECT_END_RATIO = 0.5  # last timestamp before this share of the track length
 
 
@@ -213,3 +214,25 @@ def lrc_suspect_reasons(lrc: str, length_secs: float = 0.0) -> list[str]:
 	if any(JUNK_GLYPHS.search(t) for t in texts):
 		reasons.append('junk_glyphs')
 	return reasons
+
+
+def lrc_problem_line_count(lrc: str) -> int:
+	"""How many lyric lines of a synced LRC are wrong on their own (0 if it is not judged).
+
+	Counts every line whose timestamp is shared by SUSPECT_STACKED_LINES or more lines (the
+	stacked head/tail of a failed alignment, or every line of a one_timestamp tag) plus every line
+	holding a JUNK_GLYPHS character. A pair of lines on one timestamp is legal and common, so it is
+	not counted; ends_early describes the whole track, so it adds nothing. Same exclusions as
+	lrc_suspect_reasons: instrumental markers and tags with fewer than SUSPECT_MIN_LINES lines.
+	"""
+	if INSTRUMENTAL_MARKER in lrc:
+		return 0
+	times, texts = lrc_body(lrc)
+	if len(times) < SUSPECT_MIN_LINES:
+		return 0
+	counts = Counter(times)
+	return sum(
+		1
+		for t, text in zip(times, texts)
+		if counts[t] >= SUSPECT_STACKED_LINES or JUNK_GLYPHS.search(text)
+	)
