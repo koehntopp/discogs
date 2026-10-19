@@ -498,8 +498,8 @@ matching against the known lyric lines, and librosa onset-snapping. No cloud
 APIs, no LLM in the timing path. Supersedes the earlier `align_lyrics.py`
 (deleted; see ADR 0006, now superseded, and ADR 0009).
 
-Full usage, flags, and pipeline details: `README-lrc_fix.md` (own documentation,
-not duplicated here).
+Full usage and flags: `README-lrc_fix.md` (own documentation, not duplicated here).
+Design decisions (pipeline, quality gate, ASR cache, dependency pins): ADR 0009.
 
 **ASR cache:** the demucs/whisperx word timestamps (and vocal onsets) are cached per track in
 `~/.cache/lrc_fix/<discogs_id>_<disc>_<track>.json` (`--cache-dir`, `--no-cache`, `--refresh-cache`), keyed by
@@ -523,7 +523,7 @@ both checks. See ADR 0002 section 6.
 
 **Dependencies:** `mutagen`, `whisperx`, `demucs`, `librosa`, `torch>=2.4,<2.6`, `torchaudio>=2.4,<2.6`, `numpy<2`, `transformers<5`
 
-**Shared with `update_lyrics.py`:** header build/refresh, instrumental marker format, and capitalization normalization live in `lrc_format.py` — see ADR 0002 §6. Both scripts send the same client-identification headers (`User-Agent` and the public `Lrclib-App-Id`) from `lrclib_client.py` — see ADR 0007 §4.
+**Shared with `update_lyrics.py`:** header build/refresh, instrumental marker format, and capitalization normalization live in `lrc_format.py` — see ADR 0002 §6.
 
 ---
 

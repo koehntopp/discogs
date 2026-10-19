@@ -50,12 +50,16 @@ the waveform.
 
 ## Install
 
+`lrc_fix.py` lives in this repository next to `lrc_format.py`, which it imports (the LRC header and
+normalization logic it shares with `update_lyrics.py`), so run it from a checkout rather than copying the
+single file:
+
 ```bash
-curl -O https://raw.githubusercontent.com/<you>/lrc_fix/main/lrc_fix.py
-chmod +x lrc_fix.py
+git clone https://github.com/koehntopp/discogs.git && cd discogs
+./lrc_fix.py --help
 ```
 
-Or just clone the repo.
+Design decisions: [ADR 0009](docs/adr/0009-lrc-fix-local-realignment.md).
 
 ## Usage
 
@@ -139,6 +143,8 @@ gate rejected are cached too, since they stay un-synced and would otherwise be r
   used) costs one demucs pass when they are first needed; the VAD fallback (no line matched) also needs the audio.
 - `--dry-run` still writes the cache; it only protects the `LYRICS` tag.
 
+Why these keys and validity checks: [ADR 0009](docs/adr/0009-lrc-fix-local-realignment.md) section 4.
+
 ## Quality gate
 
 Lines the transcript cannot match get an estimated time: between two matched lines they are
@@ -149,7 +155,8 @@ onto one moment.) Estimated times are still guesses. A weak alignment (and, with
 text, a harmless plain tag replaced by misleading timestamps) is caught by two checks that leave the
 tag untouched with a `skip:` message instead: fewer than `--min-match` of the lyric lines matched, or the result would
 put 5 or more lines (and at least 20% of them) on one timestamp. `--no-quality-gate` bypasses both.
-`lrc_count.py --suspects` lists existing tags that show these signs.
+`lrc_count.py --suspects` lists existing tags that show these signs. Rationale and thresholds:
+[ADR 0009](docs/adr/0009-lrc-fix-local-realignment.md) section 3.
 
 ## Characters
 
@@ -171,8 +178,9 @@ Lyric text is normalized with the shared `lrc_format.normalize_text` (curly quot
   ASR output to match against, not maximally accurate transcription.
 - Standard LRC header lines (`[ar:...]`, `[ti:...]`, `[al:...]`) in the tag
   are preserved as-is and never timestamped. Any of the three that's
-  missing gets filled in from the file's own `ARTIST`/`TITLE`/`ALBUM` tags
-  (when set).
+  missing gets filled in from the file's own tags (when set): `[ar:]` from `ALBUMARTIST`, falling back to
+  `ARTIST` only when it is empty (the same rule `update_lyrics.py` uses), `[ti:]` from `TITLE`, `[al:]`
+  from `ALBUM`, `[length:]` from the audio duration.
 - `[re:https://github.com/koehntopp/lrc_fix]` (the LRC spec's "creator" tag)
   only gets (re)stamped when a run actually changes lyric content — a
   realignment, a completed instrumental marker, etc. A metadata-only refresh
@@ -184,4 +192,4 @@ Lyric text is normalized with the shared `lrc_format.normalize_text` (curly quot
 
 ## License
 
-MIT (or whatever you prefer — update this section).
+Part of the discogs repository; this repository does not contain a license file yet.

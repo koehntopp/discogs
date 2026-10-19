@@ -91,7 +91,8 @@ We establish the following binding rules and standards for all FLAC tag handling
   this logic previously drifted silently (see Artist Source below) — sharing
   the code makes that structurally impossible instead of a bug to catch by
   hand. `lrc_format.py` is pure string-in/string-out with no mutagen/FLAC
-  dependency; each caller still owns its own tag reads.
+  dependency; each caller still owns its own tag reads. The design of `lrc_fix.py`
+  itself is in ADR 0009.
 * **Artist Source**: the "artist" used everywhere — the lrclib.net search
   query, the `[ar:]` LRC header, and log messages — is sourced from
   `ALBUMARTIST`, falling back to `ARTIST` only when `ALBUMARTIST` is empty

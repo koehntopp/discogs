@@ -386,9 +386,8 @@ def alignment_rejection(
 ) -> str | None:
 	"""Why this alignment is too weak to write, or None if it is good enough.
 
-	Unmatched lines later get a copy of a neighbouring line's time (_fill_and_clamp), so a
-	mostly-unmatched alignment would stamp many lines with one timestamp and replace a harmless
-	tag with misleading ones. Lines without any word token at all (a lone "♪" or "***") are
+	Unmatched lines later get an estimated time (_fill_and_clamp), so a mostly-unmatched
+	alignment would replace a harmless tag with mostly guessed timestamps. Lines without any word token at all (a lone "♪" or "***") are
 	not counted, so decoration in the source text cannot sink an otherwise good alignment.
 	"""
 	counted = [t for line, t in zip(lyric_lines, raw_times) if _tokenize(line)]

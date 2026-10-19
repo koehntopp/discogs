@@ -70,6 +70,7 @@ erDiagram
         string ti "header: this track's own TITLE"
         string al "header: this track's own ALBUM"
         string length "header: track duration as mm:ss"
+        string re "header: creator tag; written only by lrc_fix.py, and only when it changed the lyric content"
         string la "= zxx (no linguistic content); instrumental tracks only"
         boolean instrumental_true "sentinel update_lyrics.py checks to skip re-fetching; instrumental tracks only"
         string lyric_lines "MM:SS.xx-prefixed synced LRC lines, or plain unsynced text"

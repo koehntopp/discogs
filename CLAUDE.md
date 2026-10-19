@@ -24,6 +24,7 @@ metadata, paired with a FastAPI/HTMX web UI. Full CLI/API/tag reference: `SPEC.m
 - **No Unapproved Edits**: You are strictly prohibited from modifying any source code files, configurations, or running write/exec commands until the user has explicitly approved the implementation plan.
 - **Discuss First**: Always discuss your proposed design choices with the user and wait for approval before shifting from the planning/research phase to the execution phase.
 - **Mandatory Automatic Documentation Synchronization**: After every code change, specification and documentation files (`SPEC.md`, `README.md`, `docs/tag-schema.md`, and ADRs in `docs/adr/`) MUST be automatically updated to reflect the new codebase state, ensuring documentation is never outdated. In particular: `README.md` whenever setup requirements, config keys, scripts, or CLI options change; `docs/tag-schema.md`'s Mermaid ERD whenever a FLAC tag is added, removed, or its derivation changes.
+- **`lrc_fix.py` / `lrc_format.py` Documentation Map**: `lrc_fix.py` has its own documentation set, and a change to `lrc_fix.py` or `lrc_format.py` MUST update, in the same commit: `README-lrc_fix.md` (the options table and the matching section), the `lrc_fix.py` section of `SPEC.md`, and `docs/adr/0009-lrc-fix-local-realignment.md` (edit it when a decision changes; when a decision is replaced, write a new ADR and mark 0009 Superseded). A change to the contract `lrc_format.py` shares with `update_lyrics.py` also updates ADR 0002 section 6; a change to the tags `lrc_fix.py` writes also updates `docs/tag-schema.md`. Run `uv run check_docs.py` before committing: it fails when a `lrc_fix.py` flag is missing from the README options table (or the table lists a flag that no longer exists), or a package pinned in `lrc_fix.py` is missing from the SPEC dependencies line.
 - **Mandatory Meaningful Git Commits & Push**: After completing every code change and verifying tests/linting, all modified files MUST be committed with a concise, descriptive, and meaningful Git commit message summarizing the work completed, then immediately pushed to the `github` remote (`git push github main`). Do not let commits pile up unpushed.
 - **No Production Data Testing**: NEVER run verification tests or test code on active/production library data (e.g. `/Volumes/FLAC`). When required, copy a small subset of the target files to a temporary directory (e.g., `/tmp`) on a completely different root path before testing.
 
@@ -68,9 +69,10 @@ metadata, paired with a FastAPI/HTMX web UI. Full CLI/API/tag reference: `SPEC.m
 - `calculate_dr.py`: Dynamic Range calculation per track and album (`drmeter`).
 - `calculate_fp.py`: AcoustID acoustic fingerprint generation (`fpcalc` / `pyacoustid`).
 - `convert_opus.py`: Transcodes FLAC to Opus format.
-- `lrc_fix.py`: Local (no cloud API) LRC realignment via demucs vocal isolation + whisperx transcription + onset snapping. Own docs: `README-lrc_fix.md`.
+- `lrc_fix.py`: Local (no cloud API) LRC realignment via demucs vocal isolation + whisperx transcription + onset snapping. Own docs: `README-lrc_fix.md`; design: ADR 0009.
 - `lrc_format.py`: Shared LRC id-tag/header formatting (no CLI) — imported by `update_lyrics.py`, `lrc_fix.py`, and `lrc_count.py`.
 - `lrclib_client.py`: Shared lrclib.net client identification (`User-Agent` + public `Lrclib-App-Id`, no CLI) — imported by `update_lyrics.py` and `lrclib_submitter.py`. Limits/requirements: ADR 0007 §4.
+- `check_docs.py`: Checks that `lrc_fix.py`'s flags and dependency pins match `README-lrc_fix.md` and `SPEC.md` (no config needed).
 - `log.py`: Central structured logging (`structlog`).
 - `SPEC.md`: Full CLI, API, tag contract, and web UI specification.
 - `docs/tag-schema.md`: Mermaid ERD of the FLAC tag relationships (derived reference for ADR 0002/0008).
@@ -86,6 +88,7 @@ Detailed architectural standards and design contracts, loaded automatically as p
 @docs/adr/0005-mp3-transcoding-and-library-comparison.md
 @docs/adr/0007-lrclib-lyrics-submission-proof-of-work.md
 @docs/adr/0008-roon-specific-tag-conventions.md
+@docs/adr/0009-lrc-fix-local-realignment.md
 
 ## Approach
 - Read existing files before writing. Don't re-read unless changed.
