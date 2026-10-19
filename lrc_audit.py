@@ -147,6 +147,7 @@ COLUMNS = [
 	'length',
 	'tag_reasons',
 	'tag_lines',
+	'tag_words',
 	'tag_problem_lines',
 	'tag_last_ts',
 	'tag_origin',
@@ -162,6 +163,8 @@ COLUMNS = [
 	'word_precision',
 	'lrclib_status',
 	'lrclib_instrumental',
+	'lrclib_lines',
+	'lrclib_words',
 	'lrclib_has_synced',
 	'lrclib_reasons',
 	'lrclib_same_timestamps',
@@ -358,7 +361,72 @@ def run_lrc_fix(path: str, args: argparse.Namespace) -> tuple[int, str, str]:
 
 def status_lines(stdout: str) -> list[str]:
 	"""lrc_fix's own progress lines (indented), not the LRC it prints."""
-	return [line.strip() for line in stdout.splitlines() if line.startswith('   ')]
+	lines = [line.strip() for line in stdout.splitlines() if line.startswith('   ')]
+	return [line for line in lines if not line.startswith('would ')]  # a dry run: noise here
+
+
+def percent(value: float | None) -> str:
+	return '-' if value is None else f'{value:.0%}'
+
+
+def summary_lines(row: dict) -> list[str]:
+	"""The tag / lrclib / whisper comparison of one analysed track, for the transcribe log."""
+	origin = {
+		'lrc_fix': 'written by lrc_fix',
+		'other_tool': 'written by another tool',
+		'no_re_tag': 'no [re:] header',
+	}.get(row['tag_origin'], row['tag_origin'])
+	reasons = '; '.join(row['tag_reasons'])
+	out = [
+		f'tag:     {row["tag_lines"]} lines, {row["tag_words"]} words ({origin}); suspect: {reasons}'
+	]
+	status = row['lrclib_status']
+	like = f'text like tag: {percent(row["lrclib_text_similarity"])}'
+	if status == 'found' and row['lrclib_has_synced']:
+		same = 'yes' if row['lrclib_same_timestamps'] else 'no'
+		own = '; '.join(row['lrclib_reasons']) or 'ok'
+		out.append(
+			f'lrclib:  found, {row["lrclib_lines"]} synced lines, {row["lrclib_words"]} words; '
+			f'same timestamps as tag: {same}; its own check: {own}; {like}'
+		)
+	elif status == 'found' and row['lrclib_lines']:
+		out.append(
+			f'lrclib:  found, plain text only ({row["lrclib_lines"]} lines, '
+			f'{row["lrclib_words"]} words); {like}'
+		)
+	elif status == 'found':
+		out.append('lrclib:  found, but without lyrics (instrumental?)')
+	elif status == 'error':
+		out.append('lrclib:  lookup failed (analyze will retry)')
+	else:
+		out.append(f'lrclib:  {status.replace("_", " ")}')
+	if row.get('transcript_words') is not None:
+		out.append(f'whisper: {row["transcript_words"]} words ({row["words_per_min"]:.0f}/min)')
+		out.append(
+			f'match:   {row["lines_matched"]} of {row["lines_counted"]} lines in order '
+			f"({percent(row['line_match'])}), {percent(row['bigram_recall'])} of the lyric's word "
+			'pairs sung'
+		)
+		fix = row['fix_status'] + (f', {row["fix_detail"]}' if row['fix_detail'] else '')
+		out.append(f"verdict: {row['category']} (today's lrc_fix: {fix})")
+	else:
+		out.append(f'verdict: {row["category"]}')
+	return out
+
+
+def print_tally(subset: list[dict], args: argparse.Namespace) -> None:
+	"""Verdict counts over the given targets, from what is cached on disk (no network)."""
+	tally: Counter[str] = Counter()
+	for t in subset:
+		try:
+			row = analyze_target(t, args, load_lrclib_cached(args.work_dir, t['path']))
+		except Exception:  # noqa: BLE001  # one odd track must not hide the tally
+			tally['(could not analyse)'] += 1
+			continue
+		tally[row['category']] += 1
+	print('== verdicts so far (lrclib answers as cached):')
+	for category, n in tally.most_common():
+		print(f'   {n:4d}  {category}')
 
 
 def cmd_transcribe(args: argparse.Namespace) -> None:
@@ -377,7 +445,10 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
 		f'{len(todo)} to do'
 	)
 	if not todo:
+		print_tally(subset, args)
 		return
+	session = requests.Session()
+	pacer = update_lyrics.Pacer()
 	awake = None if args.no_caffeinate else start_caffeinate()
 	args.work_dir.mkdir(parents=True, exist_ok=True)
 	log = (args.work_dir / 'transcribe.log').open('a', encoding='utf-8')
@@ -402,6 +473,19 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
 				print(f'     FAILED: {why}')
 				with failed_path.open('a', encoding='utf-8') as fh:
 					fh.write(f'{t["path"]}\t{why}\n')
+			try:
+				if args.skip_lrclib:
+					entry = None
+				else:
+					try:
+						entry = lrclib_lookup(t, args, session, pacer)
+					except Exception as exc:  # noqa: BLE001  # the long run must survive a bad lookup
+						print(f'     lrclib lookup failed: {exc}')
+						entry = {'status': 'error', 'body': {}}
+				for line in summary_lines(analyze_target(t, args, entry)):
+					print(f'     {line}')
+			except Exception as exc:  # noqa: BLE001  # the summary is a convenience, never fatal
+				print(f'     (no summary: {exc})')
 			elapsed = time.monotonic() - started
 			eta = elapsed / i * (len(todo) - i)
 			print(f'     {time.monotonic() - t0:.0f} s; eta {eta / 3600:.1f} h', flush=True)
@@ -413,6 +497,7 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
 		if awake:
 			awake.terminate()
 	print(f'== transcribe done: {len(todo) - failed} ok, {failed} failed (see {failed_path})')
+	print_tally(subset, args)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -533,49 +618,65 @@ def lrclib_path(work_dir: Path, track_path: str) -> Path:
 	return work_dir / 'lrclib' / f'{digest}.json'
 
 
+def load_lrclib_cached(work_dir: Path, track_path: str) -> dict | None:
+	cache = lrclib_path(work_dir, track_path)
+	if not cache.exists():
+		return None
+	try:
+		return json.loads(cache.read_text(encoding='utf-8'))
+	except (OSError, ValueError):
+		return None
+
+
+def lrclib_lookup(
+	t: dict, args: argparse.Namespace, session: requests.Session, pacer: update_lyrics.Pacer
+) -> dict:
+	"""Fresh lrclib answer for one track, cached on disk. Same lookup order as update_lyrics."""
+	if not args.refetch:
+		cached = load_lrclib_cached(args.work_dir, t['path'])
+		if cached:
+			return cached
+	title = t['title']
+	stripped = update_lyrics.strip_trailing_bracket(title)
+	names = [title] if stripped == title else [title, stripped]
+	duration = str(round(t['length']))
+	variants = [
+		v
+		for name in names
+		for v in (
+			{
+				'artist_name': t['artist'],
+				'track_name': name,
+				'album_name': t['album'],
+				'duration': duration,
+			},
+			{'artist_name': t['artist'], 'track_name': name, 'duration': duration},
+		)
+	]
+	entry = {'status': 'not_found', 'body': {}, 'fetched': datetime.now().isoformat()}
+	for params in variants:
+		body = update_lyrics._lrclib_get(session, pacer, params, title)
+		if body is None:
+			entry['status'] = 'error'
+			break
+		if body:
+			entry = {'status': 'found', 'body': body, 'fetched': entry['fetched']}
+			break
+	if entry['status'] != 'error':  # an error is retried by the next lookup
+		cache = lrclib_path(args.work_dir, t['path'])
+		cache.parent.mkdir(parents=True, exist_ok=True)
+		cache.write_text(json.dumps(entry, ensure_ascii=False), encoding='utf-8')
+	return entry
+
+
 def fetch_lrclib(targets: list[dict], args: argparse.Namespace) -> dict[str, dict]:
-	"""Fresh lrclib answer per track, cached on disk. Same lookup order as update_lyrics."""
+	"""Fresh lrclib answer per track (cached on disk), one request at a time."""
 	session = requests.Session()
 	pacer = update_lyrics.Pacer()
 	out: dict[str, dict] = {}
-	fetched = 0
 	for i, t in enumerate(targets, 1):
-		cache = lrclib_path(args.work_dir, t['path'])
-		if cache.exists() and not args.refetch:
-			out[t['path']] = json.loads(cache.read_text(encoding='utf-8'))
-			continue
-		title = t['title']
-		stripped = update_lyrics.strip_trailing_bracket(title)
-		names = [title] if stripped == title else [title, stripped]
-		duration = str(round(t['length']))
-		variants = [
-			v
-			for name in names
-			for v in (
-				{
-					'artist_name': t['artist'],
-					'track_name': name,
-					'album_name': t['album'],
-					'duration': duration,
-				},
-				{'artist_name': t['artist'], 'track_name': name, 'duration': duration},
-			)
-		]
-		entry = {'status': 'not_found', 'body': {}, 'fetched': datetime.now().isoformat()}
-		for params in variants:
-			body = update_lyrics._lrclib_get(session, pacer, params, title)
-			if body is None:
-				entry['status'] = 'error'
-				break
-			if body:
-				entry = {'status': 'found', 'body': body, 'fetched': entry['fetched']}
-				break
-		if entry['status'] != 'error':  # an error is retried by the next analyze
-			cache.parent.mkdir(parents=True, exist_ok=True)
-			cache.write_text(json.dumps(entry, ensure_ascii=False), encoding='utf-8')
-		out[t['path']] = entry
-		fetched += 1
-		if fetched % 25 == 0:
+		out[t['path']] = lrclib_lookup(t, args, session, pacer)
+		if i % 25 == 0:
 			print(f'   lrclib: {i}/{len(targets)}', flush=True)
 	return out
 
@@ -588,6 +689,8 @@ def compare_lrclib(t: dict, entry: dict | None) -> dict:
 	"""The lrclib-derived columns for one track."""
 	res = {
 		'lrclib_status': entry['status'] if entry else 'skipped',
+		'lrclib_lines': None,
+		'lrclib_words': None,
 		'lrclib_instrumental': '',
 		'lrclib_has_synced': False,
 		'lrclib_reasons': [],
@@ -610,8 +713,10 @@ def compare_lrclib(t: dict, entry: dict | None) -> dict:
 		res['lrclib_reasons'] = lrc_suspect_reasons(synced, t['length'])
 		res['lrclib_same_timestamps'] = same_times(tag_times, l_times)
 		res['lrclib_text_similarity'] = similarity(tag_texts, l_texts)
+		res['lrclib_lines'], res['lrclib_words'] = len(l_texts), len(tokens(l_texts))
 	elif plain:
 		res['lrclib_text_similarity'] = similarity(tag_texts, plain.splitlines())
+		res['lrclib_lines'], res['lrclib_words'] = len(plain.splitlines()), len(tokens([plain]))
 	return res
 
 
@@ -630,6 +735,7 @@ def analyze_target(t: dict, args: argparse.Namespace, entry: dict | None) -> dic
 		'tag_problem_lines': t['problem_lines'],
 		'tag_last_ts': round(t['last_ts'], 1),
 		'tag_origin': t['origin'],
+		'tag_words': len(tokens(lrc_body(t['lyrics'])[1])),
 		**compare_lrclib(t, entry),
 	}
 	state, payload = cache_state(t, args)
