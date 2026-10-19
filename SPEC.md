@@ -501,6 +501,10 @@ APIs, no LLM in the timing path. Supersedes the earlier `align_lyrics.py`
 Full usage, flags, and pipeline details: `README-lrc_fix.md` (own documentation,
 not duplicated here).
 
+**ASR cache:** the demucs/whisperx word timestamps (and vocal onsets) are cached per track in
+`~/.cache/lrc_fix/<discogs_id>_<disc>_<track>.json` (`--cache-dir`, `--no-cache`, `--refresh-cache`), keyed by
+whisper model, language, compute type, vocal isolation and the FLAC's sample count; lyric text is never cached.
+
 **Unmatched lines:** a line the transcript cannot match gets an estimated time: interpolated between
 matched lines, and spread at the song's median seconds-per-line (at most 8 s, kept inside the track
 length) before the first and after the last matched line, so timestamps are distinct and strictly

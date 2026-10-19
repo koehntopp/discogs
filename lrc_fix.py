@@ -32,6 +32,11 @@ Sequence alignment grounds every timestamp in an actual matched ASR word.
 If alignment finds zero matches at all, that's checked against silero-vad
 as a second opinion before assuming the tag is just mislabeled.
 
+The demucs/whisperx output (word timestamps, vocal onsets) depends only on
+the audio, so it is cached per track in ~/.cache/lrc_fix/ (see --cache-dir,
+--no-cache, --refresh-cache): re-running after editing the tag or changing
+--min-match skips the slow part. Lyric text is never cached.
+
 --find-missing-lyrics is a separate mode: scans for files with no LYRICS
 tag at all and uses VAD alone (no transcription needed) to tag genuine
 instrumentals automatically, while logging the rest as needing lyrics
@@ -49,6 +54,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import json
 import logging
 import os
 import re
@@ -520,6 +526,73 @@ def write_lyrics_tag(flac: FLAC, new_lrc: str, dry_run: bool) -> None:
     flac.save()
 
 
+CACHE_VERSION = 1
+DEFAULT_CACHE_DIR = Path.home() / ".cache" / "lrc_fix"
+
+
+def _leading_int(value: str, default: int | None) -> int | None:
+    """'7/12' -> 7, '07' -> 7; default if not a number."""
+    try:
+        return int(value.split("/")[0].strip())
+    except ValueError:
+        return default
+
+
+def cache_path(flac: FLAC, cache_dir: Path) -> Path | None:
+    """<discogs_id>_<disc>_<track>.json, or None when the file can't be keyed
+    (no usable DISCOGS_RELEASE_ID or TRACKNUMBER) - those files are never cached."""
+    discogs_id = _flac_value(flac, "DISCOGS_RELEASE_ID").strip()
+    track = _leading_int(_flac_value(flac, "TRACKNUMBER"), None)
+    if not discogs_id.isdigit() or track is None:
+        return None
+    disc = _leading_int(_flac_value(flac, "DISCNUMBER"), 1)
+    return cache_dir / f"{discogs_id}_{disc}_{track}.json"
+
+
+def cache_key(args: argparse.Namespace, flac: FLAC) -> dict:
+    """Everything the cached ASR output depends on besides the lyric text. The
+    sample count/rate (not mtime, which every tag write changes) catches a
+    replaced rip that reuses the same Discogs ID and track number."""
+    return {
+        "version": CACHE_VERSION,
+        "whisper_model": args.whisper_model,
+        "language": args.language,
+        "compute_type": args.compute_type,
+        "isolate_vocals": not args.no_isolate_vocals,
+        "sample_rate": getattr(flac.info, "sample_rate", None),
+        "total_samples": getattr(flac.info, "total_samples", None),
+    }
+
+
+def load_cache(path: Path, key: dict) -> dict | None:
+    """The cached payload if it exists and every key field matches, else None.
+    A missing, unreadable or corrupt file is a miss, never an error."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("words"), list):
+        return None
+    if any(data.get(k) != v for k, v in key.items()):
+        return None
+    if data.get("onsets") is not None and not isinstance(data["onsets"], list):
+        return None
+    return data
+
+
+def save_cache(path: Path, key: dict, words: list[dict], onsets: list[float] | None) -> None:
+    """Write via a temp file + os.replace, so an interrupted run never leaves a
+    half-written cache file. A failure to write only costs the speedup."""
+    tmp_path = path.with_name(path.name + ".tmp")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {**key, "words": words, "onsets": onsets}
+        tmp_path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp_path, path)
+    except OSError as exc:
+        print(f"   warning: could not write cache {path}: {exc}", file=sys.stderr)
+
+
 def process_file(path: Path, args: argparse.Namespace, index: int, total: int) -> None:
     print(f"== [{index}/{total}] {path}")
     flac = FLAC(path)
@@ -546,15 +619,37 @@ def process_file(path: Path, args: argparse.Namespace, index: int, total: int) -
         return
     id_tags = ensure_id_tags(id_tags, flac)
 
-    with tempfile.TemporaryDirectory(prefix="lrc_fix_") as tmp:
-        audio_path = path
-        if not args.no_isolate_vocals:
-            print(f"   isolating vocals (demucs, {args.jobs} job(s))...")
-            audio_path = separate_vocals(path, args.device, args.jobs, Path(tmp))
+    cache_file = None if args.no_cache else cache_path(flac, args.cache_dir)
+    key = cache_key(args, flac)
+    cached = None
+    if cache_file and not args.refresh_cache:
+        cached = load_cache(cache_file, key)
+    words = cached["words"] if cached else None
+    onsets = cached.get("onsets") if cached else None
+    if cached:
+        print("   cache hit (skipping demucs/whisperx)")
+    elif cache_file:
+        print("   cache miss")
 
-        print(f"   transcribing ({args.whisper_model}, {args.device})...")
-        words = transcribe_words(audio_path, args.whisper_model, args.device,
-                                  args.compute_type, args.language)
+    with tempfile.TemporaryDirectory(prefix="lrc_fix_") as tmp:
+        audio: dict[str, Path] = {}
+
+        def get_audio() -> Path:
+            # demucs runs at most once per file, and only if something below needs the audio
+            if "path" not in audio:
+                audio["path"] = path
+                if not args.no_isolate_vocals:
+                    print(f"   isolating vocals (demucs, {args.jobs} job(s))...")
+                    audio["path"] = separate_vocals(path, args.device, args.jobs, Path(tmp))
+            return audio["path"]
+
+        if words is None:
+            audio_path = get_audio()
+            print(f"   transcribing ({args.whisper_model}, {args.device})...")
+            words = transcribe_words(audio_path, args.whisper_model, args.device,
+                                      args.compute_type, args.language)
+            if words and cache_file:
+                save_cache(cache_file, key, words, None)
 
         if not words:
             print("   skip: whisperx produced no word timestamps")
@@ -569,7 +664,7 @@ def process_file(path: Path, args: argparse.Namespace, index: int, total: int) -
 
         if not args.no_vocal_check and all(t is None for t in raw_times):
             print("   no lines matched - checking for vocal activity (VAD)...")
-            if not has_speech(audio_path):
+            if not has_speech(get_audio()):
                 print("   warning: no lines matched and no vocals detected (VAD) - "
                       "possibly mislabeled instrumental; tag left unchanged")
                 return
@@ -580,10 +675,13 @@ def process_file(path: Path, args: argparse.Namespace, index: int, total: int) -
                 print(f"   skip: {reason} - tag left unchanged")
                 return
 
-        onsets = []
-        if not args.no_snap_onsets:
+        if args.no_snap_onsets:
+            onsets = []
+        elif onsets is None:
             print("   detecting vocal onsets...")
-            onsets = detect_onsets(audio_path)
+            onsets = detect_onsets(get_audio())
+            if cache_file:
+                save_cache(cache_file, key, words, onsets)
 
     times = finalize_times(raw_times, onsets, float(flac.info.length) if flac.info else None)
 
@@ -696,9 +794,18 @@ def main() -> int:
                               "as such) from tracks that just need lyrics fetched (logged)")
     parser.add_argument("--dump-words", action="store_true",
                          help="print the raw ASR word/timestamp transcript for debugging")
+    parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE_DIR, metavar="PATH",
+                         help="where the demucs/whisperx results are cached, one JSON file per "
+                              "track keyed by Discogs ID/disc/track (default ~/.cache/lrc_fix)")
+    parser.add_argument("--no-cache", action="store_true",
+                         help="neither read nor write the demucs/whisperx cache")
+    parser.add_argument("--refresh-cache", action="store_true",
+                         help="ignore existing cache entries and rewrite them")
     args = parser.parse_args()
     if not 0.0 <= args.min_match <= 1.0:
         parser.error("--min-match must be between 0 and 1")
+    if args.no_cache and args.refresh_cache:
+        parser.error("--no-cache and --refresh-cache are mutually exclusive")
 
     files = find_flac_files(args.path)
     if not files:

@@ -118,6 +118,26 @@ always processes it. The tool logs `[i/N] <path>` as each file starts.
 | `--no-quality-gate` | off | Write the alignment even when too few lines matched or the result piles lines onto one timestamp |
 | `--find-missing-lyrics` | off | Scan for files with no `LYRICS` tag; VAD-tag instrumentals, log the rest |
 | `--dump-words` | off | Print the raw ASR word/timestamp transcript (debugging) |
+| `--cache-dir` | `~/.cache/lrc_fix` | Where demucs/whisperx results are cached |
+| `--no-cache` | off | Neither read nor write the cache |
+| `--refresh-cache` | off | Ignore existing cache entries and rewrite them |
+
+## ASR cache
+
+demucs and whisperx take about a minute per track on CPU, and their output depends only on the audio, not on the
+lyric text. Each processed track therefore stores its word timestamps (and, once computed, the vocal onsets) in
+`~/.cache/lrc_fix/<discogs_id>_<disc>_<track>.json`, so re-running after you edit the `LYRICS` tag, change
+`--min-match` or use `--no-quality-gate` skips demucs and whisperx (`cache hit` in the output). Tracks the quality
+gate rejected are cached too, since they stay un-synced and would otherwise be redone on every run.
+
+- Files without a numeric `DISCOGS_RELEASE_ID` or without a `TRACKNUMBER` are never cached. `disc` defaults to 1;
+  `7/12` and `07` both mean track 7.
+- An entry is only used if the whisper model, `--language`, `--compute-type`, vocal isolation on/off, and the FLAC's
+  sample rate and total sample count all match the current run; anything else is a miss. (The sample count, not the
+  modification time, so tag edits do not invalidate it but a replaced rip does.) A missing or corrupt file is a miss.
+- Onsets are cached once computed. An entry without them (the track was gated out earlier, or `--no-snap-onsets` was
+  used) costs one demucs pass when they are first needed; the VAD fallback (no line matched) also needs the audio.
+- `--dry-run` still writes the cache; it only protects the `LYRICS` tag.
 
 ## Quality gate
 
