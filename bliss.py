@@ -379,7 +379,7 @@ def checkMP3() -> None:
 						logger.warning(f'FLAC file newer - deleting {sartist} - {salbumtitle}')
 						shutil.rmtree(mp3dir)
 
-				except Exception as e:
+				except Exception as e:  # noqa: BLE001
 					logger.error(f'Error processing directory {mp3dir}: {e}')
 					continue
 

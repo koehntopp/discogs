@@ -69,7 +69,6 @@ def discogs_fetch(fn, *args, retries: int = 3, backoff: float = 60.0):
 import io
 
 import discogs_client
-
 from mutagen.flac import Picture
 from PIL import Image, ImageFile
 
@@ -133,7 +132,7 @@ def resize_covers(directory: str, max_size: int = _cover_max_size) -> None:
 				success(
 					f'Album art resized {orig_size} → {new_pictures[-1].width}x{new_pictures[-1].height} in {album_name}'
 				)
-		except Exception as e:
+		except Exception as e:  # noqa: BLE001
 			logger.warning(f'Cover resize failed for {flac_path}: {e}')
 
 
@@ -153,12 +152,12 @@ def flactag(song: FLAC | dict, tag: str, required: bool = False) -> str:
 	if not isinstance(tags, dict):
 		try:
 			tags = dict(tags)
-		except Exception:
+		except Exception:  # noqa: BLE001
 			tags = {}
 
 	# Try exact key or uppercase/lowercase key
 	for k in (tag, tag.upper(), tag.lower()):
-		if k in tags and tags[k]:
+		if tags.get(k):
 			val = tags[k]
 			return str(val[0]) if isinstance(val, (list, tuple)) else str(val)
 
@@ -211,7 +210,7 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 			{k.upper(): [str(x) for x in v] for k, v in audio.tags.items()} if audio.tags else {}
 		)
 		first_sample_rate = audio.info.sample_rate if audio.info else 44100
-	except Exception as e:
+	except Exception as e:  # noqa: BLE001
 		logger.warning(f'Skipping unreadable file {first_flac_path}: {e}')
 		return
 
@@ -338,7 +337,7 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 			country = discogs_fetch(lambda: drelease.country.strip())
 			if country:
 				new_tags['ALBUM_RELEASE_COUNTRY'] = [country]
-		except Exception:  # noqa: BLE001
+		except Exception:  # noqa: BLE001, S110  # optional tag: skipped when Discogs has no value
 			pass
 
 		try:
@@ -347,7 +346,7 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 				label_name = labels[0].name.strip()
 				if label_name:
 					new_tags['ALBUM_RELEASE_LABEL'] = [label_name]
-		except Exception:  # noqa: BLE001
+		except Exception:  # noqa: BLE001, S110  # optional tag: skipped when Discogs has no value
 			pass
 
 		managed_optional = [
@@ -408,12 +407,12 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 						audio.save()
 						try:
 							os.utime(fullfilename, None)
-						except Exception as e:
+						except Exception as e:  # noqa: BLE001
 							logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
 						flac_files += 1
-					except Exception as e:
+					except Exception as e:  # noqa: BLE001
 						logger.warning(f'Could not save tags for {fullfilename}: {e}')
-			except Exception as e:
+			except Exception as e:  # noqa: BLE001
 				logger.warning(f'Skipping unreadable file {fullfilename}: {e}')
 
 		display_title = f'{album_name} [{version_str}]' if version_str else album_name

@@ -75,7 +75,7 @@ def main() -> None:
 		'Album=true\n'
 		'TagMode=i\n'
 	)
-	preset_file = tempfile.NamedTemporaryFile(
+	preset_file = tempfile.NamedTemporaryFile(  # noqa: SIM115  # delete=False on purpose: removed explicitly in the cleanup path
 		mode='w', suffix='.ini', delete=False, prefix='rsgain_'
 	)
 	preset_file.write(preset_ini)
@@ -113,11 +113,11 @@ def main() -> None:
 		for name, p in parallel:
 			try:
 				p.kill()
-			except Exception:  # noqa: BLE001
+			except Exception:  # noqa: BLE001, S110  # best-effort cleanup while interrupted
 				pass
 		try:
 			os.unlink(preset_file.name)
-		except Exception:  # noqa: BLE001
+		except Exception:  # noqa: BLE001, S110  # best-effort cleanup while interrupted
 			pass
 		os._exit(130)
 

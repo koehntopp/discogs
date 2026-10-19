@@ -41,7 +41,7 @@ def walkdirs(fixdir: str) -> None:
 				lyrics = str(audio.tags['LYRICS'][0]).strip()
 				lyricscloud += lyrics
 				print(fullfilename)
-		except Exception:  # noqa: BLE001
+		except Exception:  # noqa: BLE001, S110  # files without a readable LYRICS tag are skipped
 			pass
 
 

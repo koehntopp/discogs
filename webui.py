@@ -78,7 +78,7 @@ def _config_dir() -> Path:
 			from config import config_dir
 
 			p = Path(config_dir)
-		except Exception:
+		except Exception:  # noqa: BLE001
 			p = Path('.')
 	p.mkdir(parents=True, exist_ok=True)
 	return p
@@ -866,7 +866,7 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 			else:
 				logger.info(f'read_album_dir: no pictures in {flac_path}')
 				row['Cover Art'] = ''
-		except Exception as e:
+		except Exception as e:  # noqa: BLE001
 			logger.warning(f'cover art read failed for {album_dir}: {e}')
 			row['Cover Art'] = ''
 		row['_DIRECTORY_PATH'] = album_dir
@@ -883,7 +883,7 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 					try:
 						audio = FLAC(str(entry / first_flac))
 						album_artist = audio.tags.get('ALBUMARTIST', [None])[0]
-					except Exception:
+					except Exception:  # noqa: BLE001, S110  # album artist is optional here
 						pass
 				if album_artist:
 					break
@@ -976,7 +976,7 @@ async def lyrics_run():
 
 	logger.info('lyrics: starting update')
 	proc = _set_proc(
-		subprocess.Popen(
+		subprocess.Popen(  # noqa: ASYNC220  # quick fork/exec; output is read in a worker thread
 			['uv', 'run', str(SCRIPTS_DIR / 'update_lyrics.py'), str(flacroot)],
 			stdout=subprocess.PIPE,
 			stderr=subprocess.DEVNULL,
@@ -1005,7 +1005,7 @@ async def bliss_run():
 
 	logger.info('bliss: starting top-level organisation pass')
 	proc = _set_proc(
-		subprocess.Popen(
+		subprocess.Popen(  # noqa: ASYNC220  # quick fork/exec; output is read in a worker thread
 			['uv', 'run', str(SCRIPTS_DIR / 'bliss.py')],
 			stdout=subprocess.PIPE,
 			stderr=subprocess.STDOUT,
@@ -1123,7 +1123,7 @@ async def run_pipeline(directory: str = Query(...)):
 
 	logger.info(f'pipeline: starting nzbfix on {directory}')
 	proc = _set_proc(
-		subprocess.Popen(
+		subprocess.Popen(  # noqa: ASYNC220  # quick fork/exec; output is read in a worker thread
 			['uv', 'run', str(SCRIPTS_DIR / 'nzbfix.py'), directory],
 			stdout=subprocess.PIPE,
 			stderr=subprocess.STDOUT,
@@ -1481,7 +1481,7 @@ def _cache_link_favicon(n: int, url: str) -> None:
 				dest = _config_dir() / f'link_favicon_{n}.ico'
 				dest.write_bytes(data)
 				return
-		except Exception as e:
+		except Exception as e:  # noqa: BLE001
 			logger.warning(f'Could not fetch favicon for link {n} at {favicon_url}: {e}')
 	logger.warning(f'No favicon found for link {n} ({url})')
 
@@ -1545,7 +1545,7 @@ if __name__ == '__main__':
 		logger.info(f'config.py loaded from: {config.__file__}')
 		logger.info(f'config.flacroot={getattr(config, "flacroot", "(missing)")}')
 		logger.info(f'config.config_dir={getattr(config, "config_dir", "(missing)")}')
-	except Exception as e:
+	except Exception as e:  # noqa: BLE001
 		logger.error(f'Failed to import config.py: {e}')
 
 	cfg = config_read()

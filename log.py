@@ -137,7 +137,7 @@ if not os.environ.get('DISCOGS_CHILD'):
 			)
 		)
 		_root.addHandler(_file_handler)
-	except Exception:
+	except Exception:  # noqa: BLE001, S110  # logging setup must never crash a script
 		pass  # log to console only if config is missing or broken
 
 
@@ -151,7 +151,7 @@ if not os.environ.get('DISCOGS_CHILD'):
 			def emit(self, record):
 				try:
 					super().emit(record)
-				except Exception:
+				except Exception:  # noqa: BLE001, S110  # logging setup must never crash a script
 					pass
 
 		_syslog_handler = _SafeSysLogHandler(address=(syslog_host, int(syslog_port)))
@@ -159,7 +159,7 @@ if not os.environ.get('DISCOGS_CHILD'):
 		_root.addHandler(_syslog_handler)
 	except ImportError:
 		pass
-	except Exception:
+	except Exception:  # noqa: BLE001, S110  # logging setup must never crash a script
 		pass
 
 

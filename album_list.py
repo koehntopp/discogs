@@ -11,7 +11,7 @@
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 import matplotlib
 
@@ -65,7 +65,7 @@ def cover_art_dimensions(flac_path: str) -> str:
 		if audio.pictures:
 			pic = audio.pictures[0]
 			return f'{pic.width}x{pic.height}'
-	except Exception:  # noqa: BLE001
+	except Exception:  # noqa: BLE001, S110  # cover size is optional
 		pass
 	return ''
 
@@ -79,7 +79,7 @@ def read_album(directory: str) -> dict[str, str] | None:
 	try:
 		audio = FLAC(flac_path)
 		tags = {k.upper(): [str(x) for x in v] for k, v in audio.tags.items()} if audio.tags else {}
-	except Exception:
+	except Exception:  # noqa: BLE001
 		return None
 
 	album_result = {tag: (tags.get(tag, [''])[0] or '') for tag in ALBUM_TAGS}
@@ -221,10 +221,8 @@ def main() -> None:
 		workers = min(32, (os.cpu_count() or 4) * 4)
 		with ThreadPoolExecutor(max_workers=workers) as pool:
 			futures = {pool.submit(read_album, d): (d, mtime) for d, mtime in to_scan}
-			done = 0
-			for fut in as_completed(futures):
+			for done, fut in enumerate(as_completed(futures), start=1):
 				d, mtime = futures[fut]
-				done += 1
 				result = fut.result()
 				if result:
 					albums.append(result)
