@@ -527,6 +527,42 @@ both checks. See ADR 0002 section 6.
 
 ---
 
+### `lrc_audit.py` — Are the suspect lyrics bad because of lrclib or because of our tools?
+
+**Purpose:** For every track whose synced LRC looks like a failed alignment (the `lrc_count.py --suspects` test, `lrc_format.lrc_suspect_reasons`), compare three sources: the tag (text, timestamps, and the `[re:]` header that says `lrc_fix` wrote it), lrclib.net today (fetched fresh, paced as in ADR 0007 section 4), and the audio (the demucs + whisperx transcript in the `lrc_fix` ASR cache). Each track gets a verdict (lyrics do not match the audio; lyrics match but lrclib has the same stacked timestamps; lrclib's timestamps are fine and the tag is worse; whisper heard nothing; ...) and a flag whether today's `lrc_fix` would fix it. It is a read-only audit: `lrc_fix.py` runs with `--dry-run`, so no tag is written.
+
+**Usage** (resumable; re-running continues where it stopped):
+
+```bash
+./lrc_audit.py run                      # prepare + transcribe + analyze, e.g. overnight
+./lrc_audit.py prepare [--root DIR]     # find the suspect tracks -> ~/.cache/lrc_audit/targets.jsonl
+./lrc_audit.py transcribe [--limit N] [--offset N]
+./lrc_audit.py analyze [--skip-lrclib] [--refetch]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--work-dir` | `~/.cache/lrc_audit` | targets, lrclib answers, `transcribe.log`, `failed.txt` |
+| `--root` | `config.flacroot` | library root scanned by `prepare` |
+| `--whisper-model`, `--language`, `--device`, `--compute-type`, `--jobs` | as `lrc_fix.py` | passed to `lrc_fix.py`; they must match between `transcribe` and `analyze` (they are part of the cache key) |
+| `--cache-dir` | `~/.cache/lrc_fix` | the `lrc_fix` ASR cache |
+| `--timeout` | 3600 | seconds per track before `lrc_fix` is given up on |
+| `--no-caffeinate` | off | do not keep a Mac awake while transcribing |
+| `--skip-lrclib` / `--refetch` | off | skip the lrclib comparison / ignore cached lrclib answers |
+| `--report` / `--out` | `docs/lrc-suspects-audit.md` / `lrc_suspects_audit` | summary report / CSV and XLSX base name |
+
+**Verdicts:** whether the text is sung at all is judged order-independently (the share of the lyric's word pairs found anywhere in the transcript), so repeats, a shuffled line order or backing vocals do not hide it; whether `lrc_fix` can align it is its own line-match gate. A track whose lyrics are sung but not alignable gets its own verdict (`text_ok_not_alignable`) instead of being blamed on lrclib.
+
+**Behaviour:** `transcribe` runs `lrc_fix.py --dry-run` once per uncached target in its own process (memory is released per track, a failure is logged to `failed.txt` and does not stop the run). `analyze` needs no ML: it recomputes line matching and the quality gate from the cached transcript, compares with lrclib, writes `lrc_suspects_audit.csv`/`.xlsx` (one row per track, git-ignored) and the summary report. Verdict rules and thresholds are listed in the report itself.
+
+**Tags read:** `LYRICS`, `ALBUMARTIST`, `ARTIST`, `ALBUM`, `TITLE`, `DISCOGS_RELEASE_ID`, `DISCNUMBER`, `TRACKNUMBER`. **Tags written:** none.
+
+**External service:** lrclib.net `GET /api/get` (same lookup order, client headers and pacing as `update_lyrics.py`).
+
+**Dependencies:** those of `lrc_fix.py`, plus `requests`, `rich`, `structlog`, `openpyxl`.
+
+---
+
 ### `lrclib_submitter.py` — LRCLIB Lyrics Publisher
 
 **Purpose:** Submits the `LYRICS` tag from a single `.flac` file to the LRCLIB API (`lrclib.net`), solving LRCLIB's Proof-of-Work (PoW) challenge automatically.

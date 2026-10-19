@@ -153,6 +153,7 @@ All config values are also editable via the Settings modal in the web UI.
 | `album_list.py` | Album inventory scan → CSV + DR chart |
 | `update_lyrics.py` | Parallel lyrics fetch from lrclib.net (8 workers, one lrclib request at a time, adaptive pacing, retries failed tracks, warns when nothing is found) |
 | `lrc_fix.py` | Local LRC realignment (demucs vocal isolation + whisperx + onset-snapping) |
+| `lrc_audit.py` | Audit of suspect synced lyrics: lrclib input vs our tools (compares tag, lrclib and a lrc_fix transcript; read-only) |
 | `lrclib_submitter.py` | Submit FLAC file lyrics to LRCLIB (lrclib.net) with PoW challenge solver |
 | `lrclib_client.py` | Shared lrclib.net client identification (User-Agent + public `Lrclib-App-Id`); no CLI |
 | `calculate_dr.py` | Dynamic Range calculation |

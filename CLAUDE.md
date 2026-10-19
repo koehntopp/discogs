@@ -70,6 +70,7 @@ metadata, paired with a FastAPI/HTMX web UI. Full CLI/API/tag reference: `SPEC.m
 - `calculate_fp.py`: AcoustID acoustic fingerprint generation (`fpcalc` / `pyacoustid`).
 - `convert_opus.py`: Transcodes FLAC to Opus format.
 - `lrc_fix.py`: Local (no cloud API) LRC realignment via demucs vocal isolation + whisperx transcription + onset snapping. Own docs: `README-lrc_fix.md`; design: ADR 0009.
+- `lrc_audit.py`: Read-only audit of the `lrc_count.py --suspects` tracks (tag vs lrclib vs `lrc_fix` transcript); runs `lrc_fix.py --dry-run`, so it needs the `lrc_fix` environment. Report: `docs/lrc-suspects-audit.md`.
 - `lrc_format.py`: Shared LRC id-tag/header formatting (no CLI) — imported by `update_lyrics.py`, `lrc_fix.py`, and `lrc_count.py`.
 - `lrclib_client.py`: Shared lrclib.net client identification (`User-Agent` + public `Lrclib-App-Id`, no CLI) — imported by `update_lyrics.py` and `lrclib_submitter.py`. Limits/requirements: ADR 0007 §4.
 - `check_docs.py`: Checks that `lrc_fix.py`'s flags and dependency pins match `README-lrc_fix.md` and `SPEC.md` (no config needed).

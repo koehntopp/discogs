@@ -27,3 +27,4 @@ album_cache.json
 audiophile_cache.json
 check_catalog_discrepancies.py
 .claude/settings.json
+lrc_suspects_audit.xlsx
