@@ -1555,8 +1555,8 @@ def cmd_fix(args: argparse.Namespace) -> None:
 	)
 	for t, row in todo:
 		detail = (
-			f'sung {percent(row["sung_ratio"])}'
-			if row['sung_ratio'] is not None
+			f'sung {percent(row.get("sung_ratio"))}'
+			if row.get('sung_ratio') is not None
 			else row['category']
 		)
 		print(f'   [{row["fix_tier"]}/{row["fix_action"]}] {t["artist"]} - {t["title"]} ({detail})')
