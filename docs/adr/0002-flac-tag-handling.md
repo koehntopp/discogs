@@ -89,7 +89,7 @@ We establish the following binding rules and standards for all FLAC tag handling
 * **Matching**: a file is matched to its MusicBrainz track by `MUSICBRAINZ_RELEASETRACKID`, else by disc/track number when the titles agree (similarity >= 0.6). A file that cannot be matched (another edition of the album) keeps whatever it has.
 * **Writing**: set when it differs from MusicBrainz; removed when MusicBrainz knows the track but has no sung language; **left untouched when MusicBrainz could not be asked** (a failed lookup is "unknown", never "no language"). The bare Vorbis `LANGUAGE` is not used: a tagger or the user may own it.
 * **Client rules**: identifying `User-Agent`, at most one request per second, retry with backoff on 429/5xx; answers cached per release for 30 days in `config_dir/musicbrainz/` so a library run is offline after the first pass. `fixtags.py --languages-only` writes only this tag (no Discogs lookups); `musicbrainz_languages = False` in `config.py` switches the lookup off.
-* **Consumer**: `lrc_fix.py` forces the transcription language from this tag (ADR 0009), which removes whisper's language misdetection (Gaelic or dialect singing detected as Latin or Welsh).
+* **Consumer**: `lrc_fix.py` forces the transcription language from this tag (ADR 0009), which removes whisper's language misdetection (Gaelic or dialect singing detected as Latin or Welsh). `update_lyrics.py` reads it too: a lone `zxx` marks a plain-text or empty `LYRICS` tag instrumental (section 6).
 
 ### 6. Lyrics Tag Management (`LYRICS`)
 * **Shared Formatting (`lrc_format.py`)**: The `[ar:]/[ti:]/[al:]/[length:]`
@@ -128,6 +128,7 @@ We establish the following binding rules and standards for all FLAC tag handling
   [00:00.00](Instrumental)
   ```
   `[la:zxx]` is the standard ISO 639-2 "no linguistic content" LRC language code; `[instrumental:true]` is the sentinel `update_lyrics.py` checks on subsequent runs to skip re-fetching. Tracks already carrying this marker are left untouched without an lrclib.net API call.
+* **Instrumental via `LYRICS_LANGUAGE`**: when a track's `LYRICS_LANGUAGE` (section 5b) is exactly `zxx` (MusicBrainz: no linguistic content) and its `LYRICS` tag is empty or plain text, `update_lyrics.py` writes the canonical marker block without an lrclib.net request (lrclib can only return wrong lyrics for such a track) and counts it as `Instrumental` / `new`. `zxx` next to a real language, `mul`, `und` or no tag do nothing. An existing synced LRC is never replaced, whatever the tag says (many such tags are valid, and MusicBrainz can be wrong for tracks with wordless or spoken vocals); `lrc_audit.py` judges those against the audio.
 * **Manual Instrumental Marking**: A user may hand-type an informal marker into the `LYRICS` tag matching `[MM:SS.xx][Instrumental]` or `[MM:SS.xx](Instrumental)` (case-insensitive, e.g. `[00:00.00][Instrumental]`) to mark a track instrumental without waiting on lrclib.net — the parenthesis form also catches an incomplete canonical block missing its `[la:zxx]`/`[instrumental:true]` sentinel lines. `update_lyrics.py` detects this pattern and rewrites it into the canonical marker block above — without making any network request — counted as a `'fix'` (syntax normalization) rather than a `'new'` write, since no new lyrics information is being added.
 
 ### 7. Calculated Metric Tags

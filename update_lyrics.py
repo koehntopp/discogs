@@ -46,12 +46,20 @@ from lrc_format import (
 from lrclib_client import lrclib_headers
 
 MAX_WORKERS = 8
+LANGUAGE_TAG = 'LYRICS_LANGUAGE'  # written by fixtags.py from MusicBrainz (ADR 0002 section 5b)
+INSTRUMENTAL_LANGUAGE = 'zxx'  # ISO 639-3 "no linguistic content"
 TRAILING_BRACKET_RE = re.compile(r'\s*[\(\[][^()\[\]]*[\)\]]\s*$')
 
 
 def strip_trailing_bracket(title: str) -> str:
 	"""Strip one trailing (...)/[...] group, e.g. '(Live at Wembley)'."""
 	return TRAILING_BRACKET_RE.sub('', title).strip()
+
+
+def is_instrumental_language(values: list[str]) -> bool:
+	"""Does MusicBrainz call the track an instrumental? Only a lone `zxx` counts: `zxx` next to
+	a real language, `mul`, `und` or no tag say nothing."""
+	return [str(v).strip().lower() for v in values] == [INSTRUMENTAL_LANGUAGE]
 
 
 def flactag(song: FLAC | dict, tag: str) -> str:
@@ -275,6 +283,7 @@ def _fetch_one(
 		track = flactag(song, 'TRACKNUMBER')
 		album = flactag(song, 'ALBUM')
 		existing_lyrics = flactag(song, 'LYRICS').strip()
+		instrumental_language = is_instrumental_language(list(song.get(LANGUAGE_TAG) or []))
 		length = float(song.info.length) if song.info and hasattr(song.info, 'length') else 0.0
 	except Exception as e:  # noqa: BLE001
 		logger.warning(f'Could not read FLAC tags for {flac_path}: {e}')
@@ -294,6 +303,13 @@ def _fetch_one(
 		# syntax fix, not new information, so it's counted as 'fix' not 'new'.
 		marker_lrc = make_instrumental_lrc(artist, title, album, length)
 		return flac_path, artist, title, marker_lrc, 'instrumental', 'fix', discogs_id, track
+
+	if instrumental_language and not is_lrc(existing_lyrics):
+		# MusicBrainz says the track has no vocals: no lrclib request (it can only return wrong
+		# lyrics for it). Plain text is replaced; an existing LRC is left to the rule below.
+		logger.info(f'Instrumental via {LANGUAGE_TAG}={INSTRUMENTAL_LANGUAGE}: {artist} - {title}')
+		marker_lrc = make_instrumental_lrc(artist, title, album, length)
+		return flac_path, artist, title, marker_lrc, 'instrumental', 'new', discogs_id, track
 
 	if existing_lyrics and is_lrc(existing_lyrics):
 		# An existing LRC is never replaced by another source (no lrclib request at all); it is only
