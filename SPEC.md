@@ -521,7 +521,9 @@ without any word are not counted), when fewer than `--min-sung` (default 0.5) of
 `shared_timestamps` pile-up per `lrc_format.lrc_suspect_reasons`. `--no-quality-gate` bypasses
 all checks. If whisperx has no alignment model for the detected language, `--fallback-language` (default `en`) makes it transcribe the track again in that language instead of failing. See ADR 0002 section 6 and ADR 0009.
 
-**Tags read:** `LYRICS`, `ALBUMARTIST`, `ARTIST`, `TITLE`, `ALBUM`
+**Language:** the per-track `LYRICS_LANGUAGE` tag (written by `fixtags.py` from MusicBrainz, ADR 0002 section 5b) forces the transcription language when it names one language that whisper and whisperx can handle; `zxx` and languages without a whisper or alignment model skip the track before any ML work; `--language` wins and `--ignore-language-tag` disables it (ADR 0009).
+
+**Tags read:** `LYRICS`, `LYRICS_LANGUAGE`, `ALBUMARTIST`, `ARTIST`, `TITLE`, `ALBUM`
 
 **Tags written:** `LYRICS`
 

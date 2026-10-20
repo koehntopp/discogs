@@ -121,12 +121,31 @@ always processes it. The tool logs `[i/N] <path>` as each file starts.
 | `--min-match` | `0.6` | Minimum share of lyric lines (those with at least one word) that must match the transcript; a weaker alignment is skipped and the tag left unchanged |
 | `--min-sung` | `0.5` | Minimum share of the lyric's consecutive word pairs that must occur in the transcript (order independent); a text that is mostly not sung is skipped and the tag left unchanged. `0` disables |
 | `--fallback-language` | `en` | If whisperx has no alignment model for the language it detected, transcribe again as this language (`none` = fail as before) |
+| `--ignore-language-tag` | off | Ignore the `LYRICS_LANGUAGE` tag (sung language per track, from MusicBrainz): auto-detect the language and do not skip instrumentals or unsupported languages |
 | `--no-quality-gate` | off | Write the alignment even when too few lines matched or the result piles lines onto one timestamp |
 | `--find-missing-lyrics` | off | Scan for files with no `LYRICS` tag; VAD-tag instrumentals, log the rest |
 | `--dump-words` | off | Print the raw ASR word/timestamp transcript (debugging) |
 | `--cache-dir` | `~/.cache/lrc_fix` | Where demucs/whisperx results are cached |
 | `--no-cache` | off | Neither read nor write the cache |
 | `--refresh-cache` | off | Ignore existing cache entries and rewrite them |
+
+## Language
+
+whisper sometimes misdetects the language of singing (Gaelic or Kölsch as Latin or Welsh), which breaks the transcript or the
+alignment. `fixtags.py` writes the sung language of every track from MusicBrainz into the `LYRICS_LANGUAGE` tag (ISO 639-3,
+one value per language; see ADR 0002 section 5b). `lrc_fix` uses it when it is there:
+
+- `--language` on the command line always wins.
+- One language that whisper and whisperx can handle is **forced** (`eng` becomes `en`), so there is no misdetection. Dialects
+  close to a supported language use it (Kölsch `ksh`, Swiss and Bavarian German and Low German use German; Scots uses English).
+- `zxx` (no linguistic content) is an instrumental: the track is skipped.
+- A language whisper does not know (Irish) or whisperx has no alignment model for (Swedish, for example) cannot be done: the
+  track is **skipped before any demucs or whisper work** with `skip: ...` and the tag is left alone.
+- Several languages, `mul` or `und`, or no tag at all: auto-detect, as before.
+- `--ignore-language-tag` turns all of this off.
+
+The cache records the language a transcript was made in; a cached transcript is redone when the tag now names a different
+language (entries from before this field are trusted).
 
 ## ASR cache
 

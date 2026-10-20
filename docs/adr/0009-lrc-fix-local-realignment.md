@@ -34,7 +34,15 @@ here.
    never fed back as context and cascaded into more hallucinated text. whisper misdetects the language
    of some singing (Gaelic or dialect as Latin or Welsh) and whisperx has no alignment model for some
    languages; instead of failing, the track is transcribed again as `--fallback-language` (default
-   `en`). Such transcripts are rough, which the sung-text check below catches.
+   `en`). Such transcripts are rough, which the sung-text check below catches. Better than reacting
+   to the failure is knowing the language: `fixtags.py` writes the sung language per track from
+   MusicBrainz into `LYRICS_LANGUAGE` (ADR 0002 section 5b), and `track_language` uses it before any
+   work. `--language` wins; one language that whisper and whisperx can handle is forced (ISO 639-3 to
+   whisper code from a table generated from whisper's own list, plus a few dialect fallbacks such as
+   `ksh` to `de`); `zxx` and languages without a whisper or alignment model skip the track
+   (transcribing Irish with a wrong-language model only produces a transcript the checks below
+   would reject, after a minute of CPU); several languages or `mul`/`und` auto-detect. The tag is
+   MusicBrainz data and can be wrong, hence `--ignore-language-tag`.
 3. **Match** the known lyric lines against the transcript with `difflib.SequenceMatcher` over lowercase
    Unicode word tokens (`[^\W_]+`, with an internal apostrophe allowed; not ASCII-only, so Cyrillic,
    CJK and accented lyrics tokenize; the text is passed through `lrc_format.normalize_text` first so a
@@ -105,6 +113,9 @@ audio, and only the lyric text changes between runs. Their output is therefore c
 - **Partial entries**: onsets are computed lazily. An entry without them (the track was gated out, or
   `--no-snap-onsets` was used) costs one demucs pass when they are first needed, as does the VAD
   fallback, which needs the audio.
+- **Language**: the key holds the requested `--language` only, so the existing cache stays valid; the
+  entry records the language it was actually transcribed in (`language_used`), and is redone when the
+  tag now names a different one. Entries without the field are trusted.
 - `--no-cache` neither reads nor writes; `--refresh-cache` ignores existing entries and rewrites them;
   `--dry-run` still writes the cache because it only protects the `LYRICS` tag.
 

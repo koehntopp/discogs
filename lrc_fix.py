@@ -292,7 +292,158 @@ def has_speech(audio_path: Path) -> bool:
 	return len(timestamps) > 0
 
 
+LANGUAGE_TAG = (
+	'LYRICS_LANGUAGE'  # written by fixtags.py from MusicBrainz, ISO 639-3, one value per language
+)
+# ISO 639-3 (the codes MusicBrainz uses) -> whisper's language code, for every language whisper
+# knows. Generated from faster_whisper.tokenizer._LANGUAGE_CODES and pycountry; the repository's
+# tests regenerate it and compare.
+ISO3_TO_WHISPER = {
+	'afr': 'af',
+	'amh': 'am',
+	'ara': 'ar',
+	'asm': 'as',
+	'aze': 'az',
+	'bak': 'ba',
+	'bel': 'be',
+	'ben': 'bn',
+	'bod': 'bo',
+	'bos': 'bs',
+	'bre': 'br',
+	'bul': 'bg',
+	'cat': 'ca',
+	'ces': 'cs',
+	'cym': 'cy',
+	'dan': 'da',
+	'deu': 'de',
+	'ell': 'el',
+	'eng': 'en',
+	'est': 'et',
+	'eus': 'eu',
+	'fao': 'fo',
+	'fas': 'fa',
+	'fin': 'fi',
+	'fra': 'fr',
+	'glg': 'gl',
+	'guj': 'gu',
+	'hat': 'ht',
+	'hau': 'ha',
+	'haw': 'haw',
+	'heb': 'he',
+	'hin': 'hi',
+	'hrv': 'hr',
+	'hun': 'hu',
+	'hye': 'hy',
+	'ind': 'id',
+	'isl': 'is',
+	'ita': 'it',
+	'jav': 'jw',
+	'jpn': 'ja',
+	'kan': 'kn',
+	'kat': 'ka',
+	'kaz': 'kk',
+	'khm': 'km',
+	'kor': 'ko',
+	'lao': 'lo',
+	'lat': 'la',
+	'lav': 'lv',
+	'lin': 'ln',
+	'lit': 'lt',
+	'ltz': 'lb',
+	'mal': 'ml',
+	'mar': 'mr',
+	'mkd': 'mk',
+	'mlg': 'mg',
+	'mlt': 'mt',
+	'mon': 'mn',
+	'mri': 'mi',
+	'msa': 'ms',
+	'mya': 'my',
+	'nep': 'ne',
+	'nld': 'nl',
+	'nno': 'nn',
+	'nor': 'no',
+	'oci': 'oc',
+	'pan': 'pa',
+	'pol': 'pl',
+	'por': 'pt',
+	'pus': 'ps',
+	'ron': 'ro',
+	'rus': 'ru',
+	'san': 'sa',
+	'sin': 'si',
+	'slk': 'sk',
+	'slv': 'sl',
+	'sna': 'sn',
+	'snd': 'sd',
+	'som': 'so',
+	'spa': 'es',
+	'sqi': 'sq',
+	'srp': 'sr',
+	'sun': 'su',
+	'swa': 'sw',
+	'swe': 'sv',
+	'tam': 'ta',
+	'tat': 'tt',
+	'tel': 'te',
+	'tgk': 'tg',
+	'tgl': 'tl',
+	'tha': 'th',
+	'tuk': 'tk',
+	'tur': 'tr',
+	'ukr': 'uk',
+	'urd': 'ur',
+	'uzb': 'uz',
+	'vie': 'vi',
+	'yid': 'yi',
+	'yor': 'yo',
+	'yue': 'yue',
+	'zho': 'zh',
+}
+ISO3_ALIASES = {'nob': 'no', 'cmn': 'zh'}  # MusicBrainz spellings of Norwegian Bokmal and Mandarin
+# Languages whisper does not know that are close enough to a supported one to transcribe as it.
+LANGUAGE_FALLBACKS = {'ksh': 'de', 'gsw': 'de', 'bar': 'de', 'nds': 'de', 'sco': 'en'}
 NO_ALIGN_MODEL_HINTS = ('No default align-model', 'could not be found')
+
+
+def align_languages() -> set[str] | None:
+	"""Languages whisperx has an alignment model for (it needs one for word times), or None if
+	whisperx is not importable and this cannot be told."""
+	try:
+		from whisperx import alignment
+	except ImportError:
+		return None
+	return set(alignment.DEFAULT_ALIGN_MODELS_TORCH) | set(alignment.DEFAULT_ALIGN_MODELS_HF)
+
+
+def track_language(flac: FLAC, args: argparse.Namespace) -> tuple[str | None, str | None]:
+	"""(language to force, reason to skip the track); (None, None) means auto-detect.
+
+	--language always wins. Otherwise the LYRICS_LANGUAGE tag (sung language per track, from
+	MusicBrainz) decides: one language that can be transcribed and aligned is forced, which avoids
+	whisper's misdetections (Gaelic or dialect singing as Latin or Welsh); `zxx` is an instrumental;
+	a language without a whisper model or without an alignment model cannot be done, so the track
+	is skipped before any demucs/whisper work; several languages or `mul`/`und` auto-detect.
+	"""
+	if args.language:
+		return args.language, None
+	if getattr(args, 'ignore_language_tag', False):
+		return None, None
+	values = [str(v).strip().lower() for v in (flac.get(LANGUAGE_TAG) or []) if str(v).strip()]
+	if not values:
+		return None, None
+	if values == ['zxx']:
+		return None, 'MusicBrainz marks the track as instrumental (zxx)'
+	if len(set(values)) > 1 or values[0] in ('mul', 'und', 'mis'):
+		return None, None
+	code = values[0]
+	whisper = ISO3_TO_WHISPER.get(code) or ISO3_ALIASES.get(code) or LANGUAGE_FALLBACKS.get(code)
+	if whisper is None:
+		return None, f'language {code} is not supported by whisper'
+	aligned = align_languages()
+	if aligned is not None and whisper not in aligned:
+		return None, f'no alignment model for language {whisper} ({code})'
+	return whisper, None
 
 
 def transcribe_words(
@@ -302,8 +453,8 @@ def transcribe_words(
 	compute_type: str,
 	language: str | None,
 	fallback_language: str | None = None,
-) -> list[dict]:
-	"""Word start times of the audio. If whisperx has no alignment model for the language it
+) -> tuple[list[dict], str]:
+	"""Word start times of the audio and the language that was used. If whisperx has no alignment model for the language it
 	detected (it misdetects Gaelic or dialect singing as Latin or Welsh, and a few models cannot be
 	downloaded), the audio is transcribed again as `fallback_language` instead of failing."""
 	import whisperx
@@ -337,6 +488,7 @@ def transcribe_words(
 		align_model, metadata = whisperx.load_align_model(
 			language_code=result['language'], device=device
 		)
+	language_used = result['language']
 	result = whisperx.align(
 		result['segments'], align_model, metadata, audio, device, print_progress=True
 	)
@@ -348,7 +500,7 @@ def transcribe_words(
 			if start is None:
 				continue
 			words.append({'w': w['word'], 't': round(start, 2)})
-	return words
+	return words, language_used
 
 
 # [^\W_]+ is "word characters minus underscore" - Unicode letters/digits from
@@ -660,13 +812,21 @@ def load_cache(path: Path, key: dict) -> dict | None:
 	return data
 
 
-def save_cache(path: Path, key: dict, words: list[dict], onsets: list[float] | None) -> None:
+def save_cache(
+	path: Path,
+	key: dict,
+	words: list[dict],
+	onsets: list[float] | None,
+	language_used: str | None = None,
+) -> None:
 	"""Write via a temp file + os.replace, so an interrupted run never leaves a
 	half-written cache file. A failure to write only costs the speedup."""
 	tmp_path = path.with_name(path.name + '.tmp')
 	try:
 		path.parent.mkdir(parents=True, exist_ok=True)
 		payload = {**key, 'words': words, 'onsets': onsets}
+		if language_used:
+			payload['language_used'] = language_used
 		tmp_path.write_text(json.dumps(payload, separators=(',', ':')), encoding='utf-8')
 		os.replace(tmp_path, path)
 	except OSError as exc:
@@ -699,11 +859,23 @@ def process_file(path: Path, args: argparse.Namespace, index: int, total: int) -
 		return
 	id_tags = ensure_id_tags(id_tags, flac)
 
+	language, skip_reason = track_language(flac, args)
+	if skip_reason:
+		print(f'   skip: {skip_reason} - tag left unchanged')
+		return
+
 	cache_file = None if args.no_cache else cache_path(flac, args.cache_dir)
 	key = cache_key(args, flac)
 	cached = None
 	if cache_file and not args.refresh_cache:
 		cached = load_cache(cache_file, key)
+	if cached and language and cached.get('language_used') not in (None, language):
+		print(
+			f'   cache entry was transcribed as {cached["language_used"]}, the language is '
+			f'{language}: transcribing again'
+		)
+		cached = None
+	language_used = cached.get('language_used') if cached else None
 	words = cached['words'] if cached else None
 	onsets = cached.get('onsets') if cached else None
 	if cached:
@@ -725,18 +897,14 @@ def process_file(path: Path, args: argparse.Namespace, index: int, total: int) -
 
 		if words is None:
 			audio_path = get_audio()
-			print(f'   transcribing ({args.whisper_model}, {args.device})...')
+			shown = f', language {language}' if language else ''
+			print(f'   transcribing ({args.whisper_model}, {args.device}{shown})...')
 			fallback = None if args.fallback_language.lower() == 'none' else args.fallback_language
-			words = transcribe_words(
-				audio_path,
-				args.whisper_model,
-				args.device,
-				args.compute_type,
-				args.language,
-				fallback,
+			words, language_used = transcribe_words(
+				audio_path, args.whisper_model, args.device, args.compute_type, language, fallback
 			)
 			if words and cache_file:
-				save_cache(cache_file, key, words, None)
+				save_cache(cache_file, key, words, None, language_used)
 
 		if not words:
 			print('   skip: whisperx produced no word timestamps')
@@ -772,7 +940,7 @@ def process_file(path: Path, args: argparse.Namespace, index: int, total: int) -
 			print('   detecting vocal onsets...')
 			onsets = detect_onsets(get_audio())
 			if cache_file:
-				save_cache(cache_file, key, words, onsets)
+				save_cache(cache_file, key, words, onsets, language_used)
 
 	times = finalize_times(raw_times, onsets, float(flac.info.length) if flac.info else None)
 
@@ -918,6 +1086,12 @@ def main() -> int:
 		metavar='LANG',
 		help='when whisperx has no alignment model for the detected language, transcribe again as '
 		'this language (default en, none = fail as before)',
+	)
+	parser.add_argument(
+		'--ignore-language-tag',
+		action='store_true',
+		help='ignore the LYRICS_LANGUAGE tag (sung language per track, from MusicBrainz): '
+		'auto-detect the language and do not skip instrumentals or unsupported languages',
 	)
 	parser.add_argument(
 		'--no-quality-gate',
