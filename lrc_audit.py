@@ -105,6 +105,7 @@ CATEGORY_TEXT = {
 	'not_cacheable': 'cannot be cached (no numeric DISCOGS_RELEASE_ID or no TRACKNUMBER)',
 	'file_missing': 'file not found',
 	'tag_changed': 'the tag changed since prepare (fixed by an apply run, or edited): run prepare again',
+	'language_skipped': 'lrc_fix skips the track because of its LYRICS_LANGUAGE tag (instrumental, or no whisper/alignment model)',
 	'not_transcribed': 'not transcribed yet',
 	'transcription_failed': 'the transcription failed (see fail_reason)',
 	'no_audio_evidence': 'whisper heard (almost) nothing: text cannot be judged',
@@ -192,6 +193,7 @@ COLUMNS = [
 	'transcript_words',
 	'words_per_min',
 	'transcript_last_ts',
+	'language_tag',
 	'timing_dev',
 	'timing_lines',
 	'lines_counted',
@@ -347,7 +349,18 @@ def lrc_fix_namespace(args: argparse.Namespace) -> argparse.Namespace:
 		language=args.language,
 		compute_type=args.compute_type,
 		no_isolate_vocals=False,
+		ignore_language_tag=getattr(args, 'ignore_language_tag', False),
 	)
+
+
+def language_info(path: Path, args: argparse.Namespace) -> tuple[list[str], str | None]:
+	"""(the LYRICS_LANGUAGE values, why lrc_fix would skip the track because of them or None)."""
+	try:
+		song = FLAC(path)
+	except Exception:  # noqa: BLE001  # missing or unreadable
+		return [], None
+	values = [str(v) for v in (song.get(lrc_fix.LANGUAGE_TAG) or [])]
+	return values, lrc_fix.track_language(song, lrc_fix_namespace(args))[1]
 
 
 def cache_state(target: dict, args: argparse.Namespace) -> tuple[str, dict | None]:
@@ -390,6 +403,8 @@ def run_lrc_fix(path: str, args: argparse.Namespace) -> tuple[int, str, str]:
 	]
 	if args.language:
 		cmd += ['--language', args.language]
+	if getattr(args, 'ignore_language_tag', False):
+		cmd.append('--ignore-language-tag')
 	cmd.append(path)
 	try:
 		proc = subprocess.run(
@@ -501,13 +516,15 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
 	counts: Counter[str] = Counter()
 	for t in subset:
 		state, _ = cache_state(t, args)
+		if state == 'missing' and language_info(Path(t['path']), args)[1]:
+			state = 'language_skipped'
 		counts[state] += 1
 		if state == 'missing':
 			todo.append(t)
 	print(
 		f'== transcribe: {len(subset)} tracks, {counts["cached"]} already cached, '
 		f'{counts["not_cacheable"]} not cacheable, {counts["file_missing"]} missing, '
-		f'{len(todo)} to do'
+		f'{counts["language_skipped"]} skipped by their language tag, {len(todo)} to do'
 	)
 	if not todo:
 		print_tally(subset, args)
@@ -833,10 +850,15 @@ def analyze_target(
 	}
 	state, payload = cache_state(t, args)
 	row['safe_bet'] = False
+	language_values, language_skip = language_info(Path(t['path']), args)
+	row['language_tag'] = '; '.join(language_values)
 	if state != 'file_missing' and current_tag(Path(t['path'])) != t['lyrics']:
 		row['pre_category'] = 'tag_changed'
 	elif payload is None:
-		if state == 'missing' and failures and t['path'] in failures:
+		if state == 'missing' and language_skip:
+			row['pre_category'] = 'language_skipped'
+			row['fail_reason'] = language_skip
+		elif state == 'missing' and failures and t['path'] in failures:
 			row['pre_category'] = 'transcription_failed'
 			row['fail_reason'] = failures[t['path']]
 		else:
@@ -1190,6 +1212,7 @@ def fix_namespace(args: argparse.Namespace) -> argparse.Namespace:
 		min_match=MATCH_OK,
 		min_sung=SUNG_OK,
 		fallback_language='en',
+		ignore_language_tag=getattr(args, 'ignore_language_tag', False),
 		no_quality_gate=False,
 		dump_words=False,
 		cache_dir=args.cache_dir,
@@ -1321,6 +1344,9 @@ def build_parser() -> argparse.ArgumentParser:
 	common.add_argument('--language', default=None)
 	common.add_argument('--device', default='cpu')
 	common.add_argument('--compute-type', default='int8')
+	common.add_argument(
+		'--ignore-language-tag', action='store_true', help='pass --ignore-language-tag to lrc_fix'
+	)
 	common.add_argument('--jobs', type=int, default=min(4, os.cpu_count() or 1))
 	common.add_argument('--cache-dir', type=Path, default=lrc_fix.DEFAULT_CACHE_DIR)
 	common.add_argument('--timeout', type=int, default=3600, help='seconds per track')
