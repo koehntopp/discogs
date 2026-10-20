@@ -457,7 +457,7 @@ uv run migrate_tags.py [--write] [DIR]
 **Usage:**
 
 ```bash
-uv run lrc_count.py [<flacdir>] [--output <file.csv>] [--tracks | --suspects]
+uv run lrc_count.py [<flacdir>] [--output <file.csv>] [--tracks | --suspects [--hints]]
 ```
 
 | Argument | Required | Description |
@@ -465,7 +465,8 @@ uv run lrc_count.py [<flacdir>] [--output <file.csv>] [--tracks | --suspects]
 | `flacdir` | No | Root directory to scan (defaults to `config.flacroot`). |
 | `--output` | No | Output CSV file path (defaults to stdout). Also writes a sibling `.xlsx` workbook with the same rows/columns next to it. |
 | `--tracks` | No | Output one row per track instead of aggregated per-artist counts. |
-| `--suspects` | No | List tracks whose synced LRC shows signs of a failed alignment (read-only report). |
+| `--suspects` | No | List tracks whose synced LRC shows signs of a failed alignment (read-only report). Tracks whose only reasons are the hints `ends_early`/`junk_hearts` are left out. |
+| `--hints` | No | With `--suspects`: also list the hint-only tracks. |
 
 **Behaviour:**
 
@@ -478,7 +479,7 @@ uv run lrc_count.py [<flacdir>] [--output <file.csv>] [--tracks | --suspects]
 
 **Output columns (`--tracks`):** `album_artist`, `album`, `song`, `lyrics_type`
 
-5. `--suspects` mode: for every synced-LRC track runs `lrc_format.lrc_suspect_reasons` (the same function `lrc_fix.py` uses as its quality gate) and writes one row per track with at least one reason, most reasons first: `one_timestamp` (every line on one timestamp), `shared_timestamps` (5+ lines and at least 20% of the lines on one timestamp), `ends_early` (last timestamp before 50% of the track length) and `junk_hearts` (hearts in lyric lines; a line that is only `♪` is a legitimate music marker and is not flagged). `ends_early` and `junk_hearts` are hints, not proof: a long instrumental outro is legitimate. Instrumental markers and LRCs with fewer than 3 timestamped lines are never judged. Heuristics catch pile-ups, not every bad alignment.
+5. `--suspects` mode: for every synced-LRC track runs `lrc_format.lrc_suspect_reasons` (the same function `lrc_fix.py` uses as its quality gate) and writes one row per track with at least one reason, most reasons first: `one_timestamp` (every line on one timestamp), `shared_timestamps` (5+ lines and at least 20% of the lines on one timestamp), `ends_early` (last timestamp before 50% of the track length) and `junk_hearts` (hearts in lyric lines; a line that is only `♪` is a legitimate music marker and is not flagged). `ends_early` and `junk_hearts` are hints, not proof: a long instrumental outro is legitimate, and a lyric often omits repeated choruses. The audit of the suspect tags found about a third of the list was `ends_early` alone and mostly harmless, so such tracks are only listed with `--hints`; `lrc_audit.py` judges them against the audio. Instrumental markers and LRCs with fewer than 3 timestamped lines are never judged. Heuristics catch pile-ups, not every bad alignment.
 
 **Output columns (`--suspects`):** `album_artist`, `album`, `song`, `reasons`, `lines`, `problem_lines`, `last_timestamp`, `length`, `directory` (pass it to `lrc_fix.py`), `yate_link`
 
@@ -527,35 +528,41 @@ all checks. If whisperx has no alignment model for the detected language, `--fal
 
 ---
 
-### `lrc_audit.py` — Are the suspect lyrics bad because of lrclib or because of our tools?
+### `lrc_audit.py` — Are the suspect lyrics bad because of lrclib or because of our tools? (and repair of the safe ones)
 
-**Purpose:** For every track whose synced LRC looks like a failed alignment (the `lrc_count.py --suspects` test, `lrc_format.lrc_suspect_reasons`), compare three sources: the tag (text, timestamps, and the `[re:]` header that says `lrc_fix` wrote it), lrclib.net today (fetched fresh, paced as in ADR 0007 section 4), and the audio (the demucs + whisperx transcript in the `lrc_fix` ASR cache). Each track gets a verdict (lyrics do not match the audio; lyrics match but lrclib has the same stacked timestamps; lrclib's timestamps are fine and the tag is worse; whisper heard nothing; ...) and a flag whether today's `lrc_fix` would fix it. It is a read-only audit: `lrc_fix.py` runs with `--dry-run`, so no tag is written.
+**Purpose:** For every track whose synced LRC looks like a failed alignment (the `lrc_count.py --suspects` test, `lrc_format.lrc_suspect_reasons`, hint-only tracks included), compare three sources: the tag (text, timestamps, and the `[re:]` header that says `lrc_fix` wrote it), lrclib.net today (fetched fresh, paced as in ADR 0007 section 4), and the audio (the demucs + whisperx transcript in the `lrc_fix` ASR cache). Each track gets a verdict and a flag whether today's `lrc_fix` would fix it. Except for `fix --apply`, it is read-only: `lrc_fix.py` runs with `--dry-run`, so no tag is written.
 
 **Usage** (resumable; re-running continues where it stopped):
 
 ```bash
-./lrc_audit.py run                      # prepare + transcribe + analyze, e.g. overnight
+./lrc_audit.py run [--apply-fixes]      # prepare + transcribe + analyze (+ fix), e.g. overnight
 ./lrc_audit.py prepare [--root DIR]     # find the suspect tracks -> ~/.cache/lrc_audit/targets.jsonl
 ./lrc_audit.py transcribe [--limit N] [--offset N]
 ./lrc_audit.py analyze [--skip-lrclib] [--refetch]
+./lrc_audit.py fix [--apply]            # list (default) or repair the safe bets
+./lrc_audit.py revert                   # restore the tags that fix --apply replaced
 ```
 
 | Option | Default | Description |
 |---|---|---|
-| `--work-dir` | `~/.cache/lrc_audit` | targets, lrclib answers, `transcribe.log`, `failed.txt` |
+| `--work-dir` | `~/.cache/lrc_audit` | targets, lrclib answers, `transcribe.log`, `failed.txt`, `fixes.jsonl` |
 | `--root` | `config.flacroot` | library root scanned by `prepare` |
-| `--whisper-model`, `--language`, `--device`, `--compute-type`, `--jobs` | as `lrc_fix.py` | passed to `lrc_fix.py`; they must match between `transcribe` and `analyze` (they are part of the cache key) |
+| `--whisper-model`, `--language`, `--device`, `--compute-type`, `--jobs` | as `lrc_fix.py` | passed to `lrc_fix.py`; they must match between `transcribe`, `analyze` and `fix` (they are part of the cache key) |
 | `--cache-dir` | `~/.cache/lrc_fix` | the `lrc_fix` ASR cache |
 | `--timeout` | 3600 | seconds per track before `lrc_fix` is given up on |
 | `--no-caffeinate` | off | do not keep a Mac awake while transcribing |
 | `--skip-lrclib` / `--refetch` | off | skip the lrclib comparison / ignore cached lrclib answers |
+| `--apply` | off | `fix`: really write the repaired tags (without it `fix` only lists them) |
+| `--apply-fixes` | off | `run`: finish with `fix --apply` |
 | `--report` / `--out` | `docs/lrc-suspects-audit.md` / `lrc_suspects_audit` | summary report / CSV and XLSX base name |
 
-**Verdicts:** whether the text is sung at all is judged order-independently (the share of the lyric's word pairs found anywhere in the transcript), so repeats, a shuffled line order or backing vocals do not hide it; whether `lrc_fix` can align it is its own line-match gate. A track whose lyrics are sung but not alignable gets its own verdict (`text_ok_not_alignable`) instead of being blamed on lrclib.
+**Behaviour:** `transcribe` runs `lrc_fix.py --dry-run` once per uncached target in its own process (memory is released per track, a failure is logged to `failed.txt` and does not stop the run). After each track it also fetches lrclib (cached, paced; the pacer is replaced after a cool-down if lrclib's circuit breaker tripped, so one hiccup does not fail the rest of the run) and prints a comparison of the three sources: the tag (lines, words, who wrote it, suspect reasons), lrclib (synced or plain, lines, words, same timestamps as the tag, its own check), whisper (words, words per minute), the in-order line match, the share of the lyric's word pairs that are sung, the timing agreement, and the verdict with today's `lrc_fix` result (`would fix` / `would reject`, a simulation on the cached transcript); a verdict tally closes the run (cached tracks are only tallied). `analyze` needs no ML: it recomputes everything from the cached transcript, compares with lrclib, and writes `lrc_suspects_audit.csv`/`.xlsx` (one row per track, git-ignored; the xlsx has a `review` sheet and there is a `_review.csv` for the tracks whose lyrics are not (fully) in the audio and the failed transcriptions) and the summary report with the verdict rules and thresholds.
 
-**Behaviour:** `transcribe` runs `lrc_fix.py --dry-run` once per uncached target in its own process (memory is released per track, a failure is logged to `failed.txt` and does not stop the run). After each track it also fetches lrclib (cached, paced) and prints a comparison of the three sources: the tag (lines, words, who wrote it, suspect reasons), lrclib (synced or plain, lines, words, same timestamps as the tag, its own check), whisper (words, words per minute), the in-order line match and the share of the lyric's word pairs that are sung, and the verdict with today's `lrc_fix` result (`would fix` / `would reject`, a simulation on the cached transcript: the audit never writes a tag); a verdict tally closes the run (cached tracks are not summarized one by one, only tallied). lrc_fix's dry-run "would update" lines are kept out of that log and are in `transcribe.log`. `analyze` needs no ML: it recomputes line matching and the quality gate from the cached transcript, compares with lrclib, writes `lrc_suspects_audit.csv`/`.xlsx` (one row per track, git-ignored) and the summary report. Verdict rules and thresholds are listed in the report itself.
+**Verdicts, in short:** no audio evidence (whisper heard almost nothing); `text_mismatch` / `text_partial` (under 20% / 20-50% of the lyric's word pairs are sung; order independent); for a tag that only ends early with sung text, the tag's own timestamps are compared with where whisper hears the lines (median distance up to 3 s: `ends_early_confirmed`, or `ends_early_borderline` when the tag ends at 45% of the track or later; larger: `timestamps_shifted`); stacked timestamps that `lrc_fix` cannot align (`text_ok_not_alignable`), that lrclib has too (`lrclib_bad_timestamps`), that `lrc_fix` wrote while lrclib has no synced lyrics (`stacked_by_lrc_fix`), or where lrclib's are fine (`tag_worse_than_lrclib_*`); `transcription_failed` (with the reason) and `tag_changed` (edited or repaired since `prepare`).
 
-**Tags read:** `LYRICS`, `ALBUMARTIST`, `ARTIST`, `ALBUM`, `TITLE`, `DISCOGS_RELEASE_ID`, `DISCNUMBER`, `TRACKNUMBER`. **Tags written:** none.
+**Safe bets and `fix`:** a track is a safe bet when its tag has stacked timestamps, at least 50% of its word pairs are sung, today's `lrc_fix` would write a clean result, the cache holds words and onsets (so no ML runs; the demucs/whisperx/onset functions are blocked during `fix`) and the tag is still what `prepare` audited. `fix` lists them; `fix --apply` runs `lrc_fix.process_file` in-process for each (the normal write path, `[re:]` stamped) after saving the old tag to `fixes.jsonl`, re-reads the tag, and restores the old one at once if the result is unchanged or still stacked. `revert` restores every tag from `fixes.jsonl` unless it was edited since the fix. Nothing else is ever written to the library.
+
+**Tags read:** `LYRICS`, `ALBUMARTIST`, `ARTIST`, `ALBUM`, `TITLE`, `DISCOGS_RELEASE_ID`, `DISCNUMBER`, `TRACKNUMBER`. **Tags written:** `LYRICS`, only by `fix --apply` / `revert`.
 
 **External service:** lrclib.net `GET /api/get` (same lookup order, client headers and pacing as `update_lyrics.py`).
 

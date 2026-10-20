@@ -26,18 +26,26 @@ test, lrc_format.lrc_suspect_reasons) and compares three sources per track:
   2. lrclib.net today (fetched fresh, paced as in ADR 0007 section 4),
   3. the audio, as the demucs + whisperx transcript in the lrc_fix ASR cache.
 
-Each track gets a verdict (see classify()): the lyrics do not match the audio, the lyrics match but
-the timestamps are bad at lrclib, the timestamps were broken by our own tools, and so on, plus whether
-today's lrc_fix would fix it. The library is only read: lrc_fix is run with --dry-run, so no tag is
-written; the only outputs are the lrc_fix cache, this tool's work directory and the reports.
+Each track gets a verdict (see classify()): the lyrics are not in the audio, the lyrics match but
+the timestamps are bad at lrclib, the timestamps were broken by our own tools, the tag only ends early
+and the audio confirms its timing, and so on, plus whether today's lrc_fix would fix it. Everything
+except `fix --apply` only reads the library: lrc_fix is run with --dry-run, so no tag is written; the
+outputs are the lrc_fix cache, this tool's work directory and the reports.
+
+`fix --apply` repairs the "safe bets" (stacked timestamps, the text is sung, today's lrc_fix would write
+a clean result, words and onsets are cached so no ML runs, the tag is unchanged since prepare) with
+lrc_fix's normal write path, after saving each old tag to fixes.jsonl; `revert` puts them back.
 
 Usage (everything is resumable; re-running continues where it stopped):
-    ./lrc_audit.py run                  # prepare + transcribe + analyze, e.g. overnight
+    ./lrc_audit.py run [--apply-fixes]  # prepare + transcribe + analyze (+ fix), e.g. overnight
     ./lrc_audit.py prepare [--root DIR]
     ./lrc_audit.py transcribe [--limit N] [--offset N]
     ./lrc_audit.py analyze [--skip-lrclib] [--refetch]
+    ./lrc_audit.py fix [--apply]        # preview (default) or write the safe bets
+    ./lrc_audit.py revert               # restore the tags that fix --apply replaced
 
-Outputs: lrc_suspects_audit.csv/.xlsx (one row per track, git-ignored) and the summary
+Outputs: lrc_suspects_audit.csv/.xlsx (one row per track, git-ignored; the xlsx has a `review` sheet,
+also lrc_suspects_audit_review.csv, for the tracks that need a human) and the summary
 docs/lrc-suspects-audit.md. Work files live in ~/.cache/lrc_audit (--work-dir).
 """
 
@@ -46,18 +54,21 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import io
 import json
 import os
 import re
 import shutil
+import statistics
 import subprocess
 import sys
 import time
 from collections import Counter
+from contextlib import redirect_stdout
 from datetime import datetime
 from difflib import SequenceMatcher
-from itertools import pairwise
 from pathlib import Path
+from unittest import mock
 
 import requests
 from mutagen.flac import FLAC
@@ -82,55 +93,82 @@ DEFAULT_OUT = ROOT / 'lrc_suspects_audit'
 MIN_WORDS = 5  # fewer transcript words than this: whisper heard (almost) nothing
 MIN_WORDS_PER_MIN = 10  # fewer than this many words per minute: same
 MATCH_OK = 0.6  # share of matched lines lrc_fix needs to align (its own --min-match)
-BIGRAM_LOW = 0.2  # share of lyric word pairs found in the transcript: below this, not sung
-BIGRAM_OK = 0.5  # at or above this the text is sung, whatever the order or structure
-AUDIO_CONTINUES_SECS = 20  # transcript runs this long past the last lyric timestamp
+SUNG_LOW = 0.2  # share of lyric word pairs found in the transcript: below this, not sung
+SUNG_OK = 0.5  # at or above this the text is sung, whatever the order or structure
+TIMING_OK_SECS = 3.0  # median distance between the tag's timestamps and where whisper hears them
+ENDS_EARLY_BORDERLINE = 0.45  # a tag whose last timestamp is at or past this share of the track
+LRCLIB_COOLDOWN = 30  # seconds to wait before trying lrclib again after its breaker tripped
 STACKED = {'one_timestamp', 'shared_timestamps'}  # the reasons that mean "timestamps are broken"
 BORDERLINE = 0.05  # report-only: a match share this close to a threshold is flagged
 
 CATEGORY_TEXT = {
 	'not_cacheable': 'cannot be cached (no numeric DISCOGS_RELEASE_ID or no TRACKNUMBER)',
 	'file_missing': 'file not found',
-	'not_transcribed': 'not transcribed yet (or the transcription failed)',
+	'tag_changed': 'the tag changed since prepare (fixed by an apply run, or edited): run prepare again',
+	'not_transcribed': 'not transcribed yet',
+	'transcription_failed': 'the transcription failed (see fail_reason)',
 	'no_audio_evidence': 'whisper heard (almost) nothing: text cannot be judged',
 	'text_mismatch': 'lyrics are not in the audio (under 20% of their word pairs are sung)',
 	'text_partial': 'lyrics are in the audio only partly (20-50% of their word pairs)',
-	'text_ok_not_alignable': 'lyrics are sung, but lrc_fix cannot align them (order or structure differs)',
-	'lyrics_truncated': 'lyrics match, but the vocals go on long after the last lyric line',
-	'ends_early_plausible': 'lyrics match; ends early only (likely an instrumental outro)',
+	'text_ok_not_alignable': 'lyrics are sung, stacked timestamps, but lrc_fix cannot align them',
+	'ends_early_confirmed': 'ends early only; the audio confirms the timestamps (a lyric shorter than the song)',
+	'ends_early_borderline': 'ends early only, timestamps confirmed, tag ends at 45-50% of the track',
+	'timestamps_shifted': 'ends early only, and the timestamps differ from where the audio sings the lines',
+	'ends_early_unconfirmed': 'ends early only; too few lines match to compare the timing',
 	'source_junk_only': 'lyrics match; only junk characters (hearts) in the source text',
 	'lrclib_bad_timestamps': 'lyrics match, timestamps stacked, lrclib has the same timestamps',
 	'lrclib_bad_other_version': 'lyrics match, timestamps stacked, lrclib has stacked ones too (different)',
+	'stacked_by_lrc_fix': "timestamps stacked, lrclib has no synced lyrics: lrc_fix's own earlier output",
 	'tag_worse_than_lrclib_lrc_fix': 'lyrics match, lrclib timestamps fine, tag written by lrc_fix',
 	'tag_worse_than_lrclib_other': 'lyrics match, lrclib timestamps fine, tag from elsewhere',
 	'timestamps_bad_source_unknown': 'lyrics match, timestamps stacked, lrclib not comparable',
 }
 
 # The report's answer to "lrclib or us?": mutually exclusive groups, in this order.
-G_LRCLIB_TS = 'Likely bad input from lrclib: stacked timestamps or truncated lyrics'
+G_LRCLIB_TS = 'Likely bad input from lrclib: stacked timestamps'
 G_LRCLIB_TEXT = (
 	'Likely bad input from lrclib: lyrics are not (fully) in the audio, lrclib serves the same text'
 )
-G_OURS = 'Broken by our tools (lrclib has good timestamps)'
+G_OURS = 'Broken by our tools: stacked timestamps written by lrc_fix, or tag worse than lrclib'
 G_NOT_ALIGNABLE = 'Lyrics are sung, but lrc_fix cannot align them (order or structure differs)'
 G_TEXT_OTHER = 'Lyrics are not (fully) in the audio, and the tag text differs from lrclib'
-G_FINE = 'Probably fine (hints only)'
-G_UNKNOWN = 'Cannot tell (no audio evidence, lrclib not comparable, not transcribed)'
-GROUPS = [G_LRCLIB_TS, G_LRCLIB_TEXT, G_OURS, G_NOT_ALIGNABLE, G_TEXT_OTHER, G_FINE, G_UNKNOWN]
+G_SHIFTED = 'Timestamps shifted against the audio (lrc_fix can fix them)'
+G_FINE = 'Probably fine: ends early only with confirmed timing, or hearts only'
+G_CHANGED = 'Tag changed since the audit'
+G_UNKNOWN = 'Cannot tell (no audio evidence, lrclib not comparable, not transcribed, failed)'
+GROUPS = [
+	G_LRCLIB_TS,
+	G_LRCLIB_TEXT,
+	G_OURS,
+	G_NOT_ALIGNABLE,
+	G_TEXT_OTHER,
+	G_SHIFTED,
+	G_FINE,
+	G_CHANGED,
+	G_UNKNOWN,
+]
 
 
 def group_of(r: dict) -> str:
 	cat = r['category']
-	if cat in ('lrclib_bad_timestamps', 'lrclib_bad_other_version', 'lyrics_truncated'):
+	if cat in ('lrclib_bad_timestamps', 'lrclib_bad_other_version'):
 		return G_LRCLIB_TS
 	if cat in ('text_mismatch', 'text_partial'):
 		return G_LRCLIB_TEXT if r.get('text_source') == 'lrclib_same_text' else G_TEXT_OTHER
 	if cat == 'text_ok_not_alignable':
 		return G_NOT_ALIGNABLE
-	if cat in ('tag_worse_than_lrclib_lrc_fix', 'tag_worse_than_lrclib_other'):
+	if cat in (
+		'stacked_by_lrc_fix',
+		'tag_worse_than_lrclib_lrc_fix',
+		'tag_worse_than_lrclib_other',
+	):
 		return G_OURS
-	if cat in ('ends_early_plausible', 'source_junk_only'):
+	if cat == 'timestamps_shifted':
+		return G_SHIFTED
+	if cat in ('ends_early_confirmed', 'ends_early_borderline', 'source_junk_only'):
 		return G_FINE
+	if cat == 'tag_changed':
+		return G_CHANGED
 	return G_UNKNOWN
 
 
@@ -154,11 +192,12 @@ COLUMNS = [
 	'transcript_words',
 	'words_per_min',
 	'transcript_last_ts',
-	'audio_continues',
+	'timing_dev',
+	'timing_lines',
 	'lines_counted',
 	'lines_matched',
 	'line_match',
-	'bigram_recall',
+	'sung_ratio',
 	'word_recall',
 	'word_precision',
 	'lrclib_status',
@@ -173,6 +212,8 @@ COLUMNS = [
 	'fix_status',
 	'fix_detail',
 	'fix_remaining_reasons',
+	'safe_bet',
+	'fail_reason',
 ]
 
 
@@ -404,15 +445,35 @@ def summary_lines(row: dict) -> list[str]:
 		out.append(f'whisper: {row["transcript_words"]} words ({row["words_per_min"]:.0f}/min)')
 		out.append(
 			f'match:   {row["lines_matched"]} of {row["lines_counted"]} lines in order '
-			f"({percent(row['line_match'])}), {percent(row['bigram_recall'])} of the lyric's word "
+			f"({percent(row['line_match'])}), {percent(row['sung_ratio'])} of the lyric's word "
 			'pairs sung'
 		)
+		if row.get('timing_dev') is not None:
+			out.append(
+				f"timing:  the tag's timestamps are {row['timing_dev']:.1f} s off (median) from "
+				f'where whisper hears {row["timing_lines"]} of its lines'
+			)
 		fix = row['fix_status'].replace('_', ' ') + (
 			f', {row["fix_detail"]}' if row['fix_detail'] else ''
 		)
-		out.append(f"verdict: {row['category']} (today's lrc_fix: {fix})")
+		safe = '; SAFE BET: fix --apply repairs it from the cache' if row.get('safe_bet') else ''
+		out.append(f"verdict: {row['category']} (today's lrc_fix: {fix}{safe})")
+	elif row.get('fail_reason'):
+		out.append(f'verdict: {row["category"]}: {row["fail_reason"]}')
 	else:
 		out.append(f'verdict: {row["category"]}')
+	return out
+
+
+def load_failures(work_dir: Path) -> dict[str, str]:
+	"""path -> last failure reason from failed.txt (a track can fail on several runs)."""
+	out: dict[str, str] = {}
+	path = work_dir / 'failed.txt'
+	if path.exists():
+		for line in path.read_text(encoding='utf-8').splitlines():
+			track, _, why = line.partition('\t')
+			if track:
+				out[track] = why.strip()
 	return out
 
 
@@ -421,7 +482,9 @@ def print_tally(subset: list[dict], args: argparse.Namespace) -> None:
 	tally: Counter[str] = Counter()
 	for t in subset:
 		try:
-			row = analyze_target(t, args, load_lrclib_cached(args.work_dir, t['path']))
+			row = analyze_target(
+				t, args, load_lrclib_cached(args.work_dir, t['path']), load_failures(args.work_dir)
+			)
 		except Exception:  # noqa: BLE001  # one odd track must not hide the tally
 			tally['(could not analyse)'] += 1
 			continue
@@ -449,8 +512,8 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
 	if not todo:
 		print_tally(subset, args)
 		return
-	session = requests.Session()
-	pacer = update_lyrics.Pacer()
+	client = LrclibClient()
+	failures = load_failures(args.work_dir)
 	awake = None if args.no_caffeinate else start_caffeinate()
 	args.work_dir.mkdir(parents=True, exist_ok=True)
 	log = (args.work_dir / 'transcribe.log').open('a', encoding='utf-8')
@@ -475,16 +538,17 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
 				print(f'     FAILED: {why}')
 				with failed_path.open('a', encoding='utf-8') as fh:
 					fh.write(f'{t["path"]}\t{why}\n')
+				failures[t['path']] = why
 			try:
 				if args.skip_lrclib:
 					entry = None
 				else:
 					try:
-						entry = lrclib_lookup(t, args, session, pacer)
+						entry = lrclib_lookup(t, args, client)
 					except Exception as exc:  # noqa: BLE001  # the long run must survive a bad lookup
 						print(f'     lrclib lookup failed: {exc}')
 						entry = {'status': 'error', 'body': {}}
-				for line in summary_lines(analyze_target(t, args, entry)):
+				for line in summary_lines(analyze_target(t, args, entry, failures)):
 					print(f'     {line}')
 			except Exception as exc:  # noqa: BLE001  # the summary is a convenience, never fatal
 				print(f'     (no summary: {exc})')
@@ -518,33 +582,14 @@ def similarity(a_lines: list[str], b_lines: list[str]) -> float | None:
 	return SequenceMatcher(a=a, b=b, autojunk=False).ratio()
 
 
-def asr_tokens(words: list[dict]) -> list[str]:
-	"""One token per transcript word (the first, as lrc_fix.match_line_times does)."""
-	out = []
+def word_stats(lyric_lines: list[str], words: list[dict]) -> tuple[float | None, float | None]:
+	"""(recall, precision) of the lyric tokens against the transcript tokens."""
+	asr = []
 	for w in words:
 		toks = lrc_fix._tokenize(w['w'])
 		if toks:
-			out.append(toks[0])
-	return out
-
-
-def bigram_recall(lyric_lines: list[str], words: list[dict]) -> float | None:
-	"""Share of the lyric's consecutive word pairs that occur anywhere in the transcript.
-
-	Unlike the line match it ignores order and structure, so repeated sections, a shuffled
-	line order or interleaved backing vocals ("ooh") do not hide the fact that the text is sung.
-	"""
-	lyric, asr = tokens(lyric_lines), asr_tokens(words)
-	if len(lyric) < 2 or len(asr) < 2:
-		return None
-	heard = set(pairwise(asr))
-	pairs = list(pairwise(lyric))
-	return sum(p in heard for p in pairs) / len(pairs)
-
-
-def word_stats(lyric_lines: list[str], words: list[dict]) -> tuple[float | None, float | None]:
-	"""(recall, precision) of the lyric tokens against the transcript tokens."""
-	asr, lyric = asr_tokens(words), tokens(lyric_lines)
+			asr.append(toks[0])
+	lyric = tokens(lyric_lines)
 	if not asr or not lyric:
 		return None, None
 	blocks = SequenceMatcher(a=asr, b=lyric, autojunk=False).get_matching_blocks()
@@ -563,13 +608,15 @@ def simulate_fix(
 	raw_times: list[float | None],
 	onsets: list[float] | None,
 	length: float,
+	words: list[dict] | None = None,
 	min_match: float = MATCH_OK,
+	min_sung: float = SUNG_OK,
 ) -> tuple[str, str, list[str]]:
 	"""What the current lrc_fix would do ('would_fix'|'would_reject', why, remaining suspect reasons).
 
 	A pure simulation on the cached transcript: nothing is written anywhere.
 	"""
-	why = lrc_fix.alignment_rejection(lyric_lines, raw_times, min_match)
+	why = lrc_fix.alignment_rejection(lyric_lines, raw_times, min_match, words, min_sung)
 	if why:
 		return 'would_reject', why, []
 	times = lrc_fix.finalize_times(raw_times, onsets or [], length or None)
@@ -592,23 +639,31 @@ def classify(r: dict) -> tuple[str, str]:
 			'lrclib_same_text' if sim is not None and sim >= 0.9 else 'differs_from_lrclib'
 		)
 	words, wpm = r['transcript_words'], r['words_per_min']
-	match, bigrams = r['line_match'], r['bigram_recall']
-	if words < MIN_WORDS or wpm < MIN_WORDS_PER_MIN or bigrams is None:
+	match, sung = r['line_match'], r['sung_ratio']
+	if words < MIN_WORDS or wpm < MIN_WORDS_PER_MIN or sung is None:
 		return 'no_audio_evidence', text_source
-	if bigrams < BIGRAM_LOW:
+	if sung < SUNG_LOW:
 		return 'text_mismatch', text_source
-	if bigrams < BIGRAM_OK:
+	if sung < SUNG_OK:
 		return 'text_partial', text_source
-	if match is None or match < MATCH_OK:
-		return 'text_ok_not_alignable', text_source
 	tag_reasons = set(r['tag_reasons'])
 	if not tag_reasons & STACKED:
-		if 'ends_early' in tag_reasons:
-			if r['audio_continues']:
-				return 'lyrics_truncated', text_source
-			return 'ends_early_plausible', text_source
-		return 'source_junk_only', text_source
+		if 'ends_early' not in tag_reasons:
+			return 'source_junk_only', text_source
+		# The text is sung and the tag only ends early: are the timestamps right where they are?
+		dev = r['timing_dev']
+		if dev is None:
+			return 'ends_early_unconfirmed', text_source
+		if dev > TIMING_OK_SECS:
+			return 'timestamps_shifted', text_source
+		share = r['tag_last_ts'] / r['length'] if r['length'] else 0.0
+		borderline = share >= ENDS_EARLY_BORDERLINE
+		return ('ends_early_borderline' if borderline else 'ends_early_confirmed'), text_source
+	if match is None or match < MATCH_OK:
+		return 'text_ok_not_alignable', text_source
 	if r['lrclib_status'] != 'found' or not r['lrclib_has_synced']:
+		if r['tag_origin'] == 'lrc_fix':
+			return 'stacked_by_lrc_fix', text_source
 		return 'timestamps_bad_source_unknown', text_source
 	if set(r['lrclib_reasons']) & STACKED:
 		same = r['lrclib_same_timestamps']
@@ -616,6 +671,17 @@ def classify(r: dict) -> tuple[str, str]:
 	if r['tag_origin'] == 'lrc_fix':
 		return 'tag_worse_than_lrclib_lrc_fix', text_source
 	return 'tag_worse_than_lrclib_other', text_source
+
+
+def timing_agreement(tag_times: list[float], tag_texts: list[str], words: list[dict]):
+	"""(median seconds between the tag's timestamps and where whisper hears the same lines,
+	number of lines compared); (None, n) when fewer than MATCH_OK of the lines are found."""
+	heard = lrc_fix.match_line_times(tag_texts, words)
+	counted = [h for text, h in zip(tag_texts, heard) if lrc_fix._tokenize(text)]
+	devs = [abs(t - h) for t, h in zip(tag_times, heard) if h is not None]
+	if not counted or len(devs) / len(counted) < MATCH_OK or not devs:
+		return None, len(devs)
+	return statistics.median(devs), len(devs)
 
 
 def lrclib_path(work_dir: Path, track_path: str) -> Path:
@@ -633,14 +699,35 @@ def load_lrclib_cached(work_dir: Path, track_path: str) -> dict | None:
 		return None
 
 
-def lrclib_lookup(
-	t: dict, args: argparse.Namespace, session: requests.Session, pacer: update_lyrics.Pacer
-) -> dict:
+class LrclibClient:
+	"""One session and one request pacer for lrclib.
+
+	update_lyrics.Pacer opens a circuit breaker after a run of failures and then refuses every
+	further request until its retry rounds reset it. This tool has no retry rounds, so the pacer is
+	replaced after a cool-down; otherwise one hiccup would fail every later lookup of the run.
+	"""
+
+	def __init__(self) -> None:
+		self.session = requests.Session()
+		self.pacer = update_lyrics.Pacer()
+
+	def ready(self) -> None:
+		if self.pacer.is_down():
+			print(
+				f'   lrclib looked down; waiting {LRCLIB_COOLDOWN} s before trying again',
+				flush=True,
+			)
+			time.sleep(LRCLIB_COOLDOWN)
+			self.pacer = update_lyrics.Pacer()
+
+
+def lrclib_lookup(t: dict, args: argparse.Namespace, client: LrclibClient) -> dict:
 	"""Fresh lrclib answer for one track, cached on disk. Same lookup order as update_lyrics."""
 	if not args.refetch:
 		cached = load_lrclib_cached(args.work_dir, t['path'])
 		if cached:
 			return cached
+	client.ready()
 	title = t['title']
 	stripped = update_lyrics.strip_trailing_bracket(title)
 	names = [title] if stripped == title else [title, stripped]
@@ -660,7 +747,7 @@ def lrclib_lookup(
 	]
 	entry = {'status': 'not_found', 'body': {}, 'fetched': datetime.now().isoformat()}
 	for params in variants:
-		body = update_lyrics._lrclib_get(session, pacer, params, title)
+		body = update_lyrics._lrclib_get(client.session, client.pacer, params, title)
 		if body is None:
 			entry['status'] = 'error'
 			break
@@ -676,11 +763,10 @@ def lrclib_lookup(
 
 def fetch_lrclib(targets: list[dict], args: argparse.Namespace) -> dict[str, dict]:
 	"""Fresh lrclib answer per track (cached on disk), one request at a time."""
-	session = requests.Session()
-	pacer = update_lyrics.Pacer()
+	client = LrclibClient()
 	out: dict[str, dict] = {}
 	for i, t in enumerate(targets, 1):
-		out[t['path']] = lrclib_lookup(t, args, session, pacer)
+		out[t['path']] = lrclib_lookup(t, args, client)
 		if i % 25 == 0:
 			print(f'   lrclib: {i}/{len(targets)}', flush=True)
 	return out
@@ -725,7 +811,9 @@ def compare_lrclib(t: dict, entry: dict | None) -> dict:
 	return res
 
 
-def analyze_target(t: dict, args: argparse.Namespace, entry: dict | None) -> dict:
+def analyze_target(
+	t: dict, args: argparse.Namespace, entry: dict | None, failures: dict | None = None
+) -> dict:
 	row = {
 		'artist': t['artist'],
 		'album': t['album'],
@@ -744,8 +832,16 @@ def analyze_target(t: dict, args: argparse.Namespace, entry: dict | None) -> dic
 		**compare_lrclib(t, entry),
 	}
 	state, payload = cache_state(t, args)
-	if payload is None:
-		row['pre_category'] = {'missing': 'not_transcribed'}.get(state, state)
+	row['safe_bet'] = False
+	if state != 'file_missing' and current_tag(Path(t['path'])) != t['lyrics']:
+		row['pre_category'] = 'tag_changed'
+	elif payload is None:
+		if state == 'missing' and failures and t['path'] in failures:
+			row['pre_category'] = 'transcription_failed'
+			row['fail_reason'] = failures[t['path']]
+		else:
+			row['pre_category'] = {'missing': 'not_transcribed'}.get(state, state)
+	if row.get('pre_category'):
 		row['category'], row['text_source'] = classify(row)
 		return row
 	words = payload['words']
@@ -756,18 +852,20 @@ def analyze_target(t: dict, args: argparse.Namespace, entry: dict | None) -> dic
 	length = t['length']
 	last_word = words[-1]['t'] if words else 0.0
 	fix_status, fix_detail, remaining = simulate_fix(
-		lyric_lines, raw_times, payload.get('onsets'), length
+		lyric_lines, raw_times, payload.get('onsets'), length, words
 	)
+	timing_dev, timing_lines = timing_agreement(*lrc_body(t['lyrics']), words)
 	row.update(
 		{
 			'transcript_words': len(words),
 			'words_per_min': round(len(words) / (length / 60), 1) if length else 0.0,
 			'transcript_last_ts': round(last_word, 1),
-			'audio_continues': last_word > t['last_ts'] + AUDIO_CONTINUES_SECS,
+			'timing_dev': timing_dev,
+			'timing_lines': timing_lines,
 			'lines_counted': counted,
 			'lines_matched': matched,
 			'line_match': (matched / counted) if counted else None,
-			'bigram_recall': bigram_recall(lyric_lines, words),
+			'sung_ratio': lrc_fix.sung_ratio(lyric_lines, words),
 			'word_recall': recall,
 			'word_precision': precision,
 			'fix_status': fix_status,
@@ -776,7 +874,34 @@ def analyze_target(t: dict, args: argparse.Namespace, entry: dict | None) -> dic
 		}
 	)
 	row['category'], row['text_source'] = classify(row)
+	row['safe_bet'] = is_safe_bet(row, payload)
 	return row
+
+
+def current_tag(path: Path) -> str | None:
+	"""The LYRICS tag as it is in the file right now (None if unreadable)."""
+	try:
+		return _first(FLAC(path), 'LYRICS')
+	except Exception:  # noqa: BLE001  # missing or unreadable
+		return None
+
+
+def is_safe_bet(row: dict, payload: dict) -> bool:
+	"""Would applying today's lrc_fix to this track repair it without any doubt?
+
+	All must hold: stacked timestamps, most of the lyric is sung, today's lrc_fix would write a clean
+	result, the cache holds words and onsets (so no ML runs), and whisper heard enough to trust.
+	The tag being unchanged since prepare is already guaranteed by the caller (no `tag_changed`).
+	"""
+	return bool(
+		set(row['tag_reasons']) & STACKED
+		and row['sung_ratio'] is not None
+		and row['sung_ratio'] >= SUNG_OK
+		and row['fix_status'] == 'would_fix'
+		and payload.get('onsets') is not None
+		and row['transcript_words'] >= MIN_WORDS
+		and row['words_per_min'] >= MIN_WORDS_PER_MIN
+	)
 
 
 def cell(value: object) -> object:
@@ -787,17 +912,50 @@ def cell(value: object) -> object:
 	return '' if value is None else value
 
 
+REVIEW_COLUMNS = [
+	'artist',
+	'album',
+	'title',
+	'category',
+	'text_source',
+	'sung_ratio',
+	'line_match',
+	'words_per_min',
+	'lrclib_status',
+	'lrclib_text_similarity',
+	'tag_origin',
+	'fail_reason',
+	'path',
+]
+REVIEW_CATEGORIES = ('text_mismatch', 'text_partial', 'transcription_failed')
+
+
 def write_tables(rows: list[dict], out_base: Path) -> None:
+	"""All rows as CSV and XLSX, plus a review list (CSV and an XLSX sheet) of the tracks that
+	need a human: lyrics not (fully) in the audio, and failed transcriptions."""
 	records = [[cell(r.get(c)) for c in COLUMNS] for r in rows]
+	review = [
+		[cell(r.get(c)) for c in REVIEW_COLUMNS] for r in rows if r['category'] in REVIEW_CATEGORIES
+	]
 	with out_base.with_suffix('.csv').open('w', newline='', encoding='utf-8') as fh:
 		writer = csv.writer(fh)
 		writer.writerow(COLUMNS)
 		writer.writerows(records)
+	review_csv = out_base.with_name(out_base.name + '_review.csv')
+	with review_csv.open('w', newline='', encoding='utf-8') as fh:
+		writer = csv.writer(fh)
+		writer.writerow(REVIEW_COLUMNS)
+		writer.writerows(review)
 	wb = Workbook()
 	ws = wb.active
+	ws.title = 'all'
 	ws.append(COLUMNS)
 	for rec in records:
 		ws.append(rec)
+	sheet = wb.create_sheet('review')
+	sheet.append(REVIEW_COLUMNS)
+	for rec in review:
+		sheet.append(rec)
 	wb.save(out_base.with_suffix('.xlsx'))
 
 
@@ -854,6 +1012,11 @@ def build_report(rows: list[dict], meta: dict) -> str:
 			'(it passes its own quality gate and the result has no stacked timestamps).'
 		),
 		'',
+		(
+			f'**{sum(1 for r in rows if r.get("safe_bet"))}** of them are safe bets: '
+			'`lrc_audit.py fix --apply` repairs these from the cache without any ML.'
+		),
+		'',
 		'## Verdicts',
 		'',
 		'| Category | Meaning | Tracks | Share | Would fix |',
@@ -888,8 +1051,8 @@ def build_report(rows: list[dict], meta: dict) -> str:
 	border = [
 		r
 		for r in rows
-		if r.get('bigram_recall') is not None
-		and any(abs(r['bigram_recall'] - t) <= BORDERLINE for t in (BIGRAM_LOW, BIGRAM_OK))
+		if r.get('sung_ratio') is not None
+		and any(abs(r['sung_ratio'] - t) <= BORDERLINE for t in (SUNG_LOW, SUNG_OK))
 	]
 	rules = [
 		(
@@ -897,42 +1060,52 @@ def build_report(rows: list[dict], meta: dict) -> str:
 			f'{MIN_WORDS_PER_MIN} words per minute.'
 		),
 		(
-			"Is the text sung at all? Bigram recall = share of the lyric's consecutive word pairs that "
+			"Is the text sung at all? Sung ratio = share of the lyric's consecutive word pairs that "
 			'occur anywhere in the transcript, independent of order, so repeats, a shuffled line order '
-			f'and backing vocals do not matter: under {BIGRAM_LOW:.0%} `text_mismatch`, under '
-			f'{BIGRAM_OK:.0%} `text_partial`. {len(border)} tracks lie within {BORDERLINE:.0%} of a '
+			f'and backing vocals do not matter: under {SUNG_LOW:.0%} `text_mismatch`, under '
+			f'{SUNG_OK:.0%} `text_partial`. {len(border)} tracks lie within {BORDERLINE:.0%} of a '
 			'threshold (see the distribution below).'
 		),
 		(
-			f'Sung, but fewer than {MATCH_OK:.0%} of the word-bearing lines match the transcript in order '
-			"(the quality gate's own number, `--min-match`): `text_ok_not_alignable`. The words are "
-			'there, but `lrc_fix` aligns monotonically and cannot place them.'
+			"The tag only ends early (no stacked timestamps) and the text is sung: the tag's own "
+			'timestamps are compared with where whisper hears the same lines. A median distance of '
+			f'{TIMING_OK_SECS:g} s or less over at least {MATCH_OK:.0%} of the lines is '
+			'`ends_early_confirmed` (the lyric is simply shorter than the song: repeats and outro are '
+			f'not written out), or `ends_early_borderline` if the tag ends at {ENDS_EARLY_BORDERLINE:.0%} '
+			'of the track or later; a larger distance is `timestamps_shifted`; too few matching lines '
+			'is `ends_early_unconfirmed`. Hearts only is `source_junk_only`.'
 		),
 		(
-			'Otherwise the text is sung and alignable. If the tag has no stacked timestamps '
-			'(`one_timestamp`/`shared_timestamps`): `lyrics_truncated` when the transcript runs more '
-			f'than {AUDIO_CONTINUES_SECS} s past the last lyric timestamp, else `ends_early_plausible`, '
-			'else `source_junk_only`.'
+			f'Stacked timestamps and fewer than {MATCH_OK:.0%} of the word-bearing lines matching in order '
+			"(the quality gate's `--min-match`): `text_ok_not_alignable`. The words are there, but "
+			'`lrc_fix` aligns monotonically and cannot place them.'
 		),
 		(
-			'With stacked timestamps, lrclib decides: no synced lyrics there is '
-			'`timestamps_bad_source_unknown`; lrclib stacked too is `lrclib_bad_timestamps` (identical '
-			'timestamps) or `lrclib_bad_other_version`; lrclib fine means our tools wrote it '
+			'Stacked timestamps and alignable: lrclib decides. No synced lyrics there and the tag was '
+			'written by `lrc_fix` is `stacked_by_lrc_fix` (its own earlier output; lrclib never had '
+			'stacked ones), no synced lyrics and another writer is `timestamps_bad_source_unknown`; '
+			'lrclib stacked too is `lrclib_bad_timestamps` (identical timestamps) or '
+			'`lrclib_bad_other_version`; lrclib fine means our tools wrote it '
 			'(`tag_worse_than_lrclib_lrc_fix` if the tag has a `lrc_fix` `[re:]` header, otherwise '
 			'`..._other`, which also covers an older lrclib version).'
 		),
 		(
-			'"Would fix" is a simulation, nothing is written: today\'s `lrc_fix` would pass its gate on '
-			'the cached transcript and the result would have no stacked timestamps (onsets as cached; '
-			'tracks gated out earlier have none). "Would reject" means it would leave the tag as it is.'
+			'"Would fix" is a simulation, nothing is written: today\'s `lrc_fix` (line match, sung '
+			'ratio and no stacked result) would write the tag from the cached transcript. "Would '
+			'reject" means it would leave the tag as it is.'
+		),
+		(
+			'A "safe bet" is a track with stacked timestamps, a sung ratio of at least '
+			f'{SUNG_OK:.0%}, "would fix", cached words and onsets (so no ML is needed) and a tag '
+			'unchanged since `prepare`. `lrc_audit.py fix --apply` repairs exactly these.'
 		),
 	]
 	buckets = Counter(
-		min(int(r['bigram_recall'] * 10), 9) for r in rows if r.get('bigram_recall') is not None
+		min(int(r['sung_ratio'] * 10), 9) for r in rows if r.get('sung_ratio') is not None
 	)
 	lines += [
 		'',
-		'## Distribution of bigram recall (how much of the lyric is sung)',
+		'## Distribution of the sung ratio (how much of the lyric is heard)',
 		'',
 		'| Share of lyric word pairs found in the transcript | Tracks |',
 		'|---|---:|',
@@ -983,7 +1156,8 @@ def cmd_analyze(args: argparse.Namespace) -> None:
 	if not args.skip_lrclib:
 		print('   fetching lrclib (cached per track; one request at a time)')
 		entries = fetch_lrclib(targets, args)
-	rows = [analyze_target(t, args, entries.get(t['path'])) for t in targets]
+	failures = load_failures(args.work_dir)
+	rows = [analyze_target(t, args, entries.get(t['path']), failures) for t in targets]
 	write_tables(rows, args.out)
 	albums = len({str(Path(t['path']).parent) for t in targets})
 	meta = {
@@ -1000,6 +1174,130 @@ def cmd_analyze(args: argparse.Namespace) -> None:
 	print(f'   report: {args.report}\n   tables: {args.out}.csv / .xlsx')
 
 
+def fix_namespace(args: argparse.Namespace) -> argparse.Namespace:
+	"""The options lrc_fix.process_file reads: today's lrc_fix defaults, writing for real."""
+	return argparse.Namespace(
+		whisper_model=args.whisper_model,
+		language=args.language,
+		device=args.device,
+		compute_type=args.compute_type,
+		jobs=args.jobs,
+		dry_run=False,
+		all=True,
+		no_isolate_vocals=False,
+		no_snap_onsets=False,
+		no_vocal_check=False,
+		min_match=MATCH_OK,
+		min_sung=SUNG_OK,
+		fallback_language='en',
+		no_quality_gate=False,
+		dump_words=False,
+		cache_dir=args.cache_dir,
+		no_cache=False,
+		refresh_cache=False,
+	)
+
+
+def write_tag(path: Path, text: str) -> None:
+	song = FLAC(path)
+	song['LYRICS'] = text
+	song.save()
+
+
+def log_fix(work_dir: Path, event: dict) -> None:
+	"""Append one event to fixes.jsonl, flushed to disk before anything else happens."""
+	work_dir.mkdir(parents=True, exist_ok=True)
+	event = {'time': datetime.now().isoformat(timespec='seconds'), **event}
+	with (work_dir / 'fixes.jsonl').open('a', encoding='utf-8') as fh:
+		fh.write(json.dumps(event, ensure_ascii=False) + '\n')
+		fh.flush()
+		os.fsync(fh.fileno())
+
+
+NO_ML = RuntimeError('this step needs demucs/whisperx; fix only works from the cache')
+
+
+def apply_fix(t: dict, args: argparse.Namespace, index: int, total: int) -> str:
+	"""Repair one safe-bet track with today's lrc_fix, from the cache. Returns the outcome."""
+	path = Path(t['path'])
+	old = current_tag(path)
+	if old != t['lyrics']:
+		return 'skipped: the tag changed since prepare'
+	log_fix(args.work_dir, {'event': 'before', 'path': t['path'], 'old': old})
+	guards = [
+		mock.patch.object(lrc_fix, name, side_effect=NO_ML)
+		for name in ('separate_vocals', 'transcribe_words', 'detect_onsets', 'has_speech')
+	]
+	try:
+		with redirect_stdout(io.StringIO()):
+			for guard in guards:
+				guard.start()
+			try:
+				lrc_fix.process_file(path, fix_namespace(args), index, total)
+			finally:
+				mock.patch.stopall()
+	except Exception as exc:  # noqa: BLE001  # one track failing must not stop the others
+		write_tag(path, old)
+		log_fix(args.work_dir, {'event': 'restored', 'path': t['path'], 'why': str(exc)})
+		return f'restored the old tag: {exc}'
+	new = current_tag(path)
+	still_bad = set(lrc_suspect_reasons(new or '', t['length'])) & STACKED
+	if not new or new == old or still_bad:
+		write_tag(path, old)
+		why = 'unchanged' if new == old else 'still stacked or empty'
+		log_fix(args.work_dir, {'event': 'restored', 'path': t['path'], 'why': why})
+		return f'restored the old tag ({why})'
+	log_fix(args.work_dir, {'event': 'applied', 'path': t['path'], 'old': old, 'new': new})
+	return 'repaired'
+
+
+def cmd_fix(args: argparse.Namespace) -> None:
+	"""List the safe bets; with --apply, repair them from the cache (old tags are saved)."""
+	targets = load_targets(args.work_dir)
+	failures = load_failures(args.work_dir)
+	safe = []
+	for t in targets:
+		row = analyze_target(t, args, load_lrclib_cached(args.work_dir, t['path']), failures)
+		if row['safe_bet']:
+			safe.append((t, row))
+	print(f'== fix: {len(safe)} safe bets among {len(targets)} suspect tracks')
+	for t, row in safe:
+		print(f'   {t["artist"]} - {t["title"]} (sung {percent(row["sung_ratio"])})')
+	if not args.apply:
+		print('   preview only: add --apply to write them (the old tags are saved for "revert")')
+		return
+	counts: Counter[str] = Counter()
+	for i, (t, _) in enumerate(safe, 1):
+		outcome = apply_fix(t, args, i, len(safe))
+		counts[outcome.split(':')[0].split(' (')[0]] += 1
+		print(f'[{i}/{len(safe)}] {t["artist"]} - {t["title"]}: {outcome}', flush=True)
+	print(f'== fix done: {dict(counts)}; backup in {args.work_dir / "fixes.jsonl"}')
+
+
+def cmd_revert(args: argparse.Namespace) -> None:
+	"""Put back the tags that `fix --apply` replaced, unless they were edited since."""
+	log = args.work_dir / 'fixes.jsonl'
+	if not log.exists():
+		sys.exit(f'nothing to revert: {log} does not exist')
+	last: dict[str, dict] = {}
+	for line in log.read_text(encoding='utf-8').splitlines():
+		event = json.loads(line)
+		if event['event'] == 'applied':
+			last[event['path']] = event
+		elif event['event'] == 'reverted':
+			last.pop(event['path'], None)
+	done = skipped = 0
+	for path, event in last.items():
+		if current_tag(Path(path)) != event['new']:
+			print(f'   skipped (edited since the fix): {path}')
+			skipped += 1
+			continue
+		write_tag(Path(path), event['old'])
+		log_fix(args.work_dir, {'event': 'reverted', 'path': path})
+		done += 1
+	print(f'== revert: {done} tags restored, {skipped} skipped')
+
+
 def cmd_run(args: argparse.Namespace) -> None:
 	if args.reuse_targets and targets_path(args.work_dir).exists():
 		print(f'== prepare: reusing {targets_path(args.work_dir)}')
@@ -1007,6 +1305,9 @@ def cmd_run(args: argparse.Namespace) -> None:
 		cmd_prepare(args)
 	cmd_transcribe(args)
 	cmd_analyze(args)
+	if args.apply_fixes:
+		args.apply = True
+		cmd_fix(args)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1029,6 +1330,14 @@ def build_parser() -> argparse.ArgumentParser:
 	common.add_argument('--skip-lrclib', action='store_true')
 	common.add_argument('--refetch', action='store_true', help='ignore cached lrclib answers')
 	common.add_argument('--reuse-targets', action='store_true', help='run: keep existing targets')
+	common.add_argument(
+		'--apply',
+		action='store_true',
+		help='fix: really write the repaired tags (default: preview)',
+	)
+	common.add_argument(
+		'--apply-fixes', action='store_true', help='run: finish with fix --apply on the safe bets'
+	)
 	common.add_argument('--report', type=Path, default=DEFAULT_REPORT)
 	common.add_argument(
 		'--out', type=Path, default=DEFAULT_OUT, help='CSV/XLSX path without suffix'
@@ -1039,6 +1348,8 @@ def build_parser() -> argparse.ArgumentParser:
 		('prepare', cmd_prepare),
 		('transcribe', cmd_transcribe),
 		('analyze', cmd_analyze),
+		('fix', cmd_fix),
+		('revert', cmd_revert),
 		('run', cmd_run),
 	):
 		sub.add_parser(name, parents=[common]).set_defaults(func=func)

@@ -31,10 +31,11 @@ timestamp, lines with hearts; see lrc_format.lrc_problem_line_count).
 `directory` can be passed to lrc_fix.py; `yate_link` opens the album in Yate (built from
 config tagger_scheme/flacroot/flacroot_local, empty if they are missing). Rows with the most
 reasons come first. Report only: no tag is written. ends_early and junk_hearts are hints, not proof (a long
-instrumental outro is legitimate).
+instrumental outro is legitimate, and the lyric may simply omit repeats), so tracks whose only reasons are
+those hints are left out unless --hints is given. lrc_audit.py judges them against the audio.
 
 Usage:
-    uv run lrc_count.py [<flacdir>] [--output <file.csv>] [--tracks | --suspects]
+    uv run lrc_count.py [<flacdir>] [--output <file.csv>] [--tracks | --suspects [--hints]]
 
 If <flacdir> is omitted, config.flacroot is used.
 If --output is omitted, the CSV is written to stdout (no .xlsx is written).
@@ -198,7 +199,13 @@ def _disc_track(song: FLAC) -> tuple[int, int]:
 	return disc, track
 
 
-def scan_album_suspects(directory: str) -> list[dict]:
+# Reasons that are hints, not defects: the lyric may simply be shorter than the song (repeats and an
+# outro not written out), or carry junk characters from its source. The audit of the suspect tags
+# (lrc_audit.py) found about a third of the list was ends_early alone and mostly harmless.
+HINT_REASONS = {'ends_early', 'junk_hearts'}
+
+
+def scan_album_suspects(directory: str, hints: bool = False) -> list[dict]:
 	"""Rows for the tracks of one album whose synced LRC looks like a failed alignment.
 
 	Each row has the CSV columns plus internal '_n'/'_disc'/'_track' sort keys.
@@ -216,7 +223,7 @@ def scan_album_suspects(directory: str) -> list[dict]:
 		lyrics = _flactag(song, 'LYRICS')
 		length = float(song.info.length) if song.info else 0.0
 		reasons = lrc_suspect_reasons(lyrics, length)
-		if not reasons:
+		if not reasons or (not hints and set(reasons) <= HINT_REASONS):
 			continue
 		times, _ = lrc_body(lyrics)
 		disc, track = _disc_track(song)
@@ -240,13 +247,13 @@ def scan_album_suspects(directory: str) -> list[dict]:
 	return rows
 
 
-def scan_library_suspects(flacdir: str) -> list[dict]:
+def scan_library_suspects(flacdir: str, hints: bool = False) -> list[dict]:
 	"""Walk the library root, returning the suspect-LRC rows of every album."""
 	rows: list[dict] = []
 	for root, dirs, files in os.walk(flacdir):
 		dirs.sort()  # deterministic traversal order
 		if any(f.lower().endswith('.flac') for f in files):
-			rows.extend(scan_album_suspects(root))
+			rows.extend(scan_album_suspects(root, hints))
 			dirs.clear()  # don't descend further into an album directory
 	return rows
 
@@ -323,6 +330,7 @@ def main() -> None:
 	output_path: str | None = None
 	tracks_mode = False
 	suspects_mode = False
+	hints_mode = False
 
 	# Simple arg parsing: [flacdir] [--output file] [--tracks | --suspects]
 	i = 0
@@ -335,6 +343,9 @@ def main() -> None:
 			i += 1
 		elif args[i] == '--suspects':
 			suspects_mode = True
+			i += 1
+		elif args[i] == '--hints':
+			hints_mode = True
 			i += 1
 		elif not args[i].startswith('--'):
 			flacdir = args[i]
@@ -357,7 +368,7 @@ def main() -> None:
 	logger.info(f'Scanning FLAC library: {flacdir}')
 
 	if suspects_mode:
-		suspect_rows = scan_library_suspects(flacdir)
+		suspect_rows = scan_library_suspects(flacdir, hints_mode)
 		logger.info(f'Found {len(suspect_rows)} tracks with a suspect LRC')
 		suspect_rows.sort(key=lambda r: (-r['_n'], r['album'].lower(), r['_disc'], r['_track']))
 		fieldnames = [
