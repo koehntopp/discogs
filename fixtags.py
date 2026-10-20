@@ -81,6 +81,15 @@ try:
 except ImportError:
 	_cover_max_size = 1500
 
+try:
+	from config import musicbrainz_languages as _musicbrainz_languages
+except ImportError:
+	_musicbrainz_languages = True
+
+import musicbrainz_client
+
+LANGUAGE_TAG = 'LYRICS_LANGUAGE'
+
 
 def resize_covers(directory: str, max_size: int = _cover_max_size) -> None:
 	"""Resize embedded cover art in all FLACs in directory if larger than max_size px."""
@@ -167,7 +176,113 @@ def flactag(song: FLAC | dict, tag: str, required: bool = False) -> str:
 
 
 # fix tags for a single album (in a single directory)
-def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
+def musicbrainz_release_id(tags: dict[str, list[str]]) -> str:
+	"""The user-set MusicBrainz release id (not the release-group id) from upper-cased tags."""
+	for key in ('MUSICBRAINZ_ALBUMID', 'MUSICBRAINZ ALBUM ID'):
+		values = tags.get(key)
+		if values and values[0].strip():
+			return values[0].strip()
+	return ''
+
+
+def load_language_release(first_tags: dict[str, list[str]], refresh: bool = False) -> dict | None:
+	"""The album's parsed MusicBrainz release, or None: switched off in config, no
+	MUSICBRAINZ_ALBUMID, or MusicBrainz could not be asked (then language tags stay as they are)."""
+	if not _musicbrainz_languages:
+		return None
+	mbid = musicbrainz_release_id(first_tags)
+	if not mbid:
+		return None
+	try:
+		import config
+
+		base = Path(os.environ.get('CONFIG_DIR') or config.config_dir)
+	except (ImportError, AttributeError):
+		base = Path('.')
+	release = musicbrainz_client.release_languages(mbid, base / 'musicbrainz', refresh)
+	if release is None:
+		logger.warning(
+			f'MusicBrainz lookup failed for release {mbid}; {LANGUAGE_TAG} left as it is'
+		)
+	return release
+
+
+def _leading_int(value: str, default: int) -> int:
+	try:
+		return int(value.split('/')[0].strip())
+	except ValueError:
+		return default
+
+
+def apply_language(audio: FLAC, release: dict | None) -> bool:
+	"""Set (or remove) LYRICS_LANGUAGE on one file from the MusicBrainz release; True if it changed.
+
+	A file that cannot be matched to a MusicBrainz track (another edition of the album) keeps whatever
+	it has; a matched track with no sung language loses the tool-owned tag.
+	"""
+	if release is None or audio.tags is None:
+		return False
+	tags = audio.tags
+	track = musicbrainz_client.find_track(
+		release,
+		tags.get('MUSICBRAINZ_RELEASETRACKID', [''])[0].strip(),
+		_leading_int(tags.get('DISCNUMBER', ['1'])[0], 1),
+		_leading_int(tags.get('TRACKNUMBER', ['0'])[0], 0),
+		tags.get('TITLE', [''])[0],
+	)
+	if track is None:
+		return False
+	wanted = track['languages']
+	if [str(x) for x in tags.get(LANGUAGE_TAG, [])] == wanted:
+		return False
+	if wanted:
+		audio[LANGUAGE_TAG] = wanted
+	elif LANGUAGE_TAG in tags:
+		del tags[LANGUAGE_TAG]
+	else:
+		return False
+	return True
+
+
+def fix_languages(album_dir: str, refresh: bool = False) -> None:
+	"""--languages-only: write only LYRICS_LANGUAGE for one album (no Discogs, no other tag)."""
+	files = sorted(Path(album_dir).rglob('*.flac'))
+	if not files:
+		return
+	try:
+		first = FLAC(str(files[0]))
+		first_tags = (
+			{k.upper(): [str(x) for x in v] for k, v in first.tags.items()} if first.tags else {}
+		)
+	except Exception as e:  # noqa: BLE001
+		logger.warning(f'Skipping unreadable file {files[0]}: {e}')
+		return
+	release = load_language_release(first_tags, refresh)
+	if release is None:
+		return
+	changed = 0
+	for path in files:
+		try:
+			audio = FLAC(str(path))
+			if not audio.tags:
+				audio.add_tags()
+			if apply_language(audio, release):
+				audio.save()
+				try:
+					os.utime(path, None)
+				except Exception as e:  # noqa: BLE001
+					logger.warning(f'Could not touch file mtime for {path}: {e}')
+				changed += 1
+		except Exception as e:  # noqa: BLE001
+			logger.warning(f'Could not update {LANGUAGE_TAG} in {path}: {e}')
+	name = Path(album_dir).name
+	if changed:
+		success(f'{LANGUAGE_TAG} updated on {changed} track(s) in {name}')
+	else:
+		logger.info(f'{LANGUAGE_TAG} already up to date in {name}')
+
+
+def fixdir(fixdir: str, dclient: discogs_client.Client, refresh_musicbrainz: bool = False) -> None:
 	"""Enrich all FLAC files in a single album directory with Discogs metadata.
 
 	Reads the DISCOGS_RELEASE_ID tag from the first FLAC file found, queries the
@@ -183,6 +298,9 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 	PART is always that track's own TITLE; WORK is that track's own SET SUBTITLE
 	when present, letting Roon group/identify individual discs of a box set
 	that this codebase otherwise treats as one flat album directory.
+
+	Also writes LYRICS_LANGUAGE per track from MusicBrainz (the sung language of the track's
+	work, ISO 639-3), anchored by the user-set MUSICBRAINZ_ALBUMID; see apply_language.
 
 	If ALBUM_ARTIST_OVERRIDE is set, it's written into ALBUMARTIST (uniformly,
 	like ALBUM/VERSION) -- a manual correction, not something derived from
@@ -349,6 +467,7 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 		except Exception:  # noqa: BLE001, S110  # optional tag: skipped when Discogs has no value
 			pass
 
+		mb_release = load_language_release(first_tags, refresh_musicbrainz)
 		managed_optional = [
 			'ALBUM_EDITION',
 			'ALBUM_DR',
@@ -379,7 +498,8 @@ def fixdir(fixdir: str, dclient: discogs_client.Client) -> None:
 				] != [set_subtitle]
 				work_stale = not set_subtitle and 'WORK' in audio.tags
 
-				stale_removed = work_stale
+				language_changed = apply_language(audio, mb_release)
+				stale_removed = work_stale or language_changed
 				for opt_tag in managed_optional:
 					if opt_tag not in new_tags and opt_tag in audio.tags:
 						del audio.tags[opt_tag]
@@ -434,6 +554,16 @@ def main() -> None:
 	"""
 	parser = argparse.ArgumentParser(description='Fix FLAC file tags using Discogs metadata')
 	parser.add_argument('directory', nargs='?', help='directory containing FLAC files to process')
+	parser.add_argument(
+		'--languages-only',
+		action='store_true',
+		help='only write LYRICS_LANGUAGE from MusicBrainz (no Discogs lookups, no other tags)',
+	)
+	parser.add_argument(
+		'--refresh-musicbrainz',
+		action='store_true',
+		help='ignore cached MusicBrainz answers and ask again',
+	)
 	args = parser.parse_args()
 
 	if args.directory:
@@ -450,7 +580,11 @@ def main() -> None:
 				flac_directories.append(root)
 				break
 
-	dclient = discogs_client.Client('PyDiscogsTagger/0.1', user_token=api_key)
+	dclient = (
+		None
+		if args.languages_only
+		else discogs_client.Client('PyDiscogsTagger/0.1', user_token=api_key)
+	)
 
 	is_tty = sys.stderr.isatty()
 	console = Console(stderr=True)
@@ -472,7 +606,10 @@ def main() -> None:
 		try:
 			task_id = progress.add_task('Fixing tags', total=len(flac_directories))
 			for directory in flac_directories:
-				fixdir(directory, dclient)
+				if args.languages_only:
+					fix_languages(directory, args.refresh_musicbrainz)
+				else:
+					fixdir(directory, dclient, args.refresh_musicbrainz)
 				progress.update(task_id, advance=1)
 		finally:
 			if is_tty:

@@ -28,6 +28,7 @@ We establish the following binding rules and standards for all FLAC tag handling
   * **Enriched Metadata (Managed by `fixtags.py`)**: `ALBUM`, `VERSION`, `DATE`, `RELEASEDATE`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`.
   * **Structured Custom Metadata (Managed by `fixtags.py`)**: `ALBUM_MASTER_TITLE`, `ALBUM_MASTER_YEAR`, `ALBUM_RELEASE_TITLE`, `ALBUM_RELEASE_YEAR`, `ALBUM_MAX_RESOLUTION`, `ALBUM_EDITION`, `ALBUM_FORMAT`, `ALBUM_RELEASE_COUNTRY`, `ALBUM_RELEASE_LABEL`.
   * **Per-Track Structured Metadata (Managed by `fixtags.py`)**: `PART`, `WORK` — unlike everything else in this table, set independently per track rather than uniformly across the album directory. See §5a.
+  * **Per-Track Language (Managed by `fixtags.py`, derived from MusicBrainz)**: `LYRICS_LANGUAGE`. See §5b.
   * **User Overrides (Optional, read by scripts)**: `ALBUM_TITLE_OVERRIDE`, `ALBUM_ARTIST_OVERRIDE`.
   * **Calculated Metric Tags**:
     * **Track & Album Dynamic Range (`DYNAMIC_RANGE`, `ALBUM_DR`)**: Computed via EBU R 128 / `drmeter`. Track DR is written to `DYNAMIC_RANGE`. Album DR is the rounded arithmetic mean of all track DR scores in the album, written to `ALBUM_DR`.
@@ -81,6 +82,14 @@ We establish the following binding rules and standards for all FLAC tag handling
   identifiable groups in Roon even though this codebase treats the whole box
   set as one flat album directory. See ADR 0008 for the full set of
   Roon-specific tagging decisions.
+
+### 5b. Lyrics Language (`LYRICS_LANGUAGE`)
+* `fixtags.py` writes `LYRICS_LANGUAGE` **per track**: the language(s) sung on the track, as ISO 639-3 codes in MusicBrainz's terms (`eng`, `deu`, `ksh`, `gle`; `mul`, `und` and `zxx` = several / undetermined / no linguistic content, i.e. an instrumental), one value per language. Discogs has no language data (neither releases nor tracks), so this is the one tag derived from **MusicBrainz** rather than Discogs. It is anchored by the user-set `MUSICBRAINZ_ALBUMID` (User Tag Authority); the tag is tool-owned and never read back as input by `fixtags.py`.
+* **Source**: the language of the work a recording performs (`work.languages`), obtained with one release lookup (`inc=recordings+recording-level-rels+work-rels`; without `recording-level-rels` the languages silently do not appear). There is deliberately **no fallback to the release-level language**: it is a single guess for the whole album and is wrong for mixed albums (an album tagged `eng` with Irish tracks). A track whose work has no language gets no tag.
+* **Matching**: a file is matched to its MusicBrainz track by `MUSICBRAINZ_RELEASETRACKID`, else by disc/track number when the titles agree (similarity >= 0.6). A file that cannot be matched (another edition of the album) keeps whatever it has.
+* **Writing**: set when it differs from MusicBrainz; removed when MusicBrainz knows the track but has no sung language; **left untouched when MusicBrainz could not be asked** (a failed lookup is "unknown", never "no language"). The bare Vorbis `LANGUAGE` is not used: a tagger or the user may own it.
+* **Client rules**: identifying `User-Agent`, at most one request per second, retry with backoff on 429/5xx; answers cached per release for 30 days in `config_dir/musicbrainz/` so a library run is offline after the first pass. `fixtags.py --languages-only` writes only this tag (no Discogs lookups); `musicbrainz_languages = False` in `config.py` switches the lookup off.
+* **Consumer**: `lrc_fix.py` forces the transcription language from this tag (ADR 0009), which removes whisper's language misdetection (Gaelic or dialect singing detected as Latin or Welsh).
 
 ### 6. Lyrics Tag Management (`LYRICS`)
 * **Shared Formatting (`lrc_format.py`)**: The `[ar:]/[ti:]/[al:]/[length:]`

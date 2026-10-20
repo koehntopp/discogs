@@ -60,6 +60,8 @@ erDiagram
         string DISCNUMBER "ripper-set, read-only; 'n' or 'n/total'"
         string PART "= this track's own TITLE, always"
         string WORK "= this track's own SET_SUBTITLE, only when present on that track"
+        string LYRICS_LANGUAGE "sung language(s) of this track, ISO 639-3 (eng, deu, ksh, gle; mul/und/zxx), from MusicBrainz via MUSICBRAINZ_ALBUMID; written/removed only by fixtags"
+        string MUSICBRAINZ_RELEASETRACKID "tagger-set, read-only; exact match key to the MusicBrainz release track"
         string SET_SUBTITLE "user-set, per-track, on discs within multi-disc editions"
         string DYNAMIC_RANGE "EBU R128/drmeter score; + legacy 'DYNAMIC RANGE' fallback"
         string ACOUSTID_FINGERPRINT "fpcalc/Chromaprint; + legacy 'ACOUSTID FINGERPRINT' fallback"

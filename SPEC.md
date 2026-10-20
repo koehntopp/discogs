@@ -168,13 +168,15 @@ uv run webui.py
 **Usage:**
 
 ```
-uv run fixtags.py [--configfile | DIRECTORY]
+uv run fixtags.py [--configfile | DIRECTORY] [--languages-only] [--refresh-musicbrainz]
 ```
 
 | Argument / Flag | Required | Description                                           |
 |-----------------|----------|-------------------------------------------------------|
 | `DIRECTORY`     | No       | Album directory (or root) to process.                 |
 | `--configfile`  | No       | Use `config.flacdir` instead of a positional argument.|
+| `--languages-only` | No    | Only write `LYRICS_LANGUAGE` from MusicBrainz: no Discogs lookups, no cover resizing, no other tag. Fast across a whole library (one cached MusicBrainz request per album). |
+| `--refresh-musicbrainz` | No | Ignore cached MusicBrainz answers (30 days) and ask again. |
 
 At least one of the two must be provided; otherwise help is printed.
 
@@ -202,17 +204,18 @@ At least one of the two must be provided; otherwise help is printed.
 5. Writes the following tags **per track** (not uniformly — each file's own value, independent of step 4's album-wide set), for Roon box-set grouping (see ADR 0008):
    - `PART` — always that track's own `TITLE`.
    - `WORK` — that track's own `SET SUBTITLE` when present (a tag the user sets manually, per disc, within multi-disc editions); removed if `SET SUBTITLE` is later cleared on that track.
+6. Writes `LYRICS_LANGUAGE` **per track** from MusicBrainz (`musicbrainz_client.py`, ADR 0002 section 5b): the sung language(s) of the track's work as ISO 639-3 codes (`eng`, `deu`, `ksh`, `gle`; `mul`/`und`/`zxx` as MusicBrainz uses them), repeated values for several languages. The release comes from the user-set `MUSICBRAINZ_ALBUMID`; a file is matched to its MusicBrainz track by `MUSICBRAINZ_RELEASETRACKID`, else by disc/track number when the title agrees (another edition of the album is left alone). A matched track without a sung language loses the tool-owned tag; a failed lookup changes nothing. Switch off with `musicbrainz_languages = False` in `config.py`.
 
-**Tags read:** `DISCOGS_RELEASE_ID`, `DATE`, `SUBTITLE`, `SET SUBTITLE`, `TITLE`,
+**Tags read:** `DISCOGS_RELEASE_ID`, `MUSICBRAINZ_ALBUMID` (or `MUSICBRAINZ ALBUM ID`), `MUSICBRAINZ_RELEASETRACKID`, `DISCNUMBER`, `TRACKNUMBER`, `DATE`, `SUBTITLE`, `SET SUBTITLE`, `TITLE`,
 `ALBUM_DR` (or deprecated `ALBUM DYNAMIC RANGE`), `ALBUM_TITLE_OVERRIDE`, `ALBUM_ARTIST_OVERRIDE`,
 `CATALOGNUMBER` (or `CATALOG NUMBER` / `CATALOG_NUMBER` / `CATALOGNO`)
 
 **Tags written:** `RELEASEDATE`, `DATE`, `YEAR`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`, `ORIGINAL DATE`, `ORIGINAL YEAR`,
 `ALBUM`, `VERSION`, `ALBUM_MASTER_TITLE`, `ALBUM_MASTER_YEAR`, `ALBUM_RELEASE_TITLE`,
 `ALBUM_RELEASE_YEAR`, `ALBUM_EDITION`, `ALBUM_RELEASE_COUNTRY`, `ALBUM_RELEASE_LABEL`,
-`ALBUM_FORMAT`, `ALBUM_MAX_RESOLUTION`, `ALBUM_DR`, `ALBUMARTIST` (only when `ALBUM_ARTIST_OVERRIDE` is set), `PART`, `WORK` (per-track)
+`ALBUM_FORMAT`, `ALBUM_MAX_RESOLUTION`, `ALBUM_DR`, `ALBUMARTIST` (only when `ALBUM_ARTIST_OVERRIDE` is set), `PART`, `WORK`, `LYRICS_LANGUAGE` (per-track)
 
-**External service:** Discogs REST API — requires `api_key` in `config.py`.
+**External services:** Discogs REST API — requires `api_key` in `config.py`; MusicBrainz web service (language only, 1 request per second, cached in `config_dir/musicbrainz/`).
 
 ---
 

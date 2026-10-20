@@ -110,6 +110,7 @@ Copy `config_demo.py` to `config/config.py` and set:
 | `rclone_buffer_size` | rclone transfer buffer size (e.g. `128M`) |
 | `rclone_stats` | rclone stats-reporting interval (e.g. `5s`) |
 | `cover_max_size` | Resize embedded cover art above this dimension (px) |
+| `musicbrainz_languages` | `True` (default): `fixtags.py` writes `LYRICS_LANGUAGE` per track from MusicBrainz (needs `MUSICBRAINZ_ALBUMID`); `False` switches the lookup off |
 | `rsgain_loudness` / `rsgain_clip_mode` / `rsgain_max_peak` / `rsgain_true_peak` / `rsgain_skip` | ReplayGain tagging settings passed to `rsgain` |
 | `syslog_host` / `syslog_port` | Optional Synology log server |
 | `log_file` | Log filename (written to `config_dir`) |
@@ -123,7 +124,7 @@ All config values are also editable via the Settings modal in the web UI.
 ## Tagging Guidelines & Contract
 
 - **Primary Anchor**: Assign `DISCOGS_RELEASE_ID` for every album using Yate or your preferred tagger (mandatory anchor for metadata enrichment).
-- **Optional MusicBrainz Tags**: MusicBrainz IDs (`MUSICBRAINZ_ALBUMID`, `MUSICBRAINZ_ARTISTID`, `MUSICBRAINZ_TRACKID`) populated by your tagger are preserved.
+- **Optional MusicBrainz Tags**: MusicBrainz IDs (`MUSICBRAINZ_ALBUMID`, `MUSICBRAINZ_ARTISTID`, `MUSICBRAINZ_TRACKID`, `MUSICBRAINZ_RELEASETRACKID`) populated by your tagger are preserved. `fixtags.py` uses `MUSICBRAINZ_ALBUMID` to write a per-track `LYRICS_LANGUAGE` tag (the sung language from MusicBrainz, e.g. `eng`, `ksh`, `gle`), which `lrc_fix.py` uses to pick the transcription language; `fixtags.py --languages-only` does just that across a library without any Discogs lookups.
 - **Cover Art**: Embedded cover art is automatically resized if larger than 1500px.
 - **Format Tag**: Set `ALBUM_FORMAT` for physical or digital source media (e.g. `"CD"`, `"SACD"`, `"Blu-ray"`, `"Vinyl"`). Defaults to `"CD"`.
 - **Edition Tag**: Set `ALBUM_EDITION` for special pressings (e.g. `"Deluxe Edition"`, `"40th Anniversary Remaster"`).

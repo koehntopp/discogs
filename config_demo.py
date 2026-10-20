@@ -27,6 +27,8 @@ rclone_stats = '5s'
 
 # Cover art
 cover_max_size = 1500  # resize embedded cover art to this max dimension (px)
+# fixtags: write LYRICS_LANGUAGE per track from MusicBrainz (needs MUSICBRAINZ_ALBUMID)
+musicbrainz_languages = True
 
 # rsgain ReplayGain settings
 rsgain_loudness = -14

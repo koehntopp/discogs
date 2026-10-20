@@ -16,7 +16,9 @@ metadata, paired with a FastAPI/HTMX web UI. Full CLI/API/tag reference: `SPEC.m
   disagrees with the Discogs data, so changing `DISCOGS_RELEASE_ID` always updates them.
   A tag the tool wrote must never be read back as input for itself; the value must come
   from Discogs. If Discogs has data for a field, it is taken in. `ALBUM_RELEASE_YEAR` is
-  taken only from the Discogs release's own year, never from any tag.
+  taken only from the Discogs release's own year, never from any tag. The one exception is
+  `LYRICS_LANGUAGE` (per-track sung language): Discogs has none, so it comes from MusicBrainz,
+  anchored by the user-set `MUSICBRAINZ_ALBUMID` (ADR 0002 section 5b).
 
 ## Agent Guidelines & Approval Workflow
 
@@ -61,7 +63,7 @@ metadata, paired with a FastAPI/HTMX web UI. Full CLI/API/tag reference: `SPEC.m
 
 - `webui.py`: FastAPI + HTMX web UI on port 8000.
 - `nzbfix.py`: Pipeline orchestration script (`dot_clean` -> `calculate_dr` -> `rsgain` -> `calculate_fp` -> `fixtags` -> `update_lyrics`).
-- `fixtags.py`: Discogs API metadata enrichment & tag normalization.
+- `fixtags.py`: Discogs API metadata enrichment & tag normalization; also writes the per-track `LYRICS_LANGUAGE` from MusicBrainz (`--languages-only` for just that).
 - `bliss.py`: File/folder organization and MP3 mirror sync (`ffmpeg`).
 - `album_list.py`: Scans FLAC library, outputs `albums.csv` and `albums_dr.png`.
 - `update_lyrics.py`: Parallel lyrics fetcher from lrclib.net with backoff retry logic.
@@ -72,6 +74,7 @@ metadata, paired with a FastAPI/HTMX web UI. Full CLI/API/tag reference: `SPEC.m
 - `lrc_fix.py`: Local (no cloud API) LRC realignment via demucs vocal isolation + whisperx transcription + onset snapping. Own docs: `README-lrc_fix.md`; design: ADR 0009.
 - `lrc_audit.py`: Audit of the `lrc_count.py --suspects` tracks (tag vs lrclib vs `lrc_fix` transcript); runs `lrc_fix.py --dry-run`, so it needs the `lrc_fix` environment. Its only library write is `fix --apply` (safe bets, from the cache, old tags saved, `revert`). Report: `docs/lrc-suspects-audit.md`.
 - `lrc_format.py`: Shared LRC id-tag/header formatting (no CLI) — imported by `update_lyrics.py`, `lrc_fix.py`, and `lrc_count.py`.
+- `musicbrainz_client.py`: MusicBrainz release lookup for the per-track sung languages (no CLI, cached, 1 request/s) — imported by `fixtags.py`. ADR 0002 §5b.
 - `lrclib_client.py`: Shared lrclib.net client identification (`User-Agent` + public `Lrclib-App-Id`, no CLI) — imported by `update_lyrics.py` and `lrclib_submitter.py`. Limits/requirements: ADR 0007 §4.
 - `check_docs.py`: Checks that `lrc_fix.py`'s flags and dependency pins match `README-lrc_fix.md` and `SPEC.md` (no config needed).
 - `log.py`: Central structured logging (`structlog`).
