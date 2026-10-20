@@ -1,7 +1,7 @@
 # ADR 0009: Local LRC Realignment with `lrc_fix.py` (demucs, whisperx, Onset Snapping)
 
 - **Status**: Accepted (supersedes ADR 0006)
-- **Date**: 2026-10-19
+- **Date**: 2026-10-20 (Updated)
 - **Authors**: Discogs Project Maintainers
 
 ## Context
@@ -43,11 +43,24 @@ here.
    (transcribing Irish with a wrong-language model only produces a transcript the checks below
    would reject, after a minute of CPU); several languages or `mul`/`und` auto-detect. The tag is
    MusicBrainz data and can be wrong, hence `--ignore-language-tag`.
-3. **Match** the known lyric lines against the transcript with `difflib.SequenceMatcher` over lowercase
-   Unicode word tokens (`[^\W_]+`, with an internal apostrophe allowed; not ASCII-only, so Cyrillic,
-   CJK and accented lyrics tokenize; the text is passed through `lrc_format.normalize_text` first so a
-   curly apostrophe does not split `don't`). Only runs of two or more consecutive words are trusted for
-   a line's time; a single matched word is a fallback, because one is easy to hit by chance.
+3. **Match** the known lyric lines against the transcript over lowercase Unicode word tokens
+   (`[^\W_]+`, with an internal apostrophe allowed; not ASCII-only, so Cyrillic, CJK and accented
+   lyrics tokenize; the text is passed through `lrc_format.normalize_text` first so a curly apostrophe
+   does not split `don't`). Two matchers run and the one that places more lines wins (the older on a
+   tie), so the second can only add matches:
+   - `match_blocks`: one `difflib.SequenceMatcher` pass over the whole text. Only runs of two or more
+     consecutive words are trusted for a line's time; a single matched word is a fallback, because
+     one is easy to hit by chance. It locks onto the longest common block, so it loses lines when a
+     chorus is repeated or the transcript has sections the text lacks.
+   - `match_per_line`: each lyric line finds its own candidate stretches in the transcript (at least
+     60% of its words in order, at least two words; a line of one or two words must match entirely and
+     counts half), a transcript word that nearly matches a lyric word (similarity 0.8, at least four
+     letters) counts as that word, and a dynamic programme then picks at most one candidate per line so
+     that the total weight is highest and the chosen stretches never go backwards. A repeated line takes
+     successive occurrences in the song; transcript sections no line claims are skipped. The text is
+     never expanded or reordered: a chorus sung four times but written once is placed at its first
+     occurrence. On the 34 suspect tags with sung text that `match_blocks` could not align, it let 9
+     pass the quality gate; the rest are mostly transcripts with hallucinated loops or ad-libs.
 4. **Snap to onsets**: each matched time is pulled back to the nearest librosa onset (computed on the
    same audio, `backtrack=True`) within 0.7 s before, falling back to one up to 0.2 s after, so it lands
    on the attack of the word, not mid-word. `--no-snap-onsets` skips this.
@@ -171,6 +184,31 @@ and is not run by `webui.py`:
   it, to stay idempotent against the tool's own buggy output. Once those bugs were fixed it became a
   liability: it silently discarded any manual edit made between runs.
 - **No estimated-time copying.** Unmatched lines are never given a neighbour's timestamp (section 3).
+
+### 9. Repairing the library from the audit (`lrc_audit.py fix`)
+
+`lrc_audit.py` compares every suspect tag with lrclib and the cached transcript, then offers repairs by
+tier. It is the only part of the audit that writes, always from the cache (the demucs, whisperx and
+onset functions are blocked), only on a tag that is unchanged since `prepare`, with the old tag saved
+to `fixes.jsonl` first so `revert` can restore it. A realigned tag is re-read and restored at once if
+it is unchanged or still stacked.
+
+- `instrumental`: `LYRICS_LANGUAGE` is `zxx` and whisper hears under 10 words per minute, or the track
+  has no real language tag (none, `und`, `zxx`) and whisper hears under 3. The tag gets the canonical
+  instrumental marker (ADR 0002 section 6). A track MusicBrainz calls sung is never marked, whatever
+  whisper hears, because a quiet or processed vocal must not erase real lyrics. MusicBrainz `zxx`
+  tracks that `lrc_fix` skips are transcribed once with `--ignore-language-tag` (`transcribe --extra zxx`)
+  so there is evidence either way.
+- `safe`: stacked timestamps, at least 50% of the word pairs sung, and `lrc_fix` would write a clean
+  result.
+- `shifted`: the text is sung and in order but the tag's timestamps are far from where the audio has
+  the lines (usually lrclib's timestamps are for another recording, for example a studio version
+  against a live one). More than 10 s off, line match at least 80%, sung at least 70%: realigned.
+  `shifted-all` (the remaining shifted tracks `lrc_fix` can fix) is opt-in.
+- `onetimestamp`: a tag whose lines share one timestamp (mostly `00:00.00`, the output of the old
+  `lrc_fix` bug when nothing matched) is realigned when `lrc_fix` can; otherwise the timestamps carry
+  no information and are dropped, keeping the text as plain lyrics so `update_lyrics.py` may replace it
+  with synced lyrics later.
 
 ---
 

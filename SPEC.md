@@ -498,7 +498,7 @@ uv run lrc_count.py [<flacdir>] [--output <file.csv>] [--tracks | --suspects [--
 
 **Purpose:** Realign `LYRICS` tag timestamps to the actual audio, entirely
 locally: demucs vocal isolation, whisperx transcription, difflib sequence
-matching against the known lyric lines, and librosa onset-snapping. No cloud
+matching and a per-line dynamic-programming match against the known lyric lines, and librosa onset-snapping. No cloud
 APIs, no LLM in the timing path. Supersedes the earlier `align_lyrics.py`
 (deleted; see ADR 0006, now superseded, and ADR 0009).
 
@@ -533,7 +533,7 @@ all checks. If whisperx has no alignment model for the detected language, `--fal
 
 ---
 
-### `lrc_audit.py` — Are the suspect lyrics bad because of lrclib or because of our tools? (and repair of the safe ones)
+### `lrc_audit.py` — Are the suspect lyrics bad because of lrclib or because of our tools? (and repair by tier)
 
 **Purpose:** For every track whose synced LRC looks like a failed alignment (the `lrc_count.py --suspects` test, `lrc_format.lrc_suspect_reasons`, hint-only tracks included), compare three sources: the tag (text, timestamps, and the `[re:]` header that says `lrc_fix` wrote it), lrclib.net today (fetched fresh, paced as in ADR 0007 section 4), and the audio (the demucs + whisperx transcript in the `lrc_fix` ASR cache). Each track gets a verdict and a flag whether today's `lrc_fix` would fix it. Except for `fix --apply`, it is read-only: `lrc_fix.py` runs with `--dry-run`, so no tag is written.
 
@@ -542,9 +542,9 @@ all checks. If whisperx has no alignment model for the detected language, `--fal
 ```bash
 ./lrc_audit.py run [--apply-fixes]      # prepare + transcribe + analyze (+ fix), e.g. overnight
 ./lrc_audit.py prepare [--root DIR]     # find the suspect tracks -> ~/.cache/lrc_audit/targets.jsonl
-./lrc_audit.py transcribe [--limit N] [--offset N]
+./lrc_audit.py transcribe [--limit N] [--offset N] [--extra stale-language|zxx|onsets]
 ./lrc_audit.py analyze [--skip-lrclib] [--refetch]
-./lrc_audit.py fix [--apply]            # list (default) or repair the safe bets
+./lrc_audit.py fix [--tiers T] [--apply]   # list (default) or write the repairs of the chosen tiers
 ./lrc_audit.py revert                   # restore the tags that fix --apply replaced
 ```
 
@@ -560,15 +560,17 @@ all checks. If whisperx has no alignment model for the detected language, `--fal
 | `--skip-lrclib` / `--refetch` | off | skip the lrclib comparison / ignore cached lrclib answers |
 | `--apply` | off | `fix`: really write the repaired tags (without it `fix` only lists them) |
 | `--apply-fixes` | off | `run`: finish with `fix --apply` |
+| `--tiers` | `safe,instrumental,shifted,onetimestamp` | `fix`: comma-separated tiers to offer (`safe`, `instrumental`, `shifted`, `shifted-all`, `onetimestamp`) |
+| `--extra` | (none) | `transcribe`: instead of the uncached tracks, run one extra ML pass over tracks that already have an answer (repeatable): `stale-language` (non-English tracks judged on a transcript that predates `LYRICS_LANGUAGE`, re-transcribed with `--refresh-cache`), `zxx` (MusicBrainz instrumentals that `lrc_fix` skips, transcribed with `--ignore-language-tag` to see whether anything is sung), `onsets` (tracks today's `lrc_fix` would fix whose cache lacks the vocal onsets) |
 | `--report` / `--out` | `docs/lrc-suspects-audit.md` / `lrc_suspects_audit` | summary report / CSV and XLSX base name |
 
 **Behaviour:** `transcribe` runs `lrc_fix.py --dry-run` once per uncached target in its own process (memory is released per track, a failure is logged to `failed.txt` and does not stop the run). After each track it also fetches lrclib (cached, paced; the pacer is replaced after a cool-down if lrclib's circuit breaker tripped, so one hiccup does not fail the rest of the run) and prints a comparison of the three sources: the tag (lines, words, who wrote it, suspect reasons), lrclib (synced or plain, lines, words, same timestamps as the tag, its own check), whisper (words, words per minute), the in-order line match, the share of the lyric's word pairs that are sung, the timing agreement, and the verdict with today's `lrc_fix` result (`would fix` / `would reject`, a simulation on the cached transcript); a verdict tally closes the run (cached tracks are only tallied). `analyze` needs no ML: it recomputes everything from the cached transcript, compares with lrclib, and writes `lrc_suspects_audit.csv`/`.xlsx` (one row per track, git-ignored; the xlsx has a `review` sheet and there is a `_review.csv` for the tracks whose lyrics are not (fully) in the audio and the failed transcriptions) and the summary report with the verdict rules and thresholds.
 
-**Verdicts, in short:** no audio evidence (whisper heard almost nothing); `text_mismatch` / `text_partial` (under 20% / 20-50% of the lyric's word pairs are sung; order independent); for a tag that only ends early with sung text, the tag's own timestamps are compared with where whisper hears the lines (median distance up to 3 s: `ends_early_confirmed`, or `ends_early_borderline` when the tag ends at 45% of the track or later; larger: `timestamps_shifted`); stacked timestamps that `lrc_fix` cannot align (`text_ok_not_alignable`), that lrclib has too (`lrclib_bad_timestamps`), that `lrc_fix` wrote while lrclib has no synced lyrics (`stacked_by_lrc_fix`), or where lrclib's are fine (`tag_worse_than_lrclib_*`); `transcription_failed` (with the reason), `language_skipped` (the `LYRICS_LANGUAGE` tag makes `lrc_fix` skip the track: an instrumental, or a language without a whisper or alignment model; `transcribe` leaves such tracks out instead of calling `lrc_fix`) and `tag_changed` (edited or repaired since `prepare`).
+**Verdicts, in short:** no audio evidence (whisper heard almost nothing); `text_mismatch` / `text_partial` (under 20% / 20-50% of the lyric's word pairs are sung; order independent); for a tag that only ends early with sung text, the tag's own timestamps are compared with where whisper hears the lines (median distance up to 3 s: `ends_early_confirmed`, or `ends_early_borderline` when the tag ends at 45% of the track or later; larger: `timestamps_shifted`); `instrumental_has_lyrics` (checked first: `LYRICS_LANGUAGE` is `zxx` and whisper hears under 10 words per minute, or the track has no real language tag and whisper hears under 3; a track MusicBrainz calls sung is never one); stacked timestamps that `lrc_fix` still cannot align (`text_ok_not_alignable`), that lrclib has too (`lrclib_bad_timestamps`), that `lrc_fix` wrote while lrclib has no synced lyrics (`stacked_by_lrc_fix`), or where lrclib's are fine (`tag_worse_than_lrclib_*`); `transcription_failed` (a crash or timeout, with the reason taken from `lrc_fix`'s own `skip:`/`warning:` line rather than library warnings; a run where whisper returned no words at all is `no_audio_evidence`), `language_skipped` (the `LYRICS_LANGUAGE` tag makes `lrc_fix` skip the track: an instrumental, or a language without a whisper or alignment model; `transcribe` leaves such tracks out instead of calling `lrc_fix`) and `tag_changed` (edited or repaired since `prepare`).
 
-**Safe bets and `fix`:** a track is a safe bet when its tag has stacked timestamps, at least 50% of its word pairs are sung, today's `lrc_fix` would write a clean result, the cache holds words and onsets (so no ML runs; the demucs/whisperx/onset functions are blocked during `fix`) and the tag is still what `prepare` audited. `fix` lists them; `fix --apply` runs `lrc_fix.process_file` in-process for each (the normal write path, `[re:]` stamped) after saving the old tag to `fixes.jsonl`, re-reads the tag, and restores the old one at once if the result is unchanged or still stacked. `revert` restores every tag from `fixes.jsonl` unless it was edited since the fix. Nothing else is ever written to the library.
+**Repair tiers and `fix`:** every track gets at most one tier (`fix_tier`/`fix_action` columns), in this order. `instrumental`: an `instrumental_has_lyrics` track gets the canonical instrumental marker (ADR 0002 section 6; its other header lines are kept). `safe`: stacked timestamps, at least 50% of the word pairs sung, today's `lrc_fix` would write a clean result, words and onsets cached. `shifted`: the text is right but the timestamps are more than 10 s off the audio, with at least 80% line match and 70% sung, and `lrc_fix` would write a clean result (`shifted-all` is every other shifted track it can fix, opt-in). `onetimestamp`: a one-timestamp tag is realigned if `lrc_fix` can, otherwise its fake timing is dropped and the text kept as plain lyrics (a tag with every line at `00:00.00` and no transcript is dropped too). Realignment needs no ML (the demucs/whisperx/onset functions are blocked during `fix`); `fix` lists the repairs and `fix --apply` writes them after saving the old tag to `fixes.jsonl`. A realigned tag is re-read and restored at once if it is unchanged or still stacked. Every tag must still be what `prepare` audited. `revert` restores every tag from `fixes.jsonl` unless it was edited since. Nothing else is ever written to the library. `analyze` also reports, per suspect track, whether MusicBrainz data is missing (`musicbrainz_state`: `tagged`, `no_id`, `id_no_language`) and lists the albums in the report; nothing is written for it.
 
-**Tags read:** `LYRICS`, `LYRICS_LANGUAGE`, `ALBUMARTIST`, `ARTIST`, `ALBUM`, `TITLE`, `DISCOGS_RELEASE_ID`, `DISCNUMBER`, `TRACKNUMBER`. **Tags written:** `LYRICS`, only by `fix --apply` / `revert`.
+**Tags read:** `LYRICS`, `LYRICS_LANGUAGE`, `MUSICBRAINZ_ALBUMID`, `ALBUMARTIST`, `ARTIST`, `ALBUM`, `TITLE`, `DISCOGS_RELEASE_ID`, `DISCNUMBER`, `TRACKNUMBER`. **Tags written:** `LYRICS`, only by `fix --apply` / `revert`.
 
 **External service:** lrclib.net `GET /api/get` (same lookup order, client headers and pacing as `update_lyrics.py`).
 

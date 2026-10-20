@@ -32,16 +32,19 @@ and the audio confirms its timing, and so on, plus whether today's lrc_fix would
 except `fix --apply` only reads the library: lrc_fix is run with --dry-run, so no tag is written; the
 outputs are the lrc_fix cache, this tool's work directory and the reports.
 
-`fix --apply` repairs the "safe bets" (stacked timestamps, the text is sung, today's lrc_fix would write
-a clean result, words and onsets are cached so no ML runs, the tag is unchanged since prepare) with
-lrc_fix's normal write path, after saving each old tag to fixes.jsonl; `revert` puts them back.
+`fix --apply` repairs the tracks of the chosen tiers (`--tiers`, see assign_tier): `safe` (stacked
+timestamps, the text is sung, today's lrc_fix would write a clean result, words and onsets are cached
+so no ML runs), `instrumental` (an instrumental whose tag holds lyrics gets the canonical marker),
+`shifted` / `shifted-all` (right text, timestamps far off the audio: realigned), `onetimestamp`
+(realigned, or the fake timestamps dropped and the text kept). The tag must be unchanged since
+prepare. Every old tag is saved to fixes.jsonl first; `revert` puts them back.
 
 Usage (everything is resumable; re-running continues where it stopped):
     ./lrc_audit.py run [--apply-fixes]  # prepare + transcribe + analyze (+ fix), e.g. overnight
     ./lrc_audit.py prepare [--root DIR]
     ./lrc_audit.py transcribe [--limit N] [--offset N]
     ./lrc_audit.py analyze [--skip-lrclib] [--refetch]
-    ./lrc_audit.py fix [--apply]        # preview (default) or write the safe bets
+    ./lrc_audit.py fix [--tiers T] [--apply]  # preview (default) or write the repairs
     ./lrc_audit.py revert               # restore the tags that fix --apply replaced
 
 Outputs: lrc_suspects_audit.csv/.xlsx (one row per track, git-ignored; the xlsx has a `review` sheet,
@@ -100,6 +103,12 @@ ENDS_EARLY_BORDERLINE = 0.45  # a tag whose last timestamp is at or past this sh
 LRCLIB_COOLDOWN = 30  # seconds to wait before trying lrclib again after its breaker tripped
 STACKED = {'one_timestamp', 'shared_timestamps'}  # the reasons that mean "timestamps are broken"
 BORDERLINE = 0.05  # report-only: a match share this close to a threshold is flagged
+INSTRUMENTAL_WPM = 3  # an untagged track with fewer words per minute than this is an instrumental
+SHIFTED_MATCH = 0.8  # the strict `shifted` tier: line match at least this ...
+SHIFTED_SUNG = 0.7  # ... sung ratio at least this ...
+SHIFTED_DEV = 10.0  # ... and the timestamps off by more than this many seconds
+TIERS = ('safe', 'instrumental', 'shifted', 'shifted-all', 'onetimestamp')
+DEFAULT_TIERS = 'safe,instrumental,shifted,onetimestamp'  # shifted-all (the unsure rest) is opt-in
 
 CATEGORY_TEXT = {
 	'not_cacheable': 'cannot be cached (no numeric DISCOGS_RELEASE_ID or no TRACKNUMBER)',
@@ -108,6 +117,7 @@ CATEGORY_TEXT = {
 	'language_skipped': 'lrc_fix skips the track because of its LYRICS_LANGUAGE tag (instrumental, or no whisper/alignment model)',
 	'not_transcribed': 'not transcribed yet',
 	'transcription_failed': 'the transcription failed (see fail_reason)',
+	'instrumental_has_lyrics': 'an instrumental (MusicBrainz says no vocals, or whisper hears almost no words) whose tag holds lyrics',
 	'no_audio_evidence': 'whisper heard (almost) nothing: text cannot be judged',
 	'text_mismatch': 'lyrics are not in the audio (under 20% of their word pairs are sung)',
 	'text_partial': 'lyrics are in the audio only partly (20-50% of their word pairs)',
@@ -133,11 +143,13 @@ G_LRCLIB_TEXT = (
 G_OURS = 'Broken by our tools: stacked timestamps written by lrc_fix, or tag worse than lrclib'
 G_NOT_ALIGNABLE = 'Lyrics are sung, but lrc_fix cannot align them (order or structure differs)'
 G_TEXT_OTHER = 'Lyrics are not (fully) in the audio, and the tag text differs from lrclib'
+G_INSTRUMENTAL = 'Instrumental tracks whose tag holds lyrics (lrc_audit marks them instrumental)'
 G_SHIFTED = 'Timestamps shifted against the audio (lrc_fix can fix them)'
 G_FINE = 'Probably fine: ends early only with confirmed timing, or hearts only'
 G_CHANGED = 'Tag changed since the audit'
 G_UNKNOWN = 'Cannot tell (no audio evidence, lrclib not comparable, not transcribed, failed)'
 GROUPS = [
+	G_INSTRUMENTAL,
 	G_LRCLIB_TS,
 	G_LRCLIB_TEXT,
 	G_OURS,
@@ -152,6 +164,8 @@ GROUPS = [
 
 def group_of(r: dict) -> str:
 	cat = r['category']
+	if cat == 'instrumental_has_lyrics':
+		return G_INSTRUMENTAL
 	if cat in ('lrclib_bad_timestamps', 'lrclib_bad_other_version'):
 		return G_LRCLIB_TS
 	if cat in ('text_mismatch', 'text_partial'):
@@ -194,6 +208,7 @@ COLUMNS = [
 	'words_per_min',
 	'transcript_last_ts',
 	'language_tag',
+	'musicbrainz_state',
 	'timing_dev',
 	'timing_lines',
 	'lines_counted',
@@ -215,6 +230,8 @@ COLUMNS = [
 	'fix_detail',
 	'fix_remaining_reasons',
 	'safe_bet',
+	'fix_tier',
+	'fix_action',
 	'fail_reason',
 ]
 
@@ -384,7 +401,9 @@ def start_caffeinate() -> subprocess.Popen | None:
 	return subprocess.Popen(['caffeinate', '-i', '-w', str(os.getpid())])
 
 
-def run_lrc_fix(path: str, args: argparse.Namespace) -> tuple[int, str, str]:
+def run_lrc_fix(
+	path: str, args: argparse.Namespace, extra: list[str] | None = None
+) -> tuple[int, str, str]:
 	"""lrc_fix.py --dry-run on one file, in its own process (so memory is released per track)."""
 	cmd = [
 		sys.executable,
@@ -405,6 +424,7 @@ def run_lrc_fix(path: str, args: argparse.Namespace) -> tuple[int, str, str]:
 		cmd += ['--language', args.language]
 	if getattr(args, 'ignore_language_tag', False):
 		cmd.append('--ignore-language-tag')
+	cmd += extra or []
 	cmd.append(path)
 	try:
 		proc = subprocess.run(
@@ -492,6 +512,17 @@ def load_failures(work_dir: Path) -> dict[str, str]:
 	return out
 
 
+def failure_reason(rc: int, out: str, err: str) -> str:
+	"""Why a transcription produced no cache entry: lrc_fix's own `skip:`/`warning:` line if it
+	printed one, else the last stderr line of a crash (the ML libraries' warnings are noise)."""
+	notes = [ln.strip() for ln in out.splitlines() if ln.strip().startswith(('skip:', 'warning:'))]
+	if notes:
+		return notes[-1]
+	if rc != 0 and err.strip():
+		return err.strip().splitlines()[-1]
+	return f'rc={rc}, no cache written'
+
+
 def print_tally(subset: list[dict], args: argparse.Namespace) -> None:
 	"""Verdict counts over the given targets, from what is cached on disk (no network)."""
 	tally: Counter[str] = Counter()
@@ -509,6 +540,47 @@ def print_tally(subset: list[dict], args: argparse.Namespace) -> None:
 		print(f'   {n:4d}  {category}')
 
 
+STALE_CATEGORIES = ('text_mismatch', 'text_partial', 'no_audio_evidence')
+
+
+def select_extra(
+	targets: list[dict], args: argparse.Namespace
+) -> list[tuple[dict, list[str], str]]:
+	"""Tracks that already have an answer but need another ML pass: (target, lrc_fix flags, why).
+
+	`stale-language`: a non-English track judged without a usable transcript, whose cache entry
+	predates the LYRICS_LANGUAGE tag (no `language_used`): transcribed again in the tagged language.
+	`zxx`: a track MusicBrainz calls instrumental that lrc_fix skips: transcribed anyway
+	(--ignore-language-tag) to see whether anything is sung. `onsets`: a track today's lrc_fix would
+	fix but whose cache lacks the vocal onsets (it was gated out before they were computed).
+	"""
+	out = []
+	failures = load_failures(args.work_dir)
+	for t in targets:
+		row = analyze_target(t, args, load_lrclib_cached(args.work_dir, t['path']), failures)
+		_, payload = cache_state(t, args)
+		langs = sung_languages(row)
+		if 'stale-language' in args.extra:
+			language = lrc_fix.track_language(FLAC(t['path']), lrc_fix_namespace(args))
+			if (
+				payload is not None
+				and row['category'] in STALE_CATEGORIES
+				and payload.get('language_used') is None
+				and language[0] not in (None, 'en')
+			):
+				out.append((t, ['--refresh-cache'], 'stale-language'))
+		if 'zxx' in args.extra and row['category'] == 'language_skipped' and langs == ['zxx']:
+			out.append((t, ['--ignore-language-tag'], 'zxx'))
+		if (
+			'onsets' in args.extra
+			and payload is not None
+			and payload.get('onsets') is None
+			and row.get('fix_status') == 'would_fix'
+		):
+			out.append((t, [], 'onsets'))
+	return out
+
+
 def cmd_transcribe(args: argparse.Namespace) -> None:
 	targets = load_targets(args.work_dir)
 	subset = targets[args.offset : (args.offset + args.limit) if args.limit else None]
@@ -519,8 +591,11 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
 		if state == 'missing' and language_info(Path(t['path']), args)[1]:
 			state = 'language_skipped'
 		counts[state] += 1
-		if state == 'missing':
-			todo.append(t)
+		if state == 'missing' and not args.extra:
+			todo.append((t, [], 'missing'))
+	if args.extra:
+		todo = [(t, flags, why) for t, flags, why in select_extra(subset, args)]
+		print(f'   extra passes {args.extra}: ' + str(dict(Counter(why for _, _, why in todo))))
 	print(
 		f'== transcribe: {len(subset)} tracks, {counts["cached"]} already cached, '
 		f'{counts["not_cacheable"]} not cacheable, {counts["file_missing"]} missing, '
@@ -538,11 +613,11 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
 	started = time.monotonic()
 	failed = 0
 	try:
-		for i, t in enumerate(todo, 1):
+		for i, (t, flags, _why) in enumerate(todo, 1):
 			t0 = time.monotonic()
 			label = f'{t["artist"]} - {t["title"]}'
 			print(f'[{i}/{len(todo)}] {label}', flush=True)
-			rc, out, err = run_lrc_fix(t['path'], args)
+			rc, out, err = run_lrc_fix(t['path'], args, flags)
 			log.write(f'=== {datetime.now().isoformat(timespec="seconds")} rc={rc} {t["path"]}\n')
 			log.write(out + '\n' + err[-4000:] + '\n')
 			log.flush()
@@ -551,7 +626,7 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
 			state, _ = cache_state(t, args)
 			if rc != 0 or state != 'cached':
 				failed += 1
-				why = err.strip().splitlines()[-1] if err.strip() else f'rc={rc}, no cache written'
+				why = failure_reason(rc, out, err)
 				print(f'     FAILED: {why}')
 				with failed_path.open('a', encoding='utf-8') as fh:
 					fh.write(f'{t["path"]}\t{why}\n')
@@ -645,6 +720,39 @@ def simulate_fix(
 	return 'would_fix', '', reasons
 
 
+def sung_languages(r: dict) -> list[str]:
+	return [x for x in r.get('language_tag', '').split('; ') if x]
+
+
+def is_instrumental_row(r: dict) -> bool:
+	"""Is this track an instrumental although its tag holds lyrics?
+
+	MusicBrainz says `zxx` (no linguistic content) and whisper hears under MIN_WORDS_PER_MIN words
+	per minute; or the track has no real language tag (none, `und`, `zxx`) and whisper hears under
+	INSTRUMENTAL_WPM words per minute. A track MusicBrainz calls sung is never one: whisper missing
+	quiet vocals must not erase real lyrics.
+	"""
+	wpm = r.get('words_per_min')
+	if wpm is None:
+		return False
+	langs = sung_languages(r)
+	if langs == ['zxx']:
+		return wpm < MIN_WORDS_PER_MIN
+	if all(lang in ('und', 'zxx') for lang in langs):
+		return wpm < INSTRUMENTAL_WPM
+	return False
+
+
+def musicbrainz_state(path: Path, language_tag: str) -> str:
+	"""'tagged' (a LYRICS_LANGUAGE exists), 'no_id' (no MUSICBRAINZ_ALBUMID) or 'id_no_language'."""
+	if language_tag:
+		return 'tagged'
+	try:
+		return 'id_no_language' if _first(FLAC(path), 'MUSICBRAINZ_ALBUMID') else 'no_id'
+	except Exception:  # noqa: BLE001  # missing or unreadable
+		return 'no_id'
+
+
 def classify(r: dict) -> tuple[str, str]:
 	"""(category, text_source) for one analysed track. See the report for the rules."""
 	text_source = ''
@@ -655,6 +763,8 @@ def classify(r: dict) -> tuple[str, str]:
 		text_source = (
 			'lrclib_same_text' if sim is not None and sim >= 0.9 else 'differs_from_lrclib'
 		)
+	if is_instrumental_row(r):
+		return 'instrumental_has_lyrics', text_source
 	words, wpm = r['transcript_words'], r['words_per_min']
 	match, sung = r['line_match'], r['sung_ratio']
 	if words < MIN_WORDS or wpm < MIN_WORDS_PER_MIN or sung is None:
@@ -852,6 +962,8 @@ def analyze_target(
 	row['safe_bet'] = False
 	language_values, language_skip = language_info(Path(t['path']), args)
 	row['language_tag'] = '; '.join(language_values)
+	row['musicbrainz_state'] = musicbrainz_state(Path(t['path']), row['language_tag'])
+	row['fix_tier'] = row['fix_action'] = ''
 	if state != 'file_missing' and current_tag(Path(t['path'])) != t['lyrics']:
 		row['pre_category'] = 'tag_changed'
 	elif payload is None:
@@ -859,12 +971,18 @@ def analyze_target(
 			row['pre_category'] = 'language_skipped'
 			row['fail_reason'] = language_skip
 		elif state == 'missing' and failures and t['path'] in failures:
-			row['pre_category'] = 'transcription_failed'
 			row['fail_reason'] = failures[t['path']]
+			# whisper returned no words at all: it heard nothing, which is evidence, not a crash
+			row['pre_category'] = (
+				'no_audio_evidence'
+				if 'produced no word timestamps' in row['fail_reason']
+				else 'transcription_failed'
+			)
 		else:
 			row['pre_category'] = {'missing': 'not_transcribed'}.get(state, state)
 	if row.get('pre_category'):
 		row['category'], row['text_source'] = classify(row)
+		row['fix_tier'], row['fix_action'] = assign_tier(row, None, t)
 		return row
 	words = payload['words']
 	_, lyric_lines = lrc_fix.strip_lyric_lines(t['lyrics'])
@@ -897,6 +1015,7 @@ def analyze_target(
 	)
 	row['category'], row['text_source'] = classify(row)
 	row['safe_bet'] = is_safe_bet(row, payload)
+	row['fix_tier'], row['fix_action'] = assign_tier(row, payload, t)
 	return row
 
 
@@ -924,6 +1043,46 @@ def is_safe_bet(row: dict, payload: dict) -> bool:
 		and row['transcript_words'] >= MIN_WORDS
 		and row['words_per_min'] >= MIN_WORDS_PER_MIN
 	)
+
+
+def assign_tier(row: dict, payload: dict | None, t: dict) -> tuple[str, str]:
+	"""(tier, action) of the repair `fix` offers for this track, or ('', '').
+
+	Actions: 'instrumental' (write the canonical marker), 'realign' (today's lrc_fix from the
+	cache) and 'plain' (keep the text, drop timestamps that carry no timing). Tiers, in order:
+	  instrumental  an instrumental whose tag holds lyrics (see is_instrumental_row)
+	  safe          stacked timestamps that today's lrc_fix repairs cleanly
+	  shifted       the text is right, the timestamps are far off and the alignment is strong
+	  shifted-all   any other shifted track lrc_fix can fix (opt-in: the evidence is thinner)
+	  onetimestamp  a one-timestamp tag: realigned if lrc_fix can, else its fake timing is dropped
+	"""
+	cat = row['category']
+	if cat == 'instrumental_has_lyrics':
+		return 'instrumental', 'instrumental'
+	has_onsets = bool(payload) and payload.get('onsets') is not None
+	if payload is None:
+		# no transcript: only a tag with every line at 00:00.00 is known to hold no timing at all
+		if cat in ('language_skipped', 'transcription_failed', 'not_transcribed') and (
+			'one_timestamp' in row['tag_reasons'] and t['last_ts'] == 0
+		):
+			return 'onetimestamp', 'plain'
+		return '', ''
+	if row['safe_bet']:
+		return 'safe', 'realign'
+	would_fix = row['fix_status'] == 'would_fix' and has_onsets
+	if cat == 'timestamps_shifted' and would_fix:
+		strong = (
+			(row['line_match'] or 0) >= SHIFTED_MATCH
+			and (row['sung_ratio'] or 0) >= SHIFTED_SUNG
+			and (row['timing_dev'] or 0) > SHIFTED_DEV
+		)
+		return ('shifted' if strong else 'shifted-all'), 'realign'
+	if 'one_timestamp' in row['tag_reasons']:
+		if would_fix:
+			return 'onetimestamp', 'realign'
+		if row['fix_status'] != 'would_fix':
+			return 'onetimestamp', 'plain'
+	return '', ''
 
 
 def cell(value: object) -> object:
@@ -989,6 +1148,48 @@ def md_cell(text: object) -> str:
 	return str(text).replace('|', '\\|').replace('\n', ' ')
 
 
+TIER_TEXT = {
+	'safe': "stacked timestamps that today's `lrc_fix` repairs cleanly: realign from the cache",
+	'instrumental': 'an instrumental whose tag holds lyrics: write the canonical instrumental marker',
+	'shifted': (
+		f'timestamps off by more than {SHIFTED_DEV:g} s, line match at least {SHIFTED_MATCH:.0%}, '
+		f'sung at least {SHIFTED_SUNG:.0%}: realign from the cache'
+	),
+	'shifted-all': 'any other shifted track `lrc_fix` can fix (opt-in)',
+	'onetimestamp': 'one-timestamp tag: realign if `lrc_fix` can, else keep the text and drop the timestamps',
+}
+
+
+def musicbrainz_section(rows: list[dict]) -> list[str]:
+	"""Albums whose suspect tracks lack a LYRICS_LANGUAGE, with the reason (report only)."""
+	lines = ['## Missing MusicBrainz data', '']
+	for state, heading in (
+		(
+			'no_id',
+			'No `MUSICBRAINZ_ALBUMID` tag (tag the release in Yate, then run `fixtags.py --languages-only`)',
+		),
+		('id_no_language', 'Has an id, but MusicBrainz gives no work language or no track match'),
+	):
+		albums: dict[str, list[dict]] = {}
+		for r in rows:
+			if r.get('musicbrainz_state') == state:
+				albums.setdefault(str(Path(r['path']).parent), []).append(r)
+		lines += [
+			f'**{heading}**: {sum(len(v) for v in albums.values())} tracks on {len(albums)} albums',
+			'',
+			'| Artist - album | Tracks | Directory |',
+			'|---|---:|---|',
+		]
+		for directory, tracks in sorted(albums.items()):
+			first = tracks[0]
+			lines.append(
+				f'| {md_cell(first["artist"])} - {md_cell(first["album"])} | {len(tracks)} '
+				f'| `{md_cell(directory)}` |'
+			)
+		lines.append('')
+	return lines
+
+
 def build_report(rows: list[dict], meta: dict) -> str:
 	total = len(rows)
 	by_cat = Counter(r['category'] for r in rows)
@@ -1039,6 +1240,20 @@ def build_report(rows: list[dict], meta: dict) -> str:
 			'`lrc_audit.py fix --apply` repairs these from the cache without any ML.'
 		),
 		'',
+		'## Repairs offered by `fix`',
+		'',
+		'| Tier | What it does | Tracks |',
+		'|---|---|---:|',
+		*[
+			f'| `{tier}` | {TIER_TEXT[tier]} | {sum(1 for r in rows if r["fix_tier"] == tier)} |'
+			for tier in TIERS
+		],
+		'',
+		(
+			f'`fix --apply` runs {", ".join(f"`{x}`" for x in DEFAULT_TIERS.split(","))} by default; '
+			'`--tiers` chooses. Every old tag is saved to `fixes.jsonl` and `revert` restores it.'
+		),
+		'',
 		'## Verdicts',
 		'',
 		'| Category | Meaning | Tracks | Share | Would fix |',
@@ -1082,6 +1297,12 @@ def build_report(rows: list[dict], meta: dict) -> str:
 			f'{MIN_WORDS_PER_MIN} words per minute.'
 		),
 		(
+			f'`instrumental_has_lyrics` (checked first): `LYRICS_LANGUAGE` is `zxx` and whisper hears '
+			f'under {MIN_WORDS_PER_MIN} words per minute, or the track has no real language tag (none, '
+			f'`und`, `zxx`) and whisper hears under {INSTRUMENTAL_WPM}. A track MusicBrainz calls sung '
+			'is never one, whatever whisper hears.'
+		),
+		(
 			"Is the text sung at all? Sung ratio = share of the lyric's consecutive word pairs that "
 			'occur anywhere in the transcript, independent of order, so repeats, a shuffled line order '
 			f'and backing vocals do not matter: under {SUNG_LOW:.0%} `text_mismatch`, under '
@@ -1100,7 +1321,8 @@ def build_report(rows: list[dict], meta: dict) -> str:
 		(
 			f'Stacked timestamps and fewer than {MATCH_OK:.0%} of the word-bearing lines matching in order '
 			"(the quality gate's `--min-match`): `text_ok_not_alignable`. The words are there, but "
-			'`lrc_fix` aligns monotonically and cannot place them.'
+			'`lrc_fix` still cannot place enough lines in order (ad-libs, or a transcript with '
+			'hallucinated loops).'
 		),
 		(
 			'Stacked timestamps and alignable: lrclib decides. No synced lyrics there and the tag was '
@@ -1167,6 +1389,7 @@ def build_report(rows: list[dict], meta: dict) -> str:
 		),
 		'Per-track results: `lrc_suspects_audit.csv`/`.xlsx` in the repository root (git-ignored).',
 	]
+	lines += musicbrainz_section(rows)
 	lines += ['## Caveats', ''] + [f'- {c}' for c in caveats] + ['']
 	return '\n'.join(lines)
 
@@ -1240,61 +1463,112 @@ def log_fix(work_dir: Path, event: dict) -> None:
 NO_ML = RuntimeError('this step needs demucs/whisperx; fix only works from the cache')
 
 
-def apply_fix(t: dict, args: argparse.Namespace, index: int, total: int) -> str:
-	"""Repair one safe-bet track with today's lrc_fix, from the cache. Returns the outcome."""
-	path = Path(t['path'])
-	old = current_tag(path)
-	if old != t['lyrics']:
-		return 'skipped: the tag changed since prepare'
-	log_fix(args.work_dir, {'event': 'before', 'path': t['path'], 'old': old})
+def instrumental_text(path: Path, old: str) -> str:
+	"""The canonical instrumental marker for this file, keeping its other header lines."""
+	flac = FLAC(path)
+	id_tags, _ = lrc_fix.strip_lyric_lines(old)
+	id_tags = lrc_fix.ensure_id_tags(id_tags, flac)
+	return lrc_fix.build_instrumental_lrc(lrc_fix.stamp_creator_tag(id_tags))
+
+
+def plain_text(old: str) -> str:
+	"""The lyric text of an LRC tag without header lines and timestamps."""
+	_, lines = lrc_fix.strip_lyric_lines(old)
+	return '\n'.join(lrc_fix.capitalize_line(lrc_fix.normalize_text(line)) for line in lines)
+
+
+def realign(path: Path, args: argparse.Namespace, index: int, total: int) -> None:
+	"""Today's lrc_fix on one file, from the cache only (any ML step raises NO_ML)."""
 	guards = [
 		mock.patch.object(lrc_fix, name, side_effect=NO_ML)
 		for name in ('separate_vocals', 'transcribe_words', 'detect_onsets', 'has_speech')
 	]
+	with redirect_stdout(io.StringIO()):
+		for guard in guards:
+			guard.start()
+		try:
+			lrc_fix.process_file(path, fix_namespace(args), index, total)
+		finally:
+			mock.patch.stopall()
+
+
+def apply_fix(t: dict, row: dict, args: argparse.Namespace, index: int, total: int) -> str:
+	"""Repair one track by its tier's action, from the cache. Returns the outcome."""
+	path = Path(t['path'])
+	old = current_tag(path)
+	if old != t['lyrics']:
+		return 'skipped: the tag changed since prepare'
+	action, tier = row['fix_action'], row['fix_tier']
+	log_fix(args.work_dir, {'event': 'before', 'path': t['path'], 'old': old, 'tier': tier})
 	try:
-		with redirect_stdout(io.StringIO()):
-			for guard in guards:
-				guard.start()
-			try:
-				lrc_fix.process_file(path, fix_namespace(args), index, total)
-			finally:
-				mock.patch.stopall()
+		if action == 'instrumental':
+			write_tag(path, instrumental_text(path, old))
+		elif action == 'plain':
+			write_tag(path, plain_text(old))
+		else:
+			realign(path, args, index, total)
 	except Exception as exc:  # noqa: BLE001  # one track failing must not stop the others
 		write_tag(path, old)
 		log_fix(args.work_dir, {'event': 'restored', 'path': t['path'], 'why': str(exc)})
 		return f'restored the old tag: {exc}'
 	new = current_tag(path)
-	still_bad = set(lrc_suspect_reasons(new or '', t['length'])) & STACKED
+	still_bad = action == 'realign' and set(lrc_suspect_reasons(new or '', t['length'])) & STACKED
 	if not new or new == old or still_bad:
 		write_tag(path, old)
 		why = 'unchanged' if new == old else 'still stacked or empty'
 		log_fix(args.work_dir, {'event': 'restored', 'path': t['path'], 'why': why})
 		return f'restored the old tag ({why})'
-	log_fix(args.work_dir, {'event': 'applied', 'path': t['path'], 'old': old, 'new': new})
-	return 'repaired'
+	log_fix(
+		args.work_dir,
+		{
+			'event': 'applied',
+			'path': t['path'],
+			'old': old,
+			'new': new,
+			'tier': tier,
+			'action': action,
+		},
+	)
+	return {'instrumental': 'marked instrumental', 'plain': 'timestamps dropped'}.get(
+		action, 'repaired'
+	)
 
 
 def cmd_fix(args: argparse.Namespace) -> None:
-	"""List the safe bets; with --apply, repair them from the cache (old tags are saved)."""
+	"""List the repairs of the chosen tiers; with --apply, write them (old tags are saved)."""
+	tiers = [x.strip() for x in args.tiers.split(',') if x.strip()]
+	unknown = [x for x in tiers if x not in TIERS]
+	if unknown:
+		sys.exit(f'unknown tier(s) {unknown}; choose from {", ".join(TIERS)}')
 	targets = load_targets(args.work_dir)
 	failures = load_failures(args.work_dir)
-	safe = []
+	todo = []
 	for t in targets:
 		row = analyze_target(t, args, load_lrclib_cached(args.work_dir, t['path']), failures)
-		if row['safe_bet']:
-			safe.append((t, row))
-	print(f'== fix: {len(safe)} safe bets among {len(targets)} suspect tracks')
-	for t, row in safe:
-		print(f'   {t["artist"]} - {t["title"]} (sung {percent(row["sung_ratio"])})')
+		if row['fix_tier'] in tiers:
+			todo.append((t, row))
+	counts = Counter(row['fix_tier'] for _, row in todo)
+	print(
+		f'== fix: {len(todo)} repairs among {len(targets)} suspect tracks ('
+		+ ', '.join(f'{tier}: {counts[tier]}' for tier in tiers)
+		+ ')'
+	)
+	for t, row in todo:
+		detail = (
+			f'sung {percent(row["sung_ratio"])}'
+			if row['sung_ratio'] is not None
+			else row['category']
+		)
+		print(f'   [{row["fix_tier"]}/{row["fix_action"]}] {t["artist"]} - {t["title"]} ({detail})')
 	if not args.apply:
 		print('   preview only: add --apply to write them (the old tags are saved for "revert")')
 		return
-	counts: Counter[str] = Counter()
-	for i, (t, _) in enumerate(safe, 1):
-		outcome = apply_fix(t, args, i, len(safe))
-		counts[outcome.split(':')[0].split(' (')[0]] += 1
-		print(f'[{i}/{len(safe)}] {t["artist"]} - {t["title"]}: {outcome}', flush=True)
-	print(f'== fix done: {dict(counts)}; backup in {args.work_dir / "fixes.jsonl"}')
+	outcomes: Counter[str] = Counter()
+	for i, (t, row) in enumerate(todo, 1):
+		outcome = apply_fix(t, row, args, i, len(todo))
+		outcomes[outcome.split(':')[0].split(' (')[0]] += 1
+		print(f'[{i}/{len(todo)}] {t["artist"]} - {t["title"]}: {outcome}', flush=True)
+	print(f'== fix done: {dict(outcomes)}; backup in {args.work_dir / "fixes.jsonl"}')
 
 
 def cmd_revert(args: argparse.Namespace) -> None:
@@ -1362,7 +1636,21 @@ def build_parser() -> argparse.ArgumentParser:
 		help='fix: really write the repaired tags (default: preview)',
 	)
 	common.add_argument(
-		'--apply-fixes', action='store_true', help='run: finish with fix --apply on the safe bets'
+		'--apply-fixes', action='store_true', help='run: finish with fix --apply (see --tiers)'
+	)
+	common.add_argument(
+		'--extra',
+		action='append',
+		default=[],
+		choices=['stale-language', 'zxx', 'onsets'],
+		help='transcribe: run only this extra ML pass over tracks that already have an answer '
+		'(repeatable): re-transcribe stale non-English, transcribe MusicBrainz instrumentals, '
+		'compute missing vocal onsets',
+	)
+	common.add_argument(
+		'--tiers',
+		default=DEFAULT_TIERS,
+		help=f'fix: comma-separated tiers to offer (all: {", ".join(TIERS)})',
 	)
 	common.add_argument('--report', type=Path, default=DEFAULT_REPORT)
 	common.add_argument(

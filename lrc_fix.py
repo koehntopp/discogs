@@ -90,6 +90,9 @@ from lrc_format import is_bare_instrumental_placeholder as is_instrumental
 
 DEFAULT_LINE_GAP = 4.0  # seconds per line when fewer than two lines matched
 TRAILING_MARGIN = 0.5  # keep spread tail lines this far before the end of the track
+FUZZY_MIN_LENGTH = 4  # words shorter than this are only matched exactly
+FUZZY_WORD_CUTOFF = 0.8  # difflib similarity at which a misheard word counts as the lyric word
+LINE_MIN_SHARE = 0.6  # share of a line's words a transcript stretch must hold to be a candidate
 MAX_SPREAD_STEP = 8.0  # never spread head/tail lines further apart than this, in seconds
 
 LRC_TIMESTAMP_RE = re.compile(r'^\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]\s*')
@@ -516,8 +519,8 @@ def _tokenize(text: str) -> list[str]:
 	return _WORD_RE.findall(normalize_text(text).lower())
 
 
-def match_line_times(lyric_lines: list[str], words: list[dict]) -> list[float | None]:
-	"""Find each lyric line's start time from an actual matched ASR word.
+def match_blocks(lyric_lines: list[str], words: list[dict]) -> list[float | None]:
+	"""One difflib pass over the whole text: each lyric line's start time from a matched ASR word.
 
 	Tokenizes both the ASR transcript and the lyric lines to plain lowercase
 	words, then runs difflib's sequence matcher between them. A lone matched
@@ -558,6 +561,106 @@ def match_line_times(lyric_lines: list[str], words: list[dict]) -> list[float | 
 					target[line_idx] = t
 
 	return [s if s is not None else weak[i] for i, s in enumerate(strong)]
+
+
+def _asr_tokens(words: list[dict]) -> tuple[list[str], list[float]]:
+	tokens: list[str] = []
+	times: list[float] = []
+	for w in words:
+		toks = _tokenize(w['w'])
+		if toks:
+			tokens.append(toks[0])
+			times.append(w['t'])
+	return tokens, times
+
+
+def match_per_line(lyric_lines: list[str], words: list[dict]) -> list[float | None]:
+	"""Place each lyric line at the best matching stretch of the transcript, in order.
+
+	match_blocks takes one difflib pass over the whole text, which locks onto the longest common
+	block and loses lines when a chorus is repeated, the transcript has sections the text lacks, or
+	the order differs a little. Here every line looks for its own candidates (a stretch of the
+	transcript that holds most of its words in order), and a dynamic programme then picks one
+	candidate per line, or none, so that the total match weight is highest and the chosen stretches
+	never go backwards in time. A line repeated in the text takes successive occurrences in the
+	song; transcript sections that no line claims are simply skipped.
+	"""
+	asr, asr_times = _asr_tokens(words)
+	lines = [_tokenize(line) for line in lyric_lines]
+	times: list[float | None] = [None] * len(lines)
+	if not asr or not any(lines):
+		return times
+	vocabulary = sorted({tok for tokens in lines for tok in tokens})
+	spelled: dict[str, str] = {}  # a misheard word is read as the lyric word it nearly is
+	for tok in set(asr):
+		if tok not in vocabulary and len(tok) >= FUZZY_MIN_LENGTH:
+			close = difflib.get_close_matches(tok, vocabulary, 1, FUZZY_WORD_CUTOFF)
+			if close:
+				spelled[tok] = close[0]
+	asr = [spelled.get(tok, tok) for tok in asr]
+	positions: dict[str, list[int]] = {}
+	for j, tok in enumerate(asr):
+		positions.setdefault(tok, []).append(j)
+
+	# candidates[i] = (first asr index, last asr index, weight)
+	candidates: list[list[tuple[int, int, float]]] = []
+	for tokens in lines:
+		found: dict[int, tuple[int, float]] = {}
+		k = len(tokens)
+		if k:
+			starts = sorted({j for tok in set(tokens) for j in positions.get(tok, [])})
+			for j in starts:
+				window = asr[j : j + k + 2]
+				blocks = difflib.SequenceMatcher(
+					a=window, b=tokens, autojunk=False
+				).get_matching_blocks()
+				if not blocks or blocks[0].a != 0:
+					continue  # a stretch counts from its first matched word
+				matched = sum(b.size for b in blocks)
+				last = j + max(b.a + b.size for b in blocks if b.size) - 1
+				if matched >= 2 and matched / k >= LINE_MIN_SHARE:
+					weight = matched / k
+				elif k <= 2 and matched == k:
+					weight = 0.5 * matched / k  # a short line is easy to hit by chance
+				else:
+					continue
+				if j not in found or weight > found[j][1]:
+					found[j] = (last, weight)
+		candidates.append([(j, last, w) for j, (last, w) in sorted(found.items())])
+
+	# best[i][c] = (total weight, previous state) for choosing candidate c on line i
+	states: list[tuple[int, int, float, int | None]] = []  # (line, cand idx, total, prev state)
+	for i, cands in enumerate(candidates):
+		new_states = []
+		for c, (first, last, weight) in enumerate(cands):
+			best_prev, best_total = None, 0.0
+			for s, (_, _, total, _) in enumerate(states):
+				prev_last = candidates[states[s][0]][states[s][1]][1]
+				if prev_last < first and total > best_total:
+					best_prev, best_total = s, total
+			new_states.append((i, c, best_total + weight, best_prev))
+		states.extend(new_states)
+	if not states:
+		return times
+	cur: int | None = max(range(len(states)), key=lambda s: (states[s][2], -s))
+	while cur is not None:
+		i, c, _, prev = states[cur]
+		times[i] = asr_times[candidates[i][c][0]]
+		cur = prev
+	return times
+
+
+def match_line_times(lyric_lines: list[str], words: list[dict]) -> list[float | None]:
+	"""Each lyric line's start time from an actual matched ASR word, None where nothing matched.
+
+	Runs both matchers (match_per_line and the older whole-text match_blocks) and keeps the result
+	that places more lines, the older one on a tie, so the redesign can only add matches.
+	"""
+	blocks = match_blocks(lyric_lines, words)
+	per_line = match_per_line(lyric_lines, words)
+	if sum(t is not None for t in per_line) > sum(t is not None for t in blocks):
+		return per_line
+	return blocks
 
 
 def sung_ratio(lyric_lines: list[str], words: list[dict]) -> float | None:

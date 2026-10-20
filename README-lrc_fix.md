@@ -18,10 +18,17 @@ the waveform.
    transcribes and force-aligns the isolated vocals, producing word-level
    timestamps.
 3. **Align** — the correct lyric lines (from the tag) are matched against
-   the ASR transcript with deterministic word-sequence matching
-   ([`difflib`](https://docs.python.org/3/library/difflib.html)). Only runs
-   of 2+ consecutive matched words are trusted, so a single coincidental
-   word match can't lock in a bogus timestamp.
+   the ASR transcript with deterministic word matching
+   ([`difflib`](https://docs.python.org/3/library/difflib.html)), by two
+   matchers; the one that places more lines wins. One is a single
+   whole-text sequence match. The other looks for each line's own best
+   stretch of the transcript (a misheard word still counts if it nearly
+   matches a lyric word) and picks one stretch per line so that the chosen
+   stretches never go backwards in time, which copes with repeated
+   choruses and transcript sections the text lacks. Only runs of 2+
+   consecutive matched words are trusted (a short line must match
+   entirely), so a single coincidental word match can't lock in a bogus
+   timestamp.
 4. **Snap to onset** — each matched timestamp is pulled back to the nearest
    real vocal onset detected via
    [librosa](https://librosa.org/doc/latest/generated/librosa.onset.onset_detect.html),
