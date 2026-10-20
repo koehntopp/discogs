@@ -119,6 +119,8 @@ always processes it. The tool logs `[i/N] <path>` as each file starts.
 | `--no-snap-onsets` | off | Skip onset detection/snapping |
 | `--no-vocal-check` | off | Skip the VAD fallback when alignment finds zero matches |
 | `--min-match` | `0.6` | Minimum share of lyric lines (those with at least one word) that must match the transcript; a weaker alignment is skipped and the tag left unchanged |
+| `--min-sung` | `0.5` | Minimum share of the lyric's consecutive word pairs that must occur in the transcript (order independent); a text that is mostly not sung is skipped and the tag left unchanged. `0` disables |
+| `--fallback-language` | `en` | If whisperx has no alignment model for the language it detected, transcribe again as this language (`none` = fail as before) |
 | `--no-quality-gate` | off | Write the alignment even when too few lines matched or the result piles lines onto one timestamp |
 | `--find-missing-lyrics` | off | Scan for files with no `LYRICS` tag; VAD-tag instrumentals, log the rest |
 | `--dump-words` | off | Print the raw ASR word/timestamp transcript (debugging) |
@@ -153,8 +155,10 @@ seconds-per-line (at most 8 s apart, kept inside the track), so every line has i
 timestamp. (They used to copy the nearest matched line's time, which stacked a failed head or tail
 onto one moment.) Estimated times are still guesses. A weak alignment (and, with junk in the source
 text, a harmless plain tag replaced by misleading timestamps) is caught by two checks that leave the
-tag untouched with a `skip:` message instead: fewer than `--min-match` of the lyric lines matched, or the result would
-put 5 or more lines (and at least 20% of them) on one timestamp. `--no-quality-gate` bypasses both.
+tag untouched with a `skip:` message instead: fewer than `--min-match` of the lyric lines matched, fewer than `--min-sung` of the
+lyric's word pairs occur in the transcript (single common words can match enough lines for a song that is not sung, such as a
+dialect or foreign-language track), or the result would put 5 or more lines (and at least 20% of them) on one timestamp.
+`--no-quality-gate` bypasses all three.
 `lrc_count.py --suspects` lists existing tags that show these signs. Rationale and thresholds:
 [ADR 0009](docs/adr/0009-lrc-fix-local-realignment.md) section 3.
 
@@ -168,6 +172,10 @@ Lyric text is normalized with the shared `lrc_format.normalize_text` (curly quot
   and silero-vad (only used for the VAD fallback / `--find-missing-lyrics`)
   from GitHub via `torch.hub` — all cached (`~/.cache/torch`,
   `~/.cache/huggingface`) so later runs are fast to start.
+- whisper sometimes misdetects the language of Gaelic, Welsh-sounding or dialect singing (as Latin or Welsh), and whisperx has
+  no alignment model for some languages. Instead of failing, `lrc_fix` then transcribes the track again as
+  `--fallback-language` (default English); the words are rougher for such songs, and the `--min-sung` check refuses a result
+  whose text is not heard.
 - Dependency pins are load-bearing: `torch<2.6` (2.6 flips the `torch.load`
   `weights_only` default and breaks pyannote checkpoint loading) and
   `transformers<5` (5.x calls `torch.accelerator`, added in torch 2.6, so

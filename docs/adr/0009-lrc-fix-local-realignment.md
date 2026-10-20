@@ -31,7 +31,10 @@ here.
    transcribes the full mix instead.
 2. **Transcribe and force-align** with whisperx, giving word-level start times.
    `condition_on_previous_text=False`, so a hallucinated guess (typically over an instrumental intro) is
-   never fed back as context and cascaded into more hallucinated text.
+   never fed back as context and cascaded into more hallucinated text. whisper misdetects the language
+   of some singing (Gaelic or dialect as Latin or Welsh) and whisperx has no alignment model for some
+   languages; instead of failing, the track is transcribed again as `--fallback-language` (default
+   `en`). Such transcripts are rough, which the sung-text check below catches.
 3. **Match** the known lyric lines against the transcript with `difflib.SequenceMatcher` over lowercase
    Unicode word tokens (`[^\W_]+`, with an internal apostrophe allowed; not ASCII-only, so Cyrillic,
    CJK and accented lyrics tokenize; the text is passed through `lrc_format.normalize_text` first so a
@@ -68,13 +71,19 @@ Alignment is deterministic and deliberately not LLM-based (see section 8).
   kept inside the track). A matched line that is not later than the previous one is treated as
   unmatched, and times are made strictly increasing at the 0.01 s resolution LRC can express. This
   replaced copying a neighbour's time, which piled a failed head or tail onto one timestamp.
-- Estimated times are still guesses, so a result is written only if both hold (`--no-quality-gate`
+- Estimated times are still guesses, so a result is written only if all three hold (`--no-quality-gate`
   bypasses them): at least `--min-match` (default 0.6) of the lyric lines that contain a word matched
-  the transcript, and `lrc_format.lrc_suspect_reasons` reports neither `one_timestamp` nor
+  the transcript in order; at least `--min-sung` (default 0.5) of the lyric's consecutive word pairs
+  occur anywhere in the transcript (`sung_ratio`, order independent); and `lrc_format.lrc_suspect_reasons` reports neither `one_timestamp` nor
   `shared_timestamps` (5 or more lines and at least 20% of them on one timestamp; tags of fewer than 3
   timestamped lines are not judged). Otherwise the tag is left unchanged with a `skip:` message.
   `lrc_count.py --suspects` uses the same function to report existing tags, so the gate and the report
   cannot disagree. See ADR 0002 section 6.
+- The `--min-sung` check was added after `lrc_audit.py` (the audit of the suspect tags) showed that the
+  line check alone accepts songs that are barely sung: with single common words matching enough lines,
+  a dialect track with 7% of its word pairs in the transcript passed with 68% matched lines. The two
+  checks answer different questions: the line match says the lines can be placed in order, the sung
+  ratio says the words are there at all.
 
 ### 4. ASR cache
 

@@ -513,9 +513,9 @@ They used to copy the neighbouring line's time, which stacked a failed head or t
 
 **Quality gate:** a weak alignment used to stamp many lines with one timestamp. `lrc_fix.py` skips a file, leaving its tag unchanged,
 when fewer than `--min-match` (default 0.6) of its lyric lines matched the transcript (lines
-without any word are not counted), or when the result would have a `one_timestamp` or
+without any word are not counted), when fewer than `--min-sung` (default 0.5) of the lyric's consecutive word pairs occur anywhere in the transcript (`lrc_fix.sung_ratio`, order independent; it catches songs that only share common words with the transcript), or when the result would have a `one_timestamp` or
 `shared_timestamps` pile-up per `lrc_format.lrc_suspect_reasons`. `--no-quality-gate` bypasses
-both checks. See ADR 0002 section 6.
+all checks. If whisperx has no alignment model for the detected language, `--fallback-language` (default `en`) makes it transcribe the track again in that language instead of failing. See ADR 0002 section 6 and ADR 0009.
 
 **Tags read:** `LYRICS`, `ALBUMARTIST`, `ARTIST`, `TITLE`, `ALBUM`
 

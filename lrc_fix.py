@@ -292,9 +292,20 @@ def has_speech(audio_path: Path) -> bool:
 	return len(timestamps) > 0
 
 
+NO_ALIGN_MODEL_HINTS = ('No default align-model', 'could not be found')
+
+
 def transcribe_words(
-	audio_path: Path, whisper_model: str, device: str, compute_type: str, language: str | None
+	audio_path: Path,
+	whisper_model: str,
+	device: str,
+	compute_type: str,
+	language: str | None,
+	fallback_language: str | None = None,
 ) -> list[dict]:
+	"""Word start times of the audio. If whisperx has no alignment model for the language it
+	detected (it misdetects Gaelic or dialect singing as Latin or Welsh, and a few models cannot be
+	downloaded), the audio is transcribed again as `fallback_language` instead of failing."""
 	import whisperx
 
 	# condition_on_previous_text=False avoids whisper's known failure mode of
@@ -307,9 +318,25 @@ def transcribe_words(
 	audio = whisperx.load_audio(str(audio_path))
 	result = model.transcribe(audio, language=language, print_progress=True)
 
-	align_model, metadata = whisperx.load_align_model(
-		language_code=result['language'], device=device
-	)
+	try:
+		align_model, metadata = whisperx.load_align_model(
+			language_code=result['language'], device=device
+		)
+	except Exception as exc:  # whisperx raises plain errors for a missing model
+		if (
+			not fallback_language
+			or result['language'] == fallback_language
+			or not any(hint in str(exc) for hint in NO_ALIGN_MODEL_HINTS)
+		):
+			raise
+		print(
+			f'   no alignment model for language {result["language"]}; '
+			f'transcribing again as {fallback_language}'
+		)
+		result = model.transcribe(audio, language=fallback_language, print_progress=True)
+		align_model, metadata = whisperx.load_align_model(
+			language_code=result['language'], device=device
+		)
 	result = whisperx.align(
 		result['segments'], align_model, metadata, audio, device, print_progress=True
 	)
@@ -381,14 +408,43 @@ def match_line_times(lyric_lines: list[str], words: list[dict]) -> list[float | 
 	return [s if s is not None else weak[i] for i, s in enumerate(strong)]
 
 
+def sung_ratio(lyric_lines: list[str], words: list[dict]) -> float | None:
+	"""Share of the lyric's consecutive word pairs that occur anywhere in the transcript, or None
+	if either side has fewer than two words.
+
+	Unlike the in-order line match this ignores order and structure, so repeated sections, a
+	shuffled line order or backing vocals ("ooh") do not hide that the text is sung. It is what
+	tells a song whose words are heard from one that only shares a few common words with the
+	transcript (a foreign or dialect song, or the wrong lyrics).
+	"""
+	lyric = [tok for line in lyric_lines for tok in _tokenize(line)]
+	heard = []
+	for w in words:
+		toks = _tokenize(w['w'])
+		if toks:
+			heard.append(toks[0])
+	if len(lyric) < 2 or len(heard) < 2:
+		return None
+	pairs = set(pairwise(heard))
+	lyric_pairs = list(pairwise(lyric))
+	return sum(p in pairs for p in lyric_pairs) / len(lyric_pairs)
+
+
 def alignment_rejection(
-	lyric_lines: list[str], raw_times: list[float | None], min_match: float
+	lyric_lines: list[str],
+	raw_times: list[float | None],
+	min_match: float,
+	words: list[dict] | None = None,
+	min_sung: float = 0.0,
 ) -> str | None:
 	"""Why this alignment is too weak to write, or None if it is good enough.
 
 	Unmatched lines later get an estimated time (_fill_and_clamp), so a mostly-unmatched
-	alignment would replace a harmless tag with mostly guessed timestamps. Lines without any word token at all (a lone "♪" or "***") are
-	not counted, so decoration in the source text cannot sink an otherwise good alignment.
+	alignment would replace a harmless tag with mostly guessed timestamps. Lines without any word
+	token at all (a lone "♪" or "***") are not counted, so decoration in the source text cannot
+	sink an otherwise good alignment. With `words` and `min_sung` it also refuses a text whose word
+	pairs are mostly not in the transcript: single common words can match enough lines to pass the
+	line check although the song is not what the text says.
 	"""
 	counted = [t for line, t in zip(lyric_lines, raw_times) if _tokenize(line)]
 	if not counted:
@@ -399,6 +455,13 @@ def alignment_rejection(
 			f'only {matched} of {len(counted)} lines matched '
 			f'({matched / len(counted):.0%}, minimum {min_match:.0%})'
 		)
+	if words is not None and min_sung > 0:
+		ratio = sung_ratio(lyric_lines, words)
+		if ratio is not None and ratio < min_sung:
+			return (
+				f"only {ratio:.0%} of the lyric's word pairs are in the transcript "
+				f'(minimum {min_sung:.0%})'
+			)
 	return None
 
 
@@ -663,8 +726,14 @@ def process_file(path: Path, args: argparse.Namespace, index: int, total: int) -
 		if words is None:
 			audio_path = get_audio()
 			print(f'   transcribing ({args.whisper_model}, {args.device})...')
+			fallback = None if args.fallback_language.lower() == 'none' else args.fallback_language
 			words = transcribe_words(
-				audio_path, args.whisper_model, args.device, args.compute_type, args.language
+				audio_path,
+				args.whisper_model,
+				args.device,
+				args.compute_type,
+				args.language,
+				fallback,
 			)
 			if words and cache_file:
 				save_cache(cache_file, key, words, None)
@@ -690,7 +759,9 @@ def process_file(path: Path, args: argparse.Namespace, index: int, total: int) -
 				return
 
 		if not args.no_quality_gate:
-			reason = alignment_rejection(lyric_lines, raw_times, args.min_match)
+			reason = alignment_rejection(
+				lyric_lines, raw_times, args.min_match, words, args.min_sung
+			)
 			if reason:
 				print(f'   skip: {reason} - tag left unchanged')
 				return
@@ -833,6 +904,22 @@ def main() -> int:
 		'unchanged instead of being stamped with copied timestamps',
 	)
 	parser.add_argument(
+		'--min-sung',
+		type=float,
+		default=0.5,
+		metavar='FRACTION',
+		help="minimum share of the lyric's word pairs that must occur in the transcript "
+		'(default 0.5, 0 disables); a text that is mostly not sung is skipped and the tag left '
+		'unchanged even if single common words match enough lines',
+	)
+	parser.add_argument(
+		'--fallback-language',
+		default='en',
+		metavar='LANG',
+		help='when whisperx has no alignment model for the detected language, transcribe again as '
+		'this language (default en, none = fail as before)',
+	)
+	parser.add_argument(
 		'--no-quality-gate',
 		action='store_true',
 		help='write the alignment even when too few lines matched or the '
@@ -869,6 +956,8 @@ def main() -> int:
 	args = parser.parse_args()
 	if not 0.0 <= args.min_match <= 1.0:
 		parser.error('--min-match must be between 0 and 1')
+	if not 0.0 <= args.min_sung <= 1.0:
+		parser.error('--min-sung must be between 0 and 1')
 	if args.no_cache and args.refresh_cache:
 		parser.error('--no-cache and --refresh-cache are mutually exclusive')
 
