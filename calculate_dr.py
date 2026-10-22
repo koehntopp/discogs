@@ -9,6 +9,7 @@
 # ///
 
 import os
+import re
 
 # import system libraries
 import sys
@@ -41,8 +42,11 @@ def calculate_dr(albumpath: str) -> None:
 
 	# Group FLAC files by their parent directory (each representing an album)
 	albums: dict[Path, list[Path]] = {}
+	# A 'Disc N' folder (Roon box set, see bliss.py) belongs to its parent album, so ALBUM_DR
+	# is the mean over all discs.
 	for p in Path(albumpath).rglob('*.flac'):
-		albums.setdefault(p.parent, []).append(p)
+		parent = p.parent.parent if re.fullmatch(r'Disc \d+', p.parent.name) else p.parent
+		albums.setdefault(parent, []).append(p)
 
 	if not albums:
 		logger.error(f'No FLAC files found in {albumpath}')

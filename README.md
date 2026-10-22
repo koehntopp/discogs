@@ -140,7 +140,7 @@ All config values are also editable via the Settings modal in the web UI.
    - `dot_clean`: Strips macOS `.DS_Store` / `._*` AppleDouble junk.
    - Parallel tasks: `calculate_dr` (DR scores), `rsgain` (ReplayGain tags), `calculate_fp` (AcoustID fingerprints).
    - Sequential tasks: `fixtags` (Discogs metadata enrichment & player date tags), `update_lyrics` (LrcLib.net lyrics download).
-4. **Organise & Mirror (`bliss.py`)**: Run `./bliss.py` to move FLACs into `Artist/Album/track.flac` structure in `flacroot` (with non-destructive overwrite protection) and generate optional MP3 mirrors.
+4. **Organise & Mirror (`bliss.py`)**: Run `./bliss.py` to move FLACs into `Artist/Album/track.flac` structure in `flacroot` (multi-disc albums get `Disc N` subfolders, which Roon uses for box sets) (with non-destructive overwrite protection) and generate optional MP3 mirrors.
 5. **Browse & Manage (`webui.py`)**: Use the FastAPI/HTMX web UI to browse, search, and manage the library.
 
 ## Scripts

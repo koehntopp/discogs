@@ -27,7 +27,7 @@ We establish the following binding rules and standards for all FLAC tag handling
   * **Ripping/Tagger Metadata (Read-Only by scripts)**: `ARTIST`, `TITLE`, `TRACKNUMBER`, `DISCNUMBER`, `CATALOGNUMBER`, `MUSICBRAINZ_ALBUMID`, `SUBTITLE`, `SET SUBTITLE` (user-set, per-track, on discs within multi-disc editions — see §5a). `ALBUMARTIST` is normally in this category too, but `fixtags.py` overwrites it when `ALBUM_ARTIST_OVERRIDE` is set (see §5).
   * **Enriched Metadata (Managed by `fixtags.py`)**: `ALBUM`, `VERSION`, `DATE`, `RELEASEDATE`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`.
   * **Structured Custom Metadata (Managed by `fixtags.py`)**: `ALBUM_MASTER_TITLE`, `ALBUM_MASTER_YEAR`, `ALBUM_RELEASE_TITLE`, `ALBUM_RELEASE_YEAR`, `ALBUM_MAX_RESOLUTION`, `ALBUM_EDITION`, `ALBUM_FORMAT`, `ALBUM_RELEASE_COUNTRY`, `ALBUM_RELEASE_LABEL`.
-  * **Per-Track Structured Metadata (Managed by `fixtags.py`)**: `PART`, `WORK` — unlike everything else in this table, set independently per track rather than uniformly across the album directory. See §5a.
+  * **Per-Track Structured Metadata (Managed by `fixtags.py`)**: `DISCSUBTITLE` — unlike everything else in this table, set independently per track rather than uniformly across the album directory. See §5a. (`PART`/`WORK` are no longer written; existing values are left alone.)
   * **Per-Track Language (Managed by `fixtags.py`, derived from MusicBrainz)**: `LYRICS_LANGUAGE`. See §5b.
   * **User Overrides (Optional, read by scripts)**: `ALBUM_TITLE_OVERRIDE`, `ALBUM_ARTIST_OVERRIDE`.
   * **Calculated Metric Tags**:
@@ -64,24 +64,25 @@ We establish the following binding rules and standards for all FLAC tag handling
 * `bliss.py` combines `clean(f"{ALBUM} {VERSION}".strip())` to compute directory names on disk, preserving 100% backward compatibility with existing folder names.
 * **`ALBUM_ARTIST_OVERRIDE`**: A manual correction for a wrong `ALBUMARTIST`, not a Discogs-derived value — `fixtags.py` doesn't fetch or track any artist data from Discogs. When set, it's written straight into `ALBUMARTIST` (uniformly across the album directory, like `ALBUM`/`VERSION`), permanently replacing whatever was there; left completely untouched when absent. No other script consults `ALBUM_ARTIST_OVERRIDE` directly — `bliss.py`, `album_list.py`, and `webui.py` all read `ALBUMARTIST` itself, which `fixtags.py` keeps corrected.
 
-### 5a. Per-Track Box-Set Grouping (`PART` and `WORK`)
-* `fixtags.py` writes `PART` and `WORK` **per track**, inside the same per-file
+### 5a. Per-Track Box-Set Disc Title (`DISCSUBTITLE`)
+* `fixtags.py` writes `DISCSUBTITLE` **per track**, inside the same per-file
   loop that saves each FLAC — not as part of the uniform album-level tag set
   applied identically to every file in the directory. This matters because a
-  single `fixdir` invocation can span an entire multi-disc box set treated as
+  single `fixdir` invocation spans an entire multi-disc box set treated as
   one Discogs release, where each disc's own identity still needs to be
   distinguishable.
-  * **`PART`**: always set to that track's own `TITLE`.
-  * **`WORK`**: set to that track's own `SET SUBTITLE` — a tag the user sets
-    manually, per disc, within multi-disc editions — but only when
+  * **`DISCSUBTITLE`**: set to that track's own `SET SUBTITLE` — a tag the user
+    sets manually, per disc, within multi-disc editions — but only when
     `SET SUBTITLE` is present on that specific track; removed if it's later
     cleared on that track.
-* Roon renders `WORK` as a shared header it groups tracks under, and `PART`
-  as the individual track label shown beneath it — letting discs of a
-  box set (e.g. "Disc 1: Studio Album", "Disc 2: Live") appear as distinct,
-  identifiable groups in Roon even though this codebase treats the whole box
-  set as one flat album directory. See ADR 0008 for the full set of
-  Roon-specific tagging decisions.
+* Roon documents `DISCSUBTITLE` as the reliable disc-title tag (it also reads
+  `SETSUBTITLE`, `SET SUBTITLE`, `TSST`, `DISCNAME`, in that order of priority
+  after it). See ADR 0008 for the Roon-specific decisions, including the folder
+  layout (`bliss.py`, ADR 0005) and the import setting this depends on.
+* `PART` and `WORK` were written by earlier versions. They are no longer written
+  or removed; the user sets them by hand while the effect in Roon is evaluated.
+* A `Disc N` subfolder (ADR 0005) belongs to its parent album: `fixtags.py`
+  processes the parent as one `fixdir`, so one Discogs lookup covers all discs.
 
 ### 5b. Lyrics Language (`LYRICS_LANGUAGE`)
 * `fixtags.py` writes `LYRICS_LANGUAGE` **per track**: the language(s) sung on the track, as ISO 639-3 codes in MusicBrainz's terms (`eng`, `deu`, `ksh`, `gle`; `mul`, `und` and `zxx` = several / undetermined / no linguistic content, i.e. an instrumental), one value per language. Discogs has no language data (neither releases nor tracks), so this is the one tag derived from **MusicBrainz** rather than Discogs. It is anchored by the user-set `MUSICBRAINZ_ALBUMID` (User Tag Authority); the tag is tool-owned and never read back as input by `fixtags.py`.

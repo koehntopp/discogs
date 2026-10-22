@@ -12,6 +12,7 @@
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -39,6 +40,9 @@ from slugify import slugify
 
 from config import flacroot, mp3root
 from log import _console_handler, _is_tty, logger, success
+
+# Disc subfolder of a multi-disc album (Roon box sets), e.g. 'Disc 2'.
+DISC_DIR_RE = re.compile(r'^Disc \d+$')
 
 
 def read_audio_tags(filepath: str) -> dict[str, list[str]]:
@@ -101,18 +105,82 @@ def clean(dirty_text: str) -> str:
 	return sanitize_filename(slugify(dirty_text, lowercase=False, separator='_'))
 
 
-def get_target_path_and_filename(flac_file: str, root_dir: str) -> tuple[str, str, dict[str, str]]:
+def _leading_int(value: str, default: int = 0) -> int:
+	"""Return the integer before any '/' in a tag value (``2/3`` -> 2), or default."""
+	m = re.match(r'\s*(\d+)', value or '')
+	return int(m.group(1)) if m else default
+
+
+def _album_dir_name(tags: dict[str, list[str]]) -> tuple[str, str]:
+	"""Return the cleaned (artist, album_version) directory names for a file's tags."""
+	raw_album = tags.get('ALBUM', [''])[0]
+	version_tag = tags.get('VERSION', [''])[0]
+	if version_tag and version_tag not in raw_album:
+		raw_album = f'{raw_album} {version_tag}'
+	artist = clean(tags.get('ALBUMARTIST', tags.get('ARTIST', ['']))[0])
+	return artist, clean(raw_album)
+
+
+def multi_disc_albums(flac_files: list[str], root_dir: str) -> set[str]:
+	"""Return the album directories (artist/album, no trailing slash) that span several discs.
+
+	An album is multi-disc when any of its files in flac_files has DISCNUMBER > 1, a
+	disc total > 1 (``1/2``, DISCTOTAL, TOTALDISCS), or when the album directory already
+	has ``Disc N`` subfolders (so a later single-disc ingest joins the existing layout).
+	Roon needs the whole album's discs to decide; one file cannot.
+	"""
+	multi: set[str] = set()
+	seen: set[str] = set()
+	for f in flac_files:
+		try:
+			tags = read_audio_tags(f)
+		except Exception as e:  # noqa: BLE001
+			logger.warning(f'Cannot read tags of {f}: {e}')
+			continue
+		if not tags or not tags.get('TITLE') or not tags.get('ALBUM'):
+			continue
+		artist, album = _album_dir_name(tags)
+		album_dir = os.path.join(root_dir, artist, album)
+		if album_dir in multi:
+			continue
+		disc_raw = tags.get('DISCNUMBER', ['1'])[0]
+		total = max(
+			_leading_int(disc_raw.split('/')[1] if '/' in disc_raw else ''),
+			_leading_int(tags.get('DISCTOTAL', [''])[0]),
+			_leading_int(tags.get('TOTALDISCS', [''])[0]),
+		)
+		if _leading_int(disc_raw, 1) > 1 or total > 1:
+			multi.add(album_dir)
+		elif album_dir not in seen:
+			seen.add(album_dir)
+			if os.path.isdir(album_dir) and any(
+				DISC_DIR_RE.match(d) for d in os.listdir(album_dir)
+			):
+				multi.add(album_dir)
+	return multi
+
+
+def disc_subdir(tags: dict[str, list[str]]) -> str:
+	"""Return the 'Disc N/' path component for a file's DISCNUMBER."""
+	return f'Disc {_leading_int(tags.get("DISCNUMBER", ["1"])[0], 1)}/'
+
+
+def get_target_path_and_filename(
+	flac_file: str, root_dir: str, multi_disc: set[str] | None = None
+) -> tuple[str, str, dict[str, str]]:
 	"""Compute the canonical destination path and filename for a FLAC file.
 
 	Reads TITLE, ALBUM, ALBUMARTIST, DISCNUMBER, and TRACKNUMBER tags from the file
 	and applies clean() to produce filesystem-safe components.  The filename format is:
 	    <disc_zz>_<track_zz>_<title>.flac
 	The directory structure under root_dir is:
-	    <root_dir>/<artist>/<album>/
+	    <root_dir>/<artist>/<album>/            (single disc)
+	    <root_dir>/<artist>/<album>/Disc <n>/   (album listed in multi_disc, for Roon box sets)
 
 	Args:
 	    flac_file: Absolute path to the source FLAC file.
 	    root_dir: Root of the target library (e.g. flacroot).
+	    multi_disc: Album directories (see multi_disc_albums) that get Disc subfolders.
 
 	Returns:
 	    Tuple of (target_path, target_filename, metadata_dict) where metadata_dict
@@ -133,7 +201,10 @@ def get_target_path_and_filename(flac_file: str, root_dir: str) -> tuple[str, st
 	disc = tags.get('DISCNUMBER', ['01'])[0].split('/')[0].zfill(2)
 	track = tags.get('TRACKNUMBER', ['00'])[0].split('/')[0].zfill(2)
 	filename = f'{disc}_{track}_{track_title}.flac'
-	path = os.path.join(root_dir, artist, album_title) + '/'
+	path = os.path.join(root_dir, artist, album_title)
+	if multi_disc and path in multi_disc:
+		path = os.path.join(path, disc_subdir(tags).rstrip('/'))
+	path += '/'
 
 	return path, filename, {'artist': artist, 'album': album_title, 'track': track_title}
 
@@ -195,6 +266,8 @@ def movefiles(flacroot: str, full: bool = False) -> None:
 		for p in (Path(flacroot).rglob('*.flac') if full else Path(flacroot).glob('*.flac'))
 	]
 
+	multi_disc = multi_disc_albums(flac_files, flacroot)
+
 	for fullfilename in flac_files:
 		if not os.path.isfile(fullfilename):
 			continue
@@ -221,6 +294,8 @@ def movefiles(flacroot: str, full: bool = False) -> None:
 			track = tags.get('TRACKNUMBER', ['0'])[0].split('/')[0].zfill(2)
 			tobefilename = f'{disc}_{track}_{stracktitle}.flac'
 			tobepathname = flacroot + sartist + '/' + salbumtitle + '/'
+			if os.path.join(flacroot, sartist, salbumtitle) in multi_disc:
+				tobepathname += disc_subdir(tags)
 			tobefullname = tobepathname + tobefilename
 
 			if unicodedata.normalize('NFD', fullfilename.lower()) != unicodedata.normalize(
@@ -263,13 +338,15 @@ def ingestfiles(ingest_dir: str) -> None:
 	# Find all FLAC files in the ingest directory
 	flac_files = [str(PurePosixPath(p)) for p in Path(ingest_dir).rglob('*.flac')]
 
+	multi_disc = multi_disc_albums(flac_files, flacroot)
+
 	for fullfilename in flac_files:
 		if not os.path.isfile(fullfilename):
 			continue
 
 		try:
 			target_path, target_filename, metadata = get_target_path_and_filename(
-				fullfilename, flacroot
+				fullfilename, flacroot, multi_disc
 			)
 			if not metadata['track'] or not metadata['album']:
 				logger.warning(f'Skipping ingest for file with unreadable tags: {fullfilename}')

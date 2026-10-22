@@ -38,26 +38,34 @@ authority, etc.) and does not restate them.
   values, not an independent naming decision. See ADR 0002 §5 for the full
   formatting contract.
 
-### 2. `WORK` / `PART` — per-track box-set grouping
+### 2. `DISCSUBTITLE` and `Disc N` folders — box-set discs
+Source: https://help.roonlabs.com/portal/en/kb/articles/box-sets-how-to-check-your-files
 * A single Discogs release — and therefore a single `fixtags.py` `fixdir`
-  invocation — can span an entire multi-disc box set treated as one release
-  (e.g. a Blu-ray box set combining a studio album, a live disc, and bonus
-  material under one `DISCOGS_RELEASE_ID`). Nothing in the album-level tag set
-  (§1 above, or ADR 0002's "Structured Custom Metadata") distinguishes one
-  disc from another within such a release.
-* `fixtags.py` writes two tags **per track** to solve this, independently of
-  the uniform album-level tags:
-  * **`WORK`** — copied from that track's own `SET SUBTITLE`, a tag the user
-    sets manually, per disc, within multi-disc editions (e.g. `Disc 1: Studio
-    Album`, `Disc 2: Live Recording`). Only written when `SET SUBTITLE` is
-    present on that specific track; removed if it's later cleared there.
-  * **`PART`** — always copied from that track's own `TITLE`, unconditionally.
-* Roon renders `WORK` as a shared header it groups tracks under, and `PART` as
-  the individual track label shown beneath that header — so discs of a box set
-  appear as distinct, identifiable groups in Roon even though this codebase's
-  own tooling (Discogs lookup, `bliss.py` directory layout) treats the whole
-  release as one flat album directory. See ADR 0002 §5a for the write
-  mechanics (per-track loop, stale-tag cleanup).
+  invocation — can span an entire multi-disc box set (e.g. a studio album, a
+  live disc, and bonus material under one `DISCOGS_RELEASE_ID`).
+* **Disc numbers**: Roon wants `DISCNUMBER` on every track and `TRACKNUMBER`
+  restarting at 1 on each disc.
+* **Disc title**: Roon checks `DISCSUBTITLE`, `SETSUBTITLE`, `SET SUBTITLE`,
+  `TSST`, `DISCNAME` in that order and calls `DISCSUBTITLE` the reliable one.
+  `fixtags.py` writes `DISCSUBTITLE` per track from that track's own
+  `SET SUBTITLE` (the user-set tag, e.g. `Studio Album`, `Live Recording`);
+  removed if `SET SUBTITLE` is cleared there. ADR 0002 §5a has the mechanics.
+* **Folders**: Roon expects one folder per box with one `CD1`/`Disc 1` subfolder
+  per disc. `bliss.py` therefore places a multi-disc album's tracks in
+  `<Album_Version>/Disc <n>/` (single-disc albums stay flat; ADR 0005 §1).
+  Folders starting with a disc marker are merged into their parent by Roon,
+  which is the intent here; a separate album folder never starts with one.
+  Per-disc cover art (`folder.jpg` inside a disc folder) is possible with this layout.
+* **Display rules and setting**: disc titles appear only when at least two discs
+  have different titles, and only if Settings > Library > Import settings >
+  "Metadata preferences for discs" is set to "Prefer file" (default "Prefer Roon").
+  After retagging or moving, rescan the album; to regroup a split box, select
+  all its albums and Rescan (Force Scan does not regroup).
+* **`WORK`/`PART`**: earlier versions wrote them (`WORK` from `SET SUBTITLE`,
+  `PART` from `TITLE`) on the assumption that Roon renders them as a group
+  header and track label. Roon's box-set documentation does not mention them,
+  so `fixtags.py` no longer writes them and leaves existing values alone while
+  their effect is evaluated by hand.
 
 ---
 
@@ -67,10 +75,11 @@ authority, etc.) and does not restate them.
 * **Correct Roon Version Display**: Multiple pressings/editions of the same
   album are distinguishable via `VERSION` without polluting `ALBUM`.
 * **Box-Set Disc Identification**: Multi-disc box sets processed as a single
-  Discogs release still surface per-disc structure in Roon, via `WORK`/`PART`,
-  without requiring the release to be split into multiple directories or
-  multiple `DISCOGS_RELEASE_ID` lookups.
+  Discogs release surface per-disc structure in Roon, via `DISCNUMBER`,
+  `DISCSUBTITLE` and `Disc N` folders, without requiring multiple
+  `DISCOGS_RELEASE_ID` lookups.
 
 ### Negative / Trade-offs
-* `WORK` depends on the user manually maintaining `SET SUBTITLE` per disc —
+* `DISCSUBTITLE` depends on the user manually maintaining `SET SUBTITLE` per disc —
   there's no Discogs API field this can be derived from automatically.
+* Disc titles show up in Roon only with the "Prefer file" import setting.

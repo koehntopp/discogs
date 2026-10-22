@@ -67,6 +67,28 @@ from log import logger, success
 
 SCRIPTS_DIR = Path(__file__).parent
 
+# Disc subfolder of a multi-disc album (Roon box sets), e.g. 'Disc 2'; see bliss.py.
+_DISC_DIR_RE = re.compile(r'^Disc (\d+)$')
+
+
+def _album_flacs(directory: str) -> list[str]:
+	"""FLAC paths of an album: its own files, then those of its 'Disc N' subfolders."""
+	names = _os.listdir(directory)
+	flacs = [_os.path.join(directory, f) for f in sorted(names) if f.endswith('.flac')]
+	for _, n in sorted((int(m.group(1)), n) for n in names if (m := _DISC_DIR_RE.match(n))):
+		sub = _os.path.join(directory, n)
+		if _os.path.isdir(sub):
+			flacs += [
+				_os.path.join(sub, f) for f in sorted(_os.listdir(sub)) if f.endswith('.flac')
+			]
+	return flacs
+
+
+def _album_root(flac_path: Path) -> str:
+	"""Album directory of a FLAC: its parent, or the grandparent inside a 'Disc N' folder."""
+	parent = flac_path.parent
+	return str(parent.parent if _DISC_DIR_RE.match(parent.name) else parent)
+
 
 def _config_dir() -> Path:
 	# ENV var takes priority (set in Docker); fall back to config.py, then CWD
@@ -206,9 +228,9 @@ def _cache_update(new_rows: list[dict], drop_dirs: set[str]) -> None:
 			for r in new_rows:
 				d = r.get('_DIRECTORY_PATH') or r.get('Directory')
 				if d and Path(d).exists():
-					flacs = [f for f in os.listdir(d) if f.endswith('.flac')]
+					flacs = _album_flacs(d)
 					if flacs:
-						mtime = max(os.path.getmtime(os.path.join(d, f)) for f in flacs)
+						mtime = max(os.path.getmtime(f) for f in flacs)
 						cache_data[d] = {'mtime': mtime, 'data': r}
 			for d in drop_dirs:
 				if d in cache_data and not Path(d).exists():
@@ -793,10 +815,10 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 	}
 
 	def read_album_dir(album_dir: str) -> dict | None:
-		first_flac = next((f for f in os.listdir(album_dir) if f.endswith('.flac')), None)
+		first_flac = next(iter(_album_flacs(album_dir)), None)
 		if not first_flac:
 			return None
-		flac_path = str(Path(album_dir) / first_flac)
+		flac_path = first_flac
 		try:
 			audio = FLAC(flac_path)
 			raw = {k.upper(): v for k, v in audio.tags.items()}
@@ -878,10 +900,10 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 	if Path(artist_dir).is_dir():
 		for entry in sorted(Path(artist_dir).iterdir()):
 			if entry.is_dir():
-				first_flac = next((f for f in os.listdir(str(entry)) if f.endswith('.flac')), None)
+				first_flac = next(iter(_album_flacs(str(entry))), None)
 				if first_flac:
 					try:
-						audio = FLAC(str(entry / first_flac))
+						audio = FLAC(first_flac)
 						album_artist = audio.tags.get('ALBUMARTIST', [None])[0]
 					except Exception:  # noqa: BLE001, S110  # album artist is optional here
 						pass
@@ -944,7 +966,7 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 		target_folders = set()
 		if search_dir.is_dir():
 			for flac_p in search_dir.rglob('*.flac'):
-				target_folders.add(str(flac_p.parent))
+				target_folders.add(_album_root(flac_p))
 
 		rows = []
 		for folder in sorted(target_folders):
@@ -955,7 +977,7 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 		if rows:
 			new_dirs = {r['Directory'] for r in rows}
 			old_folders = (
-				{str(p.parent) for p in Path(artist_dir).rglob('*.flac')}
+				{_album_root(p) for p in Path(artist_dir).rglob('*.flac')}
 				if Path(artist_dir).is_dir()
 				else set()
 			)

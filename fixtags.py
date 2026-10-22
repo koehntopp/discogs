@@ -12,6 +12,7 @@
 
 import argparse
 import os
+import re
 import sys
 import time
 from json import JSONDecodeError
@@ -90,11 +91,14 @@ import musicbrainz_client
 
 LANGUAGE_TAG = 'LYRICS_LANGUAGE'
 
+# Disc subfolder of a multi-disc album (Roon box sets), e.g. 'Disc 2'; see bliss.py.
+DISC_DIR_RE = re.compile(r'^Disc \d+$')
+
 
 def resize_covers(directory: str, max_size: int = _cover_max_size) -> None:
 	"""Resize embedded cover art in all FLACs in directory if larger than max_size px."""
 	album_name = Path(directory).name
-	for flac_path in sorted(Path(directory).glob('*.flac')):
+	for flac_path in sorted(Path(directory).rglob('*.flac')):
 		try:
 			audio = FLAC(str(flac_path))
 			if not audio.pictures:
@@ -294,10 +298,9 @@ def fixdir(fixdir: str, dclient: discogs_client.Client, refresh_musicbrainz: boo
 	    ALBUM                 – formatted title: "<name> [<year> <desc> <kHz>DR<dr>]"
 	    ORIGINAL_TITLE        – canonical Discogs title (from master release if available)
 
-	Also writes PART and WORK per track (not uniformly like the tags above):
-	PART is always that track's own TITLE; WORK is that track's own SET SUBTITLE
-	when present, letting Roon group/identify individual discs of a box set
-	that this codebase otherwise treats as one flat album directory.
+	Also writes DISCSUBTITLE per track (not uniformly like the tags above): that track's
+	own SET SUBTITLE when present, which Roon shows as the disc title of a box set.
+	PART and WORK are no longer written; existing values are left alone.
 
 	Also writes LYRICS_LANGUAGE per track from MusicBrainz (the sung language of the track's
 	work, ISO 639-3), anchored by the user-set MUSICBRAINZ_ALBUMID; see apply_language.
@@ -315,12 +318,8 @@ def fixdir(fixdir: str, dclient: discogs_client.Client, refresh_musicbrainz: boo
 	    dclient: Authenticated Discogs client instance.
 	"""
 	flac_files = 0
-	first_flac = next(
-		(filename for filename in os.listdir(fixdir) if filename.endswith('.flac')), None
-	)
-	if first_flac is not None:
-		first_flac_path = os.path.join(fixdir, first_flac)
-	else:
+	first_flac_path = next((str(p) for p in sorted(Path(fixdir).rglob('*.flac'))), None)
+	if first_flac_path is None:
 		return
 	try:
 		audio = FLAC(first_flac_path)
@@ -484,22 +483,18 @@ def fixdir(fixdir: str, dclient: discogs_client.Client, refresh_musicbrainz: boo
 				if not audio.tags:
 					audio.add_tags()
 
-				# PART/WORK are per-track (Roon box-set grouping): WORK comes from
+				# DISCSUBTITLE is per-track (Roon box-set disc title): it comes from
 				# each track's own SET SUBTITLE (a tag the user sets manually on
 				# discs within multi-disc editions, so it varies track to track
 				# within a single fixdir), not from the uniform album-level new_tags.
-				title = audio.tags.get('TITLE', [''])[0].strip()
 				set_subtitle = audio.tags.get('SET SUBTITLE', [''])[0].strip()
-				part_changed = bool(title) and [str(x) for x in audio.tags.get('PART', [])] != [
-					title
-				]
-				work_changed = bool(set_subtitle) and [
-					str(x) for x in audio.tags.get('WORK', [])
+				disc_subtitle_changed = bool(set_subtitle) and [
+					str(x) for x in audio.tags.get('DISCSUBTITLE', [])
 				] != [set_subtitle]
-				work_stale = not set_subtitle and 'WORK' in audio.tags
+				disc_subtitle_stale = not set_subtitle and 'DISCSUBTITLE' in audio.tags
 
 				language_changed = apply_language(audio, mb_release)
-				stale_removed = work_stale or language_changed
+				stale_removed = disc_subtitle_stale or language_changed
 				for opt_tag in managed_optional:
 					if opt_tag not in new_tags and opt_tag in audio.tags:
 						del audio.tags[opt_tag]
@@ -507,8 +502,7 @@ def fixdir(fixdir: str, dclient: discogs_client.Client, refresh_musicbrainz: boo
 
 				needs_update = (
 					stale_removed
-					or part_changed
-					or work_changed
+					or disc_subtitle_changed
 					or any(
 						[str(x) for x in audio.tags.get(k, [])] != v for k, v in new_tags.items()
 					)
@@ -517,12 +511,10 @@ def fixdir(fixdir: str, dclient: discogs_client.Client, refresh_musicbrainz: boo
 				if needs_update:
 					for k, v in new_tags.items():
 						audio[k] = v
-					if title:
-						audio['PART'] = [title]
 					if set_subtitle:
-						audio['WORK'] = [set_subtitle]
-					elif 'WORK' in audio.tags:
-						del audio.tags['WORK']
+						audio['DISCSUBTITLE'] = [set_subtitle]
+					elif 'DISCSUBTITLE' in audio.tags:
+						del audio.tags['DISCSUBTITLE']
 					try:
 						audio.save()
 						try:
@@ -573,11 +565,16 @@ def main() -> None:
 
 		flacdir = config.nzbdir
 
+	# A 'Disc N' folder belongs to its parent album (Roon box set): one fixdir per album.
 	flac_directories = []
 	for root, dirs, files in os.walk(flacdir):
 		for file in files:
 			if file.endswith('.flac'):
-				flac_directories.append(root)
+				album_root = (
+					os.path.dirname(root) if DISC_DIR_RE.match(os.path.basename(root)) else root
+				)
+				if album_root not in flac_directories:
+					flac_directories.append(album_root)
 				break
 
 	dclient = (

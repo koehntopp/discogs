@@ -21,10 +21,18 @@ We establish the following architectural rules for library organization, MP3 mir
 * **Canonical Destination Path**:
   Every FLAC file is moved into the canonical structure:
   `<flacroot>/<Artist>/<Album_Version>/<disc_zz>_<track_zz>_<Title>.flac`
+  and, for a multi-disc album (Roon box set, ADR 0008 §2):
+  `<flacroot>/<Artist>/<Album_Version>/Disc <n>/<disc_zz>_<track_zz>_<Title>.flac`
+  An album is multi-disc when, among the files of the run, any has `DISCNUMBER` > 1 or a disc
+  total > 1 (`1/2`, `DISCTOTAL`, `TOTALDISCS`), or when its album directory already has `Disc N`
+  subfolders. Single-disc albums stay flat. `--full` migrates existing flat multi-disc albums.
+  Every other script treats a `Disc N` folder as part of its parent album (`fixtags.py`,
+  `album_list.py`, `webui.py`, `calculate_dr.py`, so `ALBUM_DR` is the mean over all discs).
 
 * **Component Derivation & `clean()` Sanitization**:
   * **`<Artist>`**: Derived from `clean(ALBUMARTIST or ARTIST or "Unknown Artist")`. `ALBUM_ARTIST_OVERRIDE` is deliberately not consulted here — `fixtags.py` already writes it straight into `ALBUMARTIST` when set (see ADR 0002 §5), so every other consumer reads the corrected value from the real tag rather than checking the override itself.
   * **`<Album_Version>`**: Derived from `clean(f"{ALBUM} {VERSION}".strip())`. Combines clean master title and plain-text version tag. Since `VERSION` includes a `DR<xx>` score and a parenthesized catalog number when available (ADR 0002 §5), directory names change whenever `ALBUM_DR` is recalculated — an accepted trade-off for making that information visible in Roon.
+  * **`Disc <n>`**: unpadded `DISCNUMBER`, only for multi-disc albums (see above).
   * **`<disc_zz>`**: 2-digit zero-padded `DISCNUMBER` (`01`, `02`). Splits total track strings (e.g. `1/2` $\rightarrow$ `01`). Defaults to `01`.
   * **`<track_zz>`**: 2-digit zero-padded `TRACKNUMBER` (`01`, `07`). Splits total track strings (e.g. `7/12` $\rightarrow$ `07`). Defaults to `00`.
   * **`<Title>`**: Derived from `clean(TITLE or "Unknown Title")`.

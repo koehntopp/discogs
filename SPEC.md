@@ -201,9 +201,8 @@ At least one of the two must be provided; otherwise help is printed.
    - `ALBUM` — clean master release title for players (e.g. `Brothers in Arms`). Taken from `ALBUM_TITLE_OVERRIDE` if present, otherwise clean `ALBUM_MASTER_TITLE` or `ORIGINAL_TITLE`.
    - `VERSION` — release decoration string for Roon version display: `<year> DR<xx> <format> (<edition>) (<catalog number>)` (e.g., `2025 DR09 Blu-ray (40th Anniversary Edition) (DGCD 12345)`). `DR<xx>` (two-digit, zero-padded) and the parenthesized catalog number are each appended only when available.
    - `ALBUMARTIST` — only when `ALBUM_ARTIST_OVERRIDE` is set: written verbatim (a manual correction, not derived from Discogs), permanently replacing whatever was there. Left completely untouched when the override is absent.
-5. Writes the following tags **per track** (not uniformly — each file's own value, independent of step 4's album-wide set), for Roon box-set grouping (see ADR 0008):
-   - `PART` — always that track's own `TITLE`.
-   - `WORK` — that track's own `SET SUBTITLE` when present (a tag the user sets manually, per disc, within multi-disc editions); removed if `SET SUBTITLE` is later cleared on that track.
+5. Writes the following tag **per track** (not uniformly — each file's own value, independent of step 4's album-wide set), as the Roon box-set disc title (see ADR 0008):
+   - `DISCSUBTITLE` — that track's own `SET SUBTITLE` when present (a tag the user sets manually, per disc, within multi-disc editions); removed if `SET SUBTITLE` is later cleared on that track. `PART`/`WORK` are no longer written; existing values are left alone.
 6. Writes `LYRICS_LANGUAGE` **per track** from MusicBrainz (`musicbrainz_client.py`, ADR 0002 section 5b): the sung language(s) of the track's work as ISO 639-3 codes (`eng`, `deu`, `ksh`, `gle`; `mul`/`und`/`zxx` as MusicBrainz uses them), repeated values for several languages. The release comes from the user-set `MUSICBRAINZ_ALBUMID`; a file is matched to its MusicBrainz track by `MUSICBRAINZ_RELEASETRACKID`, else by disc/track number when the title agrees (another edition of the album is left alone). A matched track without a sung language loses the tool-owned tag; a failed lookup changes nothing. Switch off with `musicbrainz_languages = False` in `config.py`.
 
 **Tags read:** `DISCOGS_RELEASE_ID`, `MUSICBRAINZ_ALBUMID` (or `MUSICBRAINZ ALBUM ID`), `MUSICBRAINZ_RELEASETRACKID`, `DISCNUMBER`, `TRACKNUMBER`, `DATE`, `SUBTITLE`, `SET SUBTITLE`, `TITLE`,
@@ -213,7 +212,7 @@ At least one of the two must be provided; otherwise help is printed.
 **Tags written:** `RELEASEDATE`, `DATE`, `YEAR`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`, `ORIGINAL DATE`, `ORIGINAL YEAR`,
 `ALBUM`, `VERSION`, `ALBUM_MASTER_TITLE`, `ALBUM_MASTER_YEAR`, `ALBUM_RELEASE_TITLE`,
 `ALBUM_RELEASE_YEAR`, `ALBUM_EDITION`, `ALBUM_RELEASE_COUNTRY`, `ALBUM_RELEASE_LABEL`,
-`ALBUM_FORMAT`, `ALBUM_MAX_RESOLUTION`, `ALBUM_DR`, `ALBUMARTIST` (only when `ALBUM_ARTIST_OVERRIDE` is set), `PART`, `WORK`, `LYRICS_LANGUAGE` (per-track)
+`ALBUM_FORMAT`, `ALBUM_MAX_RESOLUTION`, `ALBUM_DR`, `ALBUMARTIST` (only when `ALBUM_ARTIST_OVERRIDE` is set), `DISCSUBTITLE`, `LYRICS_LANGUAGE` (per-track)
 
 **External services:** Discogs REST API — requires `api_key` in `config.py`; MusicBrainz web service (language only, 1 request per second, cached in `config_dir/musicbrainz/`).
 
@@ -348,6 +347,8 @@ uv run bliss.py [--ingest DIR | --full | --mp3]
 <flacroot>/<ALBUMARTIST>/<ALBUM>/<DISCNUMBER>_<TRACKNUMBER>_<TITLE>.flac
 <mp3root>/<ALBUMARTIST>/<ALBUM>/<DISCNUMBER>_<TRACKNUMBER>_<TITLE>.mp3
 ```
+
+Multi-disc albums (any `DISCNUMBER` > 1, a disc total > 1, or an album directory that already has `Disc N` folders) get a `Disc <n>/` level between `<ALBUM>` and the file, in both trees (Roon box sets, ADR 0008 §2, ADR 0005 §1). `--full` migrates existing flat multi-disc albums.
 
 All path components are sanitised by `clean()`: punctuation removed, spaces replaced
 with underscores, German umlauts transliterated.
