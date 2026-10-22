@@ -27,7 +27,7 @@ We establish the following binding rules and standards for all FLAC tag handling
   * **Ripping/Tagger Metadata (Read-Only by scripts)**: `ARTIST`, `TITLE`, `TRACKNUMBER`, `DISCNUMBER`, `CATALOGNUMBER`, `MUSICBRAINZ_ALBUMID`, `SUBTITLE`, `SET SUBTITLE` (user-set, per-track, on discs within multi-disc editions — see §5a). `ALBUMARTIST` is normally in this category too, but `fixtags.py` overwrites it when `ALBUM_ARTIST_OVERRIDE` is set (see §5).
   * **Enriched Metadata (Managed by `fixtags.py`)**: `ALBUM`, `VERSION`, `DATE`, `RELEASEDATE`, `ORIGINALDATE`, `ORIGINALRELEASEDATE`.
   * **Structured Custom Metadata (Managed by `fixtags.py`)**: `ALBUM_MASTER_TITLE`, `ALBUM_MASTER_YEAR`, `ALBUM_RELEASE_TITLE`, `ALBUM_RELEASE_YEAR`, `ALBUM_MAX_RESOLUTION`, `ALBUM_EDITION`, `ALBUM_FORMAT`, `ALBUM_RELEASE_COUNTRY`, `ALBUM_RELEASE_LABEL`.
-  * **Per-Track Structured Metadata (Managed by `fixtags.py`)**: `DISCSUBTITLE` — unlike everything else in this table, set independently per track rather than uniformly across the album directory. See §5a. (`PART`/`WORK` are no longer written; existing values are left alone.)
+  * **Per-Track Structured Metadata (Managed by `fixtags.py`)**: `DISCSUBTITLE` — unlike everything else in this table, set independently per track rather than uniformly across the album directory. See §5a. (`PART`/`WORK` are removed where set.)
   * **Per-Track Language (Managed by `fixtags.py`, derived from MusicBrainz)**: `LYRICS_LANGUAGE`. See §5b.
   * **User Overrides (Optional, read by scripts)**: `ALBUM_TITLE_OVERRIDE`, `ALBUM_ARTIST_OVERRIDE`.
   * **Calculated Metric Tags**:
@@ -79,8 +79,8 @@ We establish the following binding rules and standards for all FLAC tag handling
   `SETSUBTITLE`, `SET SUBTITLE`, `TSST`, `DISCNAME`, in that order of priority
   after it). See ADR 0008 for the Roon-specific decisions, including the folder
   layout (`bliss.py`, ADR 0005) and the import setting this depends on.
-* `PART` and `WORK` were written by earlier versions. They are no longer written
-  or removed; the user sets them by hand while the effect in Roon is evaluated.
+* `PART` and `WORK` were written by earlier versions. `fixtags.py` now removes them
+  where set (the old writer is kept commented out in the per-file loop).
 * A `Disc N` subfolder (ADR 0005) belongs to its parent album: `fixtags.py`
   processes the parent as one `fixdir`, so one Discogs lookup covers all discs.
 

@@ -24,6 +24,7 @@ from rich.progress import (
 	TimeRemainingColumn,
 )
 
+from disc_layout import album_flacs, is_album_dir, is_disc_dir
 from log import _is_tty, logger
 
 
@@ -33,11 +34,11 @@ def flactag(tags: dict, key: str) -> str:
 
 
 def process_album_directory(directory: str, write_mode: bool) -> dict | None:
-	flacs = sorted(f for f in os.listdir(directory) if f.endswith('.flac'))
+	flacs = album_flacs(directory)
 	if not flacs:
 		return None
 
-	first_flac = str(PurePosixPath(directory) / flacs[0])
+	first_flac = str(PurePosixPath(flacs[0]))
 	try:
 		audio = FLAC(first_flac)
 		tags = {k.upper(): [str(x) for x in v] for k, v in audio.tags.items()} if audio.tags else {}
@@ -75,8 +76,8 @@ def process_album_directory(directory: str, write_mode: bool) -> dict | None:
 	}
 
 	if write_mode:
-		for fname in flacs:
-			fpath = str(PurePosixPath(directory) / fname)
+		for fpath in map(PurePosixPath, flacs):
+			fpath = str(fpath)
 			try:
 				tf = FLAC(fpath)
 				if not tf.tags:
@@ -100,8 +101,9 @@ def scan_and_migrate(root_dir: str, write_mode: bool, output_csv: str) -> None:
 	logger.info(f'Scanning FLAC library at: {root_dir}')
 	album_dirs = []
 	for root, _dirs, files in os.walk(root_dir):
-		if any(f.endswith('.flac') for f in files):
+		if is_album_dir(_dirs, files):
 			album_dirs.append(root)
+			_dirs[:] = [d for d in _dirs if not is_disc_dir(d)]  # discs belong to this album
 
 	total_dirs = len(album_dirs)
 	logger.info(f'Found {total_dirs} album directories.')

@@ -10,12 +10,12 @@
 
 import json
 import os
-import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import matplotlib
 
+from disc_layout import album_flacs, album_root
 from log import logger
 
 matplotlib.use('Agg')
@@ -71,22 +71,6 @@ def cover_art_dimensions(flac_path: str) -> str:
 	return ''
 
 
-# Disc subfolder of a multi-disc album (Roon box sets), e.g. 'Disc 2'; see bliss.py.
-DISC_DIR_RE = re.compile(r'^Disc (\d+)$')
-
-
-def album_flacs(directory: str) -> list[str]:
-	"""Return the FLAC paths of an album: its own files, then those of its 'Disc N' subfolders."""
-	names = os.listdir(directory)
-	flacs = [os.path.join(directory, f) for f in sorted(names) if f.endswith('.flac')]
-	discs = sorted((int(m.group(1)), n) for n in names if (m := DISC_DIR_RE.match(n)))
-	for _, n in discs:
-		sub = os.path.join(directory, n)
-		if os.path.isdir(sub):
-			flacs += [os.path.join(sub, f) for f in sorted(os.listdir(sub)) if f.endswith('.flac')]
-	return flacs
-
-
 def read_album(directory: str) -> dict[str, str] | None:
 	"""Read first FLAC in directory and return dict of album tags + COVER_ART + _DIRECTORY_PATH."""
 	flacs = album_flacs(directory)
@@ -138,9 +122,7 @@ def find_flac_dirs(root: str) -> list[str]:
 	dirs = []
 	for dirpath, _, files in os.walk(root):
 		if any(f.endswith('.flac') for f in files):
-			# a 'Disc N' folder is part of its parent album
-			if DISC_DIR_RE.match(os.path.basename(dirpath)):
-				dirpath = os.path.dirname(dirpath)
+			dirpath = album_root(dirpath)  # a 'Disc N' folder is part of its parent album
 			if dirpath not in dirs:
 				dirs.append(dirpath)
 	return dirs

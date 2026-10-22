@@ -39,10 +39,8 @@ from rich.progress import (
 from slugify import slugify
 
 from config import flacroot, mp3root
+from disc_layout import is_disc_dir
 from log import _console_handler, _is_tty, logger, success
-
-# Disc subfolder of a multi-disc album (Roon box sets), e.g. 'Disc 2'.
-DISC_DIR_RE = re.compile(r'^Disc \d+$')
 
 
 def read_audio_tags(filepath: str) -> dict[str, list[str]]:
@@ -153,9 +151,7 @@ def multi_disc_albums(flac_files: list[str], root_dir: str) -> set[str]:
 			multi.add(album_dir)
 		elif album_dir not in seen:
 			seen.add(album_dir)
-			if os.path.isdir(album_dir) and any(
-				DISC_DIR_RE.match(d) for d in os.listdir(album_dir)
-			):
+			if os.path.isdir(album_dir) and any(is_disc_dir(d) for d in os.listdir(album_dir)):
 				multi.add(album_dir)
 	return multi
 
@@ -244,6 +240,29 @@ def move_flac_file(source_file: str, target_path: str, target_filename: str) -> 
 	return False
 
 
+def flat_multidisc_files(flacroot: str) -> list[str]:
+	"""FLACs of albums that still lie flat in their album directory although they span discs.
+
+	Looks one level below each artist directory and uses the ``<disc_zz>_`` filename prefix
+	bliss.py itself wrote, so no tag has to be read: an album directory with FLACs directly in
+	it and a disc prefix above 01 needs ``Disc N`` subfolders. This lets the quick scan migrate
+	existing multi-disc albums without --full.
+	"""
+	files: list[str] = []
+	for artist in sorted(os.listdir(flacroot)):
+		artist_dir = os.path.join(flacroot, artist)
+		if not os.path.isdir(artist_dir):
+			continue
+		for album in sorted(os.listdir(artist_dir)):
+			album_dir = os.path.join(artist_dir, album)
+			if not os.path.isdir(album_dir):
+				continue
+			flacs = [f for f in os.listdir(album_dir) if f.lower().endswith('.flac')]
+			if any(_leading_int(f) > 1 and re.match(r'\d+_', f) for f in flacs):
+				files += [str(PurePosixPath(album_dir, f)) for f in sorted(flacs)]
+	return files
+
+
 def movefiles(flacroot: str, full: bool = False) -> None:
 	"""Reorganise FLAC files under flacroot into the canonical directory/name structure.
 
@@ -253,18 +272,22 @@ def movefiles(flacroot: str, full: bool = False) -> None:
 
 	Args:
 	    flacroot: Root library directory.
-	    full: When True, scan recursively; when False, scan only the root level.
+	    full: When True, scan recursively; when False, scan the root level plus flat albums
+	        that span several discs (they are moved into Disc N subfolders).
 	"""
 	# If full==False, only check for .flac files directly in the flacroot directory (non-recursive).
 	# If full==True, scan the whole tree recursively.
 	logger.info(
-		f'Checking FLAC folders in {flacroot}' + (' (full recursive)' if full else ' (root-only)')
+		f'Checking FLAC folders in {flacroot}'
+		+ (' (full recursive)' if full else ' (root-level files and flat multi-disc albums)')
 	)
 	currentalbum = ''
 	flac_files = [
 		str(PurePosixPath(p))
 		for p in (Path(flacroot).rglob('*.flac') if full else Path(flacroot).glob('*.flac'))
 	]
+	if not full:
+		flac_files += flat_multidisc_files(flacroot)
 
 	multi_disc = multi_disc_albums(flac_files, flacroot)
 
@@ -574,7 +597,7 @@ def main() -> None:
 	    --ingest DIR   Move all FLACs from DIR into flacroot, then clean up empty dirs.
 	    --full         Recursively reorganise the entire flacroot tree.
 	    --mp3          Sync the MP3 mirror: delete stale MP3 dirs, then transcode missing ones.
-	    (no flags)     Quick scan: reorganise only files directly in flacroot (not recursive).
+	    (no flags)     Quick scan: files directly in flacroot, plus flat multi-disc albums.
 	"""
 	parser = argparse.ArgumentParser(description='Music library management tool')
 	parser.add_argument(

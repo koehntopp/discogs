@@ -25,9 +25,10 @@ We establish the following architectural rules for library organization, MP3 mir
   `<flacroot>/<Artist>/<Album_Version>/Disc <n>/<disc_zz>_<track_zz>_<Title>.flac`
   An album is multi-disc when, among the files of the run, any has `DISCNUMBER` > 1 or a disc
   total > 1 (`1/2`, `DISCTOTAL`, `TOTALDISCS`), or when its album directory already has `Disc N`
-  subfolders. Single-disc albums stay flat. `--full` migrates existing flat multi-disc albums.
-  Every other script treats a `Disc N` folder as part of its parent album (`fixtags.py`,
-  `album_list.py`, `webui.py`, `calculate_dr.py`, so `ALBUM_DR` is the mean over all discs).
+  subfolders. Single-disc albums stay flat. `--full` and the no-flag quick scan migrate existing flat multi-disc albums.
+  Every other script treats a `Disc N` folder as part of its parent album through the shared
+  `disc_layout.py` (`fixtags.py`, `album_list.py`, `webui.py`, `lrc_count.py`, `migrate_tags.py`,
+  `calculate_dr.py`, so `ALBUM_DR` is the mean over all discs).
 
 * **Component Derivation & `clean()` Sanitization**:
   * **`<Artist>`**: Derived from `clean(ALBUMARTIST or ARTIST or "Unknown Artist")`. `ALBUM_ARTIST_OVERRIDE` is deliberately not consulted here — `fixtags.py` already writes it straight into `ALBUMARTIST` when set (see ADR 0002 §5), so every other consumer reads the corrected value from the real tag rather than checking the override itself.
@@ -51,7 +52,7 @@ We establish the following architectural rules for library organization, MP3 mir
   * `--ingest DIR`: Ingests files from `DIR` into `flacroot`, reorganizes them, and cleans up empty source directories.
   * `--full`: Scans entire `flacroot` recursively.
   * `--mp3`: Syncs MP3 mirror tree under `mp3root`.
-  * Default (`bliss.py` with no flags): Quick scan of root-level files inside `flacroot`.
+  * Default (`bliss.py` with no flags): Quick scan of root-level files inside `flacroot`, plus existing flat multi-disc albums (found from the `<disc_zz>_` filename prefix, no tag reads), which are moved into `Disc N` subfolders without `--full`.
 
 ### 2. Post-Download Pipeline Orchestration (`nzbfix.py`)
 * **Sequential 6-Step Processing Order**:

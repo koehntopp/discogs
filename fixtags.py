@@ -12,7 +12,6 @@
 
 import argparse
 import os
-import re
 import sys
 import time
 from json import JSONDecodeError
@@ -88,11 +87,9 @@ except ImportError:
 	_musicbrainz_languages = True
 
 import musicbrainz_client
+from disc_layout import album_root
 
 LANGUAGE_TAG = 'LYRICS_LANGUAGE'
-
-# Disc subfolder of a multi-disc album (Roon box sets), e.g. 'Disc 2'; see bliss.py.
-DISC_DIR_RE = re.compile(r'^Disc \d+$')
 
 
 def resize_covers(directory: str, max_size: int = _cover_max_size) -> None:
@@ -300,7 +297,8 @@ def fixdir(fixdir: str, dclient: discogs_client.Client, refresh_musicbrainz: boo
 
 	Also writes DISCSUBTITLE per track (not uniformly like the tags above): that track's
 	own SET SUBTITLE when present, which Roon shows as the disc title of a box set.
-	PART and WORK are no longer written; existing values are left alone.
+	PART and WORK (written by earlier versions) are removed where set; the old code is kept
+	commented out in the per-file loop.
 
 	Also writes LYRICS_LANGUAGE per track from MusicBrainz (the sung language of the track's
 	work, ISO 639-3), anchored by the user-set MUSICBRAINZ_ALBUMID; see apply_language.
@@ -493,8 +491,18 @@ def fixdir(fixdir: str, dclient: discogs_client.Client, refresh_musicbrainz: boo
 				] != [set_subtitle]
 				disc_subtitle_stale = not set_subtitle and 'DISCSUBTITLE' in audio.tags
 
+				# WORK/PART (Roon grouping by work, replaced by DISCSUBTITLE) are removed where set.
+				# The previous per-track writer is kept for reference:
+				# title = audio.tags.get('TITLE', [''])[0].strip()
+				# part_changed = bool(title) and [str(x) for x in audio.tags.get('PART', [])] != [title]
+				# work_changed = bool(set_subtitle) and [
+				# 	str(x) for x in audio.tags.get('WORK', [])
+				# ] != [set_subtitle]
+				# work_stale = not set_subtitle and 'WORK' in audio.tags
+				legacy_grouping = [t for t in ('WORK', 'PART') if t in audio.tags]
+
 				language_changed = apply_language(audio, mb_release)
-				stale_removed = disc_subtitle_stale or language_changed
+				stale_removed = bool(legacy_grouping) or disc_subtitle_stale or language_changed
 				for opt_tag in managed_optional:
 					if opt_tag not in new_tags and opt_tag in audio.tags:
 						del audio.tags[opt_tag]
@@ -511,6 +519,14 @@ def fixdir(fixdir: str, dclient: discogs_client.Client, refresh_musicbrainz: boo
 				if needs_update:
 					for k, v in new_tags.items():
 						audio[k] = v
+					for legacy_tag in legacy_grouping:
+						del audio.tags[legacy_tag]
+					# if title:
+					# 	audio['PART'] = [title]
+					# if set_subtitle:
+					# 	audio['WORK'] = [set_subtitle]
+					# elif 'WORK' in audio.tags:
+					# 	del audio.tags['WORK']
 					if set_subtitle:
 						audio['DISCSUBTITLE'] = [set_subtitle]
 					elif 'DISCSUBTITLE' in audio.tags:
@@ -570,11 +586,9 @@ def main() -> None:
 	for root, dirs, files in os.walk(flacdir):
 		for file in files:
 			if file.endswith('.flac'):
-				album_root = (
-					os.path.dirname(root) if DISC_DIR_RE.match(os.path.basename(root)) else root
-				)
-				if album_root not in flac_directories:
-					flac_directories.append(album_root)
+				album_dir = album_root(root)
+				if album_dir not in flac_directories:
+					flac_directories.append(album_dir)
 				break
 
 	dclient = (

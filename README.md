@@ -152,6 +152,7 @@ All config values are also editable via the Settings modal in the web UI.
 | `fixtags.py` | Discogs API tag enrichment & date tag mapping |
 | `bliss.py` | File organisation + MP3 sync (with overwrite protection) |
 | `album_list.py` | Album inventory scan → CSV + DR chart |
+| `disc_layout.py` | Shared helpers for the `Disc N` folder layout of multi-disc albums (no CLI) |
 | `update_lyrics.py` | Parallel lyrics fetch from lrclib.net (8 workers, one lrclib request at a time, adaptive pacing, retries failed tracks, warns when nothing is found; marks tracks tagged `LYRICS_LANGUAGE=zxx` instrumental without asking lrclib) |
 | `lrc_fix.py` | Local LRC realignment (demucs vocal isolation + whisperx + onset-snapping) |
 | `lrc_audit.py` | Audit of suspect synced lyrics: lrclib input vs our tools (compares tag, lrclib and a lrc_fix transcript) and, with `fix --apply`, repair by tier from the cache (safe realignments, instrumentals marked, shifted timestamps, one-timestamp tags; old tags saved, `revert` restores) |

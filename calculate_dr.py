@@ -9,7 +9,6 @@
 # ///
 
 import os
-import re
 
 # import system libraries
 import sys
@@ -20,6 +19,7 @@ from drmeter.algorithm import dynamic_range
 from drmeter.models import AudioData
 from mutagen.flac import FLAC
 
+from disc_layout import album_root_of_file
 from log import logger
 
 
@@ -45,8 +45,7 @@ def calculate_dr(albumpath: str) -> None:
 	# A 'Disc N' folder (Roon box set, see bliss.py) belongs to its parent album, so ALBUM_DR
 	# is the mean over all discs.
 	for p in Path(albumpath).rglob('*.flac'):
-		parent = p.parent.parent if re.fullmatch(r'Disc \d+', p.parent.name) else p.parent
-		albums.setdefault(parent, []).append(p)
+		albums.setdefault(Path(album_root_of_file(p)), []).append(p)
 
 	if not albums:
 		logger.error(f'No FLAC files found in {albumpath}')

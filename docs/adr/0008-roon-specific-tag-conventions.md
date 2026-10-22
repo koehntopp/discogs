@@ -64,8 +64,8 @@ Source: https://help.roonlabs.com/portal/en/kb/articles/box-sets-how-to-check-yo
 * **`WORK`/`PART`**: earlier versions wrote them (`WORK` from `SET SUBTITLE`,
   `PART` from `TITLE`) on the assumption that Roon renders them as a group
   header and track label. Roon's box-set documentation does not mention them,
-  so `fixtags.py` no longer writes them and leaves existing values alone while
-  their effect is evaluated by hand.
+  so `fixtags.py` no longer writes them and removes them where set (the old
+  writer is kept commented out).
 
 ---
 

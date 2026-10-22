@@ -63,31 +63,11 @@ from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from disc_layout import album_flacs as _album_flacs
+from disc_layout import album_root_of_file as _album_root
 from log import logger, success
 
 SCRIPTS_DIR = Path(__file__).parent
-
-# Disc subfolder of a multi-disc album (Roon box sets), e.g. 'Disc 2'; see bliss.py.
-_DISC_DIR_RE = re.compile(r'^Disc (\d+)$')
-
-
-def _album_flacs(directory: str) -> list[str]:
-	"""FLAC paths of an album: its own files, then those of its 'Disc N' subfolders."""
-	names = _os.listdir(directory)
-	flacs = [_os.path.join(directory, f) for f in sorted(names) if f.endswith('.flac')]
-	for _, n in sorted((int(m.group(1)), n) for n in names if (m := _DISC_DIR_RE.match(n))):
-		sub = _os.path.join(directory, n)
-		if _os.path.isdir(sub):
-			flacs += [
-				_os.path.join(sub, f) for f in sorted(_os.listdir(sub)) if f.endswith('.flac')
-			]
-	return flacs
-
-
-def _album_root(flac_path: Path) -> str:
-	"""Album directory of a FLAC: its parent, or the grandparent inside a 'Disc N' folder."""
-	parent = flac_path.parent
-	return str(parent.parent if _DISC_DIR_RE.match(parent.name) else parent)
 
 
 def _config_dir() -> Path:

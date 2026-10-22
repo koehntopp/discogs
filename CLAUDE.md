@@ -73,6 +73,7 @@ metadata, paired with a FastAPI/HTMX web UI. Full CLI/API/tag reference: `SPEC.m
 - `convert_opus.py`: Transcodes FLAC to Opus format.
 - `lrc_fix.py`: Local (no cloud API) LRC realignment via demucs vocal isolation + whisperx transcription + onset snapping. Own docs: `README-lrc_fix.md`; design: ADR 0009.
 - `lrc_audit.py`: Audit of the `lrc_count.py --suspects` tracks (tag vs lrclib vs `lrc_fix` transcript); runs `lrc_fix.py --dry-run`, so it needs the `lrc_fix` environment. Its only library write is `fix --apply` (repair tiers `safe`/`instrumental`/`shifted`/`onetimestamp`, from the cache, old tags saved, `revert`). Report: `docs/lrc-suspects-audit.md`.
+- `disc_layout.py`: Shared helpers for the multi-disc `Disc N` folder layout (no CLI) — imported by `bliss.py`, `fixtags.py`, `album_list.py`, `webui.py`, `calculate_dr.py`, `lrc_count.py`, `migrate_tags.py`. ADR 0005 §1.
 - `lrc_format.py`: Shared LRC id-tag/header formatting (no CLI) — imported by `update_lyrics.py`, `lrc_fix.py`, and `lrc_count.py`.
 - `musicbrainz_client.py`: MusicBrainz release lookup for the per-track sung languages (no CLI, cached, 1 request/s) — imported by `fixtags.py`. ADR 0002 §5b.
 - `lrclib_client.py`: Shared lrclib.net client identification (`User-Agent` + public `Lrclib-App-Id`, no CLI) — imported by `update_lyrics.py` and `lrclib_submitter.py`. Limits/requirements: ADR 0007 §4.

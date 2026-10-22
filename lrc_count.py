@@ -52,6 +52,7 @@ from pathlib import Path
 from mutagen.flac import FLAC
 from openpyxl import Workbook
 
+from disc_layout import album_flacs, is_album_dir
 from log import logger
 from lrc_format import (
 	INSTRUMENTAL_MARKER,
@@ -85,12 +86,12 @@ def _lyric_status(song: FLAC) -> str:
 
 def scan_album(directory: str) -> tuple[str, dict[str, int]] | None:
 	"""Scan one album directory and return (album_artist, status_counts), or None."""
-	flacs = sorted(f for f in os.listdir(directory) if f.lower().endswith('.flac'))
+	flacs = album_flacs(directory)
 	if not flacs:
 		return None
 
 	# Read artist from the first track
-	first_path = os.path.join(directory, flacs[0])
+	first_path = flacs[0]
 	try:
 		first = FLAC(first_path)
 	except Exception as e:  # noqa: BLE001
@@ -100,8 +101,7 @@ def scan_album(directory: str) -> tuple[str, dict[str, int]] | None:
 	artist = _flactag(first, 'ALBUMARTIST') or _flactag(first, 'ARTIST')
 
 	counts = {'lrc': 0, 'txt': 0, 'none': 0, 'instrumental': 0}
-	for filename in flacs:
-		track_path = os.path.join(directory, filename)
+	for track_path in flacs:
 		try:
 			song = FLAC(track_path)
 			counts[_lyric_status(song)] += 1
@@ -127,14 +127,14 @@ def scan_album_tracks(directory: str) -> list[dict]:
 	Each row has 'album_artist', 'album', 'song', 'lyrics_type', plus internal
 	'_disc'/'_track' sort keys (not meant for CSV output).
 	"""
-	flacs = sorted(f for f in os.listdir(directory) if f.lower().endswith('.flac'))
+	flacs = album_flacs(directory)
 	if not flacs:
 		return []
 
 	rows = []
 	album_artist = ''
-	for filename in flacs:
-		track_path = os.path.join(directory, filename)
+	for track_path in flacs:
+		filename = os.path.basename(track_path)
 		try:
 			song = FLAC(track_path)
 		except Exception as e:  # noqa: BLE001
@@ -211,8 +211,8 @@ def scan_album_suspects(directory: str, hints: bool = False) -> list[dict]:
 	Each row has the CSV columns plus internal '_n'/'_disc'/'_track' sort keys.
 	"""
 	rows = []
-	for filename in sorted(f for f in os.listdir(directory) if f.lower().endswith('.flac')):
-		track_path = os.path.join(directory, filename)
+	for track_path in album_flacs(directory):
+		filename = os.path.basename(track_path)
 		try:
 			song = FLAC(track_path)
 		except Exception as e:  # noqa: BLE001
@@ -252,7 +252,7 @@ def scan_library_suspects(flacdir: str, hints: bool = False) -> list[dict]:
 	rows: list[dict] = []
 	for root, dirs, files in os.walk(flacdir):
 		dirs.sort()  # deterministic traversal order
-		if any(f.lower().endswith('.flac') for f in files):
+		if is_album_dir(dirs, files):
 			rows.extend(scan_album_suspects(root, hints))
 			dirs.clear()  # don't descend further into an album directory
 	return rows
@@ -263,7 +263,7 @@ def scan_library_tracks(flacdir: str) -> list[dict]:
 	rows: list[dict] = []
 	for root, dirs, files in os.walk(flacdir):
 		dirs.sort()  # deterministic traversal order
-		if any(f.lower().endswith('.flac') for f in files):
+		if is_album_dir(dirs, files):
 			rows.extend(scan_album_tracks(root))
 			dirs.clear()  # don't descend further into an album directory
 	return rows
@@ -280,7 +280,7 @@ def scan_library(flacdir: str) -> tuple[dict[str, dict[str, int]], int]:
 	album_count = 0
 	for root, dirs, files in os.walk(flacdir):
 		dirs.sort()  # deterministic traversal order
-		if any(f.lower().endswith('.flac') for f in files):
+		if is_album_dir(dirs, files):
 			result = scan_album(root)
 			if result is not None:
 				artist, counts = result

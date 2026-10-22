@@ -202,7 +202,7 @@ At least one of the two must be provided; otherwise help is printed.
    - `VERSION` — release decoration string for Roon version display: `<year> DR<xx> <format> (<edition>) (<catalog number>)` (e.g., `2025 DR09 Blu-ray (40th Anniversary Edition) (DGCD 12345)`). `DR<xx>` (two-digit, zero-padded) and the parenthesized catalog number are each appended only when available.
    - `ALBUMARTIST` — only when `ALBUM_ARTIST_OVERRIDE` is set: written verbatim (a manual correction, not derived from Discogs), permanently replacing whatever was there. Left completely untouched when the override is absent.
 5. Writes the following tag **per track** (not uniformly — each file's own value, independent of step 4's album-wide set), as the Roon box-set disc title (see ADR 0008):
-   - `DISCSUBTITLE` — that track's own `SET SUBTITLE` when present (a tag the user sets manually, per disc, within multi-disc editions); removed if `SET SUBTITLE` is later cleared on that track. `PART`/`WORK` are no longer written; existing values are left alone.
+   - `DISCSUBTITLE` — that track's own `SET SUBTITLE` when present (a tag the user sets manually, per disc, within multi-disc editions); removed if `SET SUBTITLE` is later cleared on that track. `PART`/`WORK` (written by earlier versions) are removed where set.
 6. Writes `LYRICS_LANGUAGE` **per track** from MusicBrainz (`musicbrainz_client.py`, ADR 0002 section 5b): the sung language(s) of the track's work as ISO 639-3 codes (`eng`, `deu`, `ksh`, `gle`; `mul`/`und`/`zxx` as MusicBrainz uses them), repeated values for several languages. The release comes from the user-set `MUSICBRAINZ_ALBUMID`; a file is matched to its MusicBrainz track by `MUSICBRAINZ_RELEASETRACKID`, else by disc/track number when the title agrees (another edition of the album is left alone). A matched track without a sung language loses the tool-owned tag; a failed lookup changes nothing. Switch off with `musicbrainz_languages = False` in `config.py`.
 
 **Tags read:** `DISCOGS_RELEASE_ID`, `MUSICBRAINZ_ALBUMID` (or `MUSICBRAINZ ALBUM ID`), `MUSICBRAINZ_RELEASETRACKID`, `DISCNUMBER`, `TRACKNUMBER`, `DATE`, `SUBTITLE`, `SET SUBTITLE`, `TITLE`,
@@ -336,7 +336,7 @@ uv run bliss.py [--ingest DIR | --full | --mp3]
 
 | Flag / Argument | Description                                                              |
 |-----------------|--------------------------------------------------------------------------|
-| *(none)*        | Quick scan: reorganise only files directly in `flacroot` (non-recursive). |
+| *(none)*        | Quick scan: reorganise files directly in `flacroot`, plus flat multi-disc albums (album directories whose files carry a `<disc_zz>_` prefix above `01`), which move into `Disc N` subfolders. |
 | `--ingest DIR`  | Move all FLACs from `DIR` into `flacroot`, then clean up empty dirs.     |
 | `--full`        | Recursively reorganise the entire `flacroot` tree.                        |
 | `--mp3`         | Delete stale MP3 dirs, then transcode any missing ones with ffmpeg.      |
@@ -348,7 +348,7 @@ uv run bliss.py [--ingest DIR | --full | --mp3]
 <mp3root>/<ALBUMARTIST>/<ALBUM>/<DISCNUMBER>_<TRACKNUMBER>_<TITLE>.mp3
 ```
 
-Multi-disc albums (any `DISCNUMBER` > 1, a disc total > 1, or an album directory that already has `Disc N` folders) get a `Disc <n>/` level between `<ALBUM>` and the file, in both trees (Roon box sets, ADR 0008 §2, ADR 0005 §1). `--full` migrates existing flat multi-disc albums.
+Multi-disc albums (any `DISCNUMBER` > 1, a disc total > 1, or an album directory that already has `Disc N` folders) get a `Disc <n>/` level between `<ALBUM>` and the file, in both trees (Roon box sets, ADR 0008 §2, ADR 0005 §1). `--full` and the quick scan migrate existing flat multi-disc albums. Other scripts see a `Disc N` folder as part of its parent album via `disc_layout.py`.
 
 All path components are sanitised by `clean()`: punctuation removed, spaces replaced
 with underscores, German umlauts transliterated.
