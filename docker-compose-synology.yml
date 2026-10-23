@@ -6,6 +6,7 @@ services:
       - "8765:8000"
     volumes:
       - /volume1/docker/discogs/config:/config   # config.py, logs, albums.csv, albums_dr.png
+      - /volume1/docker/discogs/ssh:/root/.ssh:ro  # SSH keys + known_hosts for the Sync script
       - /volume1/FLAC:/flac                      # FLAC library — adjust to your share name
     environment:
       - CONFIG_DIR=/config

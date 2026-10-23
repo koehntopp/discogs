@@ -17,7 +17,7 @@ If you have multiple versions of the same album (original, remaster, SACD, Qobuz
 - **Dynamic Range scoring** — per-track and per-album DR values written as FLAC tags; DR column links to loudness-war.info
 - **Lyrics** — parallel tag reading (8 workers) with lrclib requests sent one at a time under shared adaptive pacing, deferred retry of tracks lrclib could not answer, a warning for every track with no match, TXT-to-LRC upgrade (an existing LRC is never replaced, only corrected in place: headers, characters, capitalization), and a lyrics cache that is written only on change and pruned of stale entries
 - **AcoustID fingerprinting** — generates and stores acoustic fingerprints
-- **Library sync** — makes ROCK pull the FLAC library from the NAS with rsync over SSH (no detour through the Docker host)
+- **Library sync** — runs your own sync script; the template makes ROCK pull the library from the NAS with rsync over SSH (no detour through the Docker host)
 - **Syslog forwarding** — optional structured log forwarding to a Synology log server
 - **Docker support** — runs on Docker Desktop (Mac) or Synology NAS
 
@@ -84,7 +84,7 @@ The container's persistent data is on the NAS (NFS), not on the host:
 | Container path | NAS path |
 |---|---|
 | `/config` | `/volume1/docker/discogs/discogs/config` (config.py, logs, albums.csv, lyrics/) |
-| `/root/.ssh/known_hosts` | `/volume1/docker/discogs/discogs/ssh/known_hosts` (read-only) |
+| `/root/.ssh` | the SSH folder with the key used by the Sync script, e.g. `/volume1/docker/discogs/discogs/ssh` (read-only) |
 | `/flac` | SMB share `//192.168.1.98/flac` |
 
 The full host setup is documented in `AGENTS.md` in the `docker discogs` folder.
@@ -102,10 +102,7 @@ Copy `config_demo.py` to `config/config.py` and set:
 | `mp3root` | MP3 mirror root |
 | `nzbdir` | Staging directory for newly tagged FLACs |
 | `flacroot_local` | Path as seen by the browser (for tagger deep links) |
-| `sync_host` | SSH target of ROCK (`user@host`), reachable from the container |
-| `sync_source` | Master library as ROCK sees it (`user@nas:/volume1/flac/`, trailing slash) |
-| `sync_dest` | Library path on ROCK (`/mnt/flac/`, trailing slash) |
-| `sync_ssh_key` | Optional private key for container to ROCK (e.g. `/config/id_ed25519`) |
+| `sync_script` | Script run by the Sync button; a bare name is looked up in the config directory (see `sync_demo.sh`) |
 | `cover_max_size` | Resize embedded cover art above this dimension (px) |
 | `musicbrainz_languages` | `True` (default): `fixtags.py` writes `LYRICS_LANGUAGE` per track from MusicBrainz (needs `MUSICBRAINZ_ALBUMID`); `False` switches the lookup off |
 | `rsgain_loudness` / `rsgain_clip_mode` / `rsgain_max_peak` / `rsgain_true_peak` / `rsgain_skip` | ReplayGain tagging settings passed to `rsgain` |

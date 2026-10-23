@@ -1054,31 +1054,17 @@ def _sync_lines(stream):
 
 
 def _sync_command(cfg: dict[str, str]) -> list[str] | None:
-	"""Build the ssh command that makes ROCK pull the library from the NAS (ADR 0010).
+	"""Build the command for the user's sync script (ADR 0010).
 
-	Returns None when sync_host, sync_source or sync_dest is missing from config.py."""
-	host = cfg.get('sync_host', '')
-	source = cfg.get('sync_source', '')
-	dest = cfg.get('sync_dest', '')
-	if not (host and source and dest):
+	`sync_script` is a path, or a bare name resolved against the config directory. Returns None
+	when it is unset or the file does not exist."""
+	name = cfg.get('sync_script', '')
+	if not name:
 		return None
-	key = cfg.get('sync_ssh_key', '')
-	remote = shlex.join(
-		[
-			'rsync',
-			'-rlti',
-			'--delete',
-			'--inplace',
-			'--exclude',
-			'@eaDir/',
-			'--info=stats2,progress2',
-			'-e',
-			'ssh',
-			source,
-			dest,
-		]
-	)
-	return ['ssh', '-tt', '-o', 'BatchMode=yes'] + (['-i', key] if key else []) + [host, remote]
+	script = Path(name)
+	if not script.is_absolute():
+		script = _config_dir() / script
+	return ['bash', str(script)] if script.is_file() else None
 
 
 @app.get('/sync', response_class=HTMLResponse)
@@ -1086,7 +1072,7 @@ async def sync_start():
 	sync_cmd = _sync_command(config_read())
 
 	if not sync_cmd:
-		logger.error('sync: sync_host, sync_source or sync_dest not set in config')
+		logger.error('sync: sync_script not set in config, or the script does not exist')
 	else:
 		if _sync.get('proc') and _sync['proc'].poll() is None:
 			_sync['proc'].terminate()
@@ -1181,10 +1167,7 @@ CONFIG_LABELS = {
 	'log_retention': ('Log Retention', 'text'),
 	'syslog_host': ('Syslog Host (Synology)', 'text'),
 	'syslog_port': ('Syslog Port', 'text'),
-	'sync_host': ('Sync ROCK SSH Target (user@host)', 'text'),
-	'sync_source': ('Sync Source (user@nas:/path/)', 'text'),
-	'sync_dest': ('Sync Destination on ROCK', 'text'),
-	'sync_ssh_key': ('Sync SSH Key (optional)', 'text'),
+	'sync_script': ('Sync Script (in config dir)', 'text'),
 	'cover_max_size': ('Cover Art Max Size (px)', 'text'),
 	'link_url_1': ('Link Button #1 URL', 'text'),
 	'link_url_2': ('Link Button #2 URL', 'text'),

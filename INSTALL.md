@@ -170,39 +170,38 @@ docker exec discogs uv run bliss.py --mp3
 
 ---
 
-## Part 3: Library Sync (ROCK pulls from the NAS)
+## Part 3: Library Sync
 
-The **Sync** button does not copy anything itself. The container runs `ssh` to ROCK, and ROCK runs
-`rsync` against the NAS, so the data goes NAS to ROCK directly. rsync sends only the changed blocks
-of retagged files; `--delete` removes files on ROCK that are gone from the NAS and `@eaDir/` is
-excluded. Design: ADR 0010.
+The **Sync** button runs a shell script you provide, so the sync itself is entirely yours to define.
+The template `sync_demo.sh` makes ROCK pull the library from the NAS with rsync over SSH, so the
+data goes NAS to ROCK directly and not through the Docker host. rsync sends only the changed
+blocks of retagged files; `--delete` removes files on ROCK that are gone from the NAS and `@eaDir/`
+is excluded. Design: ADR 0010.
 
-### One-time setup
+### Setup
 
-1. **Container to ROCK**: the container needs an SSH key ROCK accepts. Put a private key in
-   `config/` (for example `config/id_ed25519`), authorise its public key on ROCK, and put ROCK's
-   host key into the mounted `known_hosts` (`ssh-keyscan -H <rock-ip> >> ssh/known_hosts`).
-2. **ROCK to NAS**: ROCK needs its own key on the NAS (rsync service enabled in DSM, SSH port 22).
-   On ROCK: `ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519`, then append the public key to the
-   NAS user's `~/.ssh/authorized_keys` and accept the host key once with `ssh <nas-user>@<nas> true`.
-   On Synology the user's home directory and `~/.ssh` must not be group- or world-writable.
-3. Test from the Docker host (drop the `n` for a real run):
+1. Copy `sync_demo.sh` to `config/sync.sh` (next to `config.py`) and edit the host names and paths.
+2. Set `sync_script = 'sync.sh'` in `config.py` (or in Settings). A bare name is looked up in the
+   config directory; an absolute path also works.
+3. Make the host's SSH keys visible to the container: mount the host's SSH folder read-only at
+   `/root/.ssh` (see the volume line in the compose files). It needs the private key that ROCK
+   accepts and a `known_hosts` entry for ROCK (`ssh-keyscan -H <rock-ip> >> known_hosts`).
+   The script then needs no key setting. The image contains the `ssh` client.
+4. ROCK needs its own key on the NAS (rsync service enabled in DSM, SSH port 22). On ROCK:
+   `ssh-keygen -t ed25519 -N ''`, append the public key to the NAS user's `~/.ssh/authorized_keys`
+   and accept the host key once with `ssh <nas-user>@<nas> true`. On Synology the user's home
+   directory and `~/.ssh` must not be group- or world-writable.
+5. Test the script from the Docker host before using the button: `bash config/sync.sh`
+   (add `n` to `-rlti` for a dry run).
 
-```bash
-ssh -o BatchMode=yes user@rock "rsync -rltin --delete --inplace --exclude '@eaDir/' -e ssh user@nas:/volume1/flac/ /mnt/flac/"
-```
+Start the long-running command with `exec` (as the template does): Kill then ends the remote rsync.
+The log modal shows every line the script prints; rsync progress lines are shown at most every 5 s.
 
-### Config values
+### Config value
 
 ```python
-sync_host = 'user@rock'  # ssh target of ROCK
-sync_source = 'user@nas:/volume1/flac/'  # master, as ROCK sees it (trailing slash)
-sync_dest = '/mnt/flac/'  # library path on ROCK (trailing slash)
-sync_ssh_key = '/config/id_ed25519'  # optional, container to ROCK
+sync_script = 'sync.sh'  # script in the config directory (or an absolute path)
 ```
-
-The log modal shows one line per change (`>f+++++++++ path` new, `>f.st...... path` updated,
-`*deleting path` removed), a progress line at most every 5 s, and the rsync statistics at the end.
 
 ---
 

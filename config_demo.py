@@ -16,11 +16,9 @@ flacroot_local = '/volume1/FLAC/'
 
 nzbdir = '/nzb/'  # mapped from e.g. /volume1/nzb/complete
 
-# Library sync: ROCK pulls from the NAS with rsync over SSH (ADR 0010)
-sync_host = 'user@rock'  # ssh target of ROCK, reachable from the container
-sync_source = 'user@nas:/volume1/FLAC/'  # master, as seen from ROCK (keep the trailing slash)
-sync_dest = '/mnt/flac/'  # library path on ROCK (keep the trailing slash)
-# sync_ssh_key = '/config/id_ed25519'  # optional key for container -> ROCK
+# Library sync: script run by the Sync button. A bare name is looked up in the config
+# directory (next to config.py); see sync_demo.sh (ADR 0010)
+sync_script = 'sync.sh'
 
 # Cover art
 cover_max_size = 1500  # resize embedded cover art to this max dimension (px)
