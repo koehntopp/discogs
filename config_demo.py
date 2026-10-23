@@ -16,14 +16,11 @@ flacroot_local = '/volume1/FLAC/'
 
 nzbdir = '/nzb/'  # mapped from e.g. /volume1/nzb/complete
 
-# rclone sync to remote
-rclone_source = 'FLAC:/flac'  # rclone remote for source
-flacroot_remote = 'REMOTE:/path/'  # rclone remote for destination
-rclone_flags = 'sync'
-rclone_transfers = 16
-rclone_checkers = 32
-rclone_buffer_size = '128M'
-rclone_stats = '5s'
+# Library sync: ROCK pulls from the NAS with rsync over SSH (ADR 0010)
+sync_host = 'user@rock'  # ssh target of ROCK, reachable from the container
+sync_source = 'user@nas:/volume1/FLAC/'  # master, as seen from ROCK (keep the trailing slash)
+sync_dest = '/mnt/flac/'  # library path on ROCK (keep the trailing slash)
+# sync_ssh_key = '/config/id_ed25519'  # optional key for container -> ROCK
 
 # Cover art
 cover_max_size = 1500  # resize embedded cover art to this max dimension (px)

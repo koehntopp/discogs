@@ -94,7 +94,7 @@ The main view is a table of your albums, scanned from `flacroot`. Each row shows
 - **Refresh** — scans `flacroot` and rebuilds the album table
 - **Lyrics** — fetches lyrics for all albums in `nzbdir` (see Part 2)
 - **Bliss** — organises files into `Artist/Album/track.flac` structure (see Part 2)
-- **Sync** — runs rclone to mirror the library (see Part 3)
+- **Sync** — makes ROCK pull the library from the NAS with rsync (see Part 3)
 - **Log** — opens the live log modal; shows output from any running process
 - **Settings** — edit all config values in the browser; saves to `config/config.py`
 
@@ -170,59 +170,39 @@ docker exec discogs uv run bliss.py --mp3
 
 ---
 
-## Part 3: rclone Sync
+## Part 3: Library Sync (ROCK pulls from the NAS)
 
-rclone mirrors your FLAC library to a remote destination. It runs when you click **Sync** in the UI.
+The **Sync** button does not copy anything itself. The container runs `ssh` to ROCK, and ROCK runs
+`rsync` against the NAS, so the data goes NAS to ROCK directly. rsync sends only the changed blocks
+of retagged files; `--delete` removes files on ROCK that are gone from the NAS and `@eaDir/` is
+excluded. Design: ADR 0010.
 
-### rclone.conf
+### One-time setup
 
-Create `config/rclone.conf` with your source and destination remotes. rclone supports [many backends](https://rclone.org/overview/) — SMB, SFTP, S3, Backblaze, etc.
-
-Example with an SMB source and SFTP destination:
-
-```ini
-[FLAC]
-type = smb
-host = 192.168.1.10
-user = your_user
-pass = your_rclone_obscured_password   # use: rclone obscure yourpassword
-
-[ROCK]
-type = sftp
-host = 192.168.1.20
-user = your_user
-key_file = /config/id_rsa
-known_hosts_file = /config/known_hosts
-```
-
-Passwords in rclone.conf must be obscured with `rclone obscure`, not stored in plain text.
-
-For SFTP, generate `known_hosts` with:
+1. **Container to ROCK**: the container needs an SSH key ROCK accepts. Put a private key in
+   `config/` (for example `config/id_ed25519`), authorise its public key on ROCK, and put ROCK's
+   host key into the mounted `known_hosts` (`ssh-keyscan -H <rock-ip> >> ssh/known_hosts`).
+2. **ROCK to NAS**: ROCK needs its own key on the NAS (rsync service enabled in DSM, SSH port 22).
+   On ROCK: `ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519`, then append the public key to the
+   NAS user's `~/.ssh/authorized_keys` and accept the host key once with `ssh <nas-user>@<nas> true`.
+   On Synology the user's home directory and `~/.ssh` must not be group- or world-writable.
+3. Test from the Docker host (drop the `n` for a real run):
 
 ```bash
-ssh-keyscan -H 192.168.1.20 >> config/known_hosts
+ssh -o BatchMode=yes user@rock "rsync -rltin --delete --inplace --exclude '@eaDir/' -e ssh user@nas:/volume1/flac/ /mnt/flac/"
 ```
 
 ### Config values
 
 ```python
-rclone_source = 'FLAC:/flac'  # rclone remote:path for source
-flacroot_remote = 'ROCK:/mnt/flac'  # rclone remote:path for destination
-rclone_flags = 'sync'  # rclone subcommand
-rclone_transfers = 16  # parallel file transfers
-rclone_checkers = 32  # parallel metadata checks
-rclone_buffer_size = '128M'  # per-transfer buffer
-rclone_stats = '5s'  # progress reporting interval
+sync_host = 'user@rock'  # ssh target of ROCK
+sync_source = 'user@nas:/volume1/flac/'  # master, as ROCK sees it (trailing slash)
+sync_dest = '/mnt/flac/'  # library path on ROCK (trailing slash)
+sync_ssh_key = '/config/id_ed25519'  # optional, container to ROCK
 ```
 
-### Add to docker-compose.yml
-
-```yaml
-environment:
-  - CONFIG_DIR=/config
-  - PORT=8000
-  - RCLONE_CONFIG=/config/rclone.conf   # add this
-```
+The log modal shows one line per change (`>f+++++++++ path` new, `>f.st...... path` updated,
+`*deleting path` removed), a progress line at most every 5 s, and the rsync statistics at the end.
 
 ---
 
@@ -241,7 +221,7 @@ No restart needed after adding these via the Settings UI — they are read at st
 
 ## Part 5: Toolbar Link Buttons
 
-Add up to 5 custom buttons to the toolbar — useful for linking to related apps (your NAS UI, Prowlarr, rclone web, etc.).
+Add up to 5 custom buttons to the toolbar — useful for linking to related apps (your NAS UI, Prowlarr, etc.).
 
 In Settings, fill in **Link button #1** through **#5** with full URLs. The button appears immediately; the favicon is fetched and cached automatically.
 
@@ -287,7 +267,6 @@ For ARM-based Synology:
 | Volume: FLAC | `/volume1/FLAC` → `/flac` |
 | Env: `CONFIG_DIR` | `/config` |
 | Env: `PORT` | `8000` |
-| Env: `RCLONE_CONFIG` | `/config/rclone.conf` |
 | Restart policy | Unless stopped |
 
 Create `/volume1/docker/discogs/config/config.py` from `config_demo.py` before starting the container.

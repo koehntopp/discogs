@@ -24,6 +24,7 @@ if _os.environ.get('PREINSTALL_ONLY'):
 
 import json
 import re
+import shlex
 import subprocess
 
 
@@ -1031,84 +1032,94 @@ async def bliss_run():
 	return await log_modal()
 
 
+_SYNC_PROGRESS_RE = re.compile(r'^\s*[\d.,]+[KMGT]?\s+\d+%\s')
+_SYNC_PROGRESS_EVERY = 5.0  # seconds between logged rsync progress lines
+
+
+def _sync_lines(stream):
+	"""Yield text lines from a binary stream, splitting on both \\r and \\n.
+
+	rsync redraws its progress line with carriage returns, and `ssh -tt` turns newlines into
+	\\r\\n, so a plain line iterator would glue many progress updates into one long line."""
+	buf = b''
+	while chunk := stream.read1(4096):
+		buf += chunk
+		parts = re.split(rb'[\r\n]+', buf)
+		buf = parts.pop()
+		for part in parts:
+			if part.strip():
+				yield part.decode('utf-8', 'replace').rstrip()
+	if buf.strip():
+		yield buf.decode('utf-8', 'replace').rstrip()
+
+
+def _sync_command(cfg: dict[str, str]) -> list[str] | None:
+	"""Build the ssh command that makes ROCK pull the library from the NAS (ADR 0010).
+
+	Returns None when sync_host, sync_source or sync_dest is missing from config.py."""
+	host = cfg.get('sync_host', '')
+	source = cfg.get('sync_source', '')
+	dest = cfg.get('sync_dest', '')
+	if not (host and source and dest):
+		return None
+	key = cfg.get('sync_ssh_key', '')
+	remote = shlex.join(
+		[
+			'rsync',
+			'-rlti',
+			'--delete',
+			'--inplace',
+			'--exclude',
+			'@eaDir/',
+			'--info=stats2,progress2',
+			'-e',
+			'ssh',
+			source,
+			dest,
+		]
+	)
+	return ['ssh', '-tt', '-o', 'BatchMode=yes'] + (['-i', key] if key else []) + [host, remote]
+
+
 @app.get('/sync', response_class=HTMLResponse)
 async def sync_start():
-	cfg = config_read()
-	source = cfg.get('rclone_source', '')
-	remote = cfg.get('flacroot_remote', '')
-	flags = cfg.get('rclone_flags', 'sync')
-	transfers = cfg.get('rclone_transfers', '16')
-	checkers = cfg.get('rclone_checkers', '32')
-	buffer = cfg.get('rclone_buffer_size', '128M')
-	stats = cfg.get('rclone_stats', '5s')
+	sync_cmd = _sync_command(config_read())
 
-	if not source or not remote:
-		logger.error('rclone sync: rclone_source or flacroot_remote not set in config')
+	if not sync_cmd:
+		logger.error('sync: sync_host, sync_source or sync_dest not set in config')
 	else:
 		if _sync.get('proc') and _sync['proc'].poll() is None:
 			_sync['proc'].terminate()
 		import threading
 
-		strip = {'-P', '--progress', '-v', '--verbose'}
-		clean_flags = [f for f in flags.split() if f not in strip]
-		rclone_log = _config_dir() / 'rclone.log'
-		rclone_log.write_text('')  # truncate on each run
-		rclone_conf = _config_dir() / 'rclone.conf'
-		conf_flag = ['--config', str(rclone_conf)] if rclone_conf.exists() else []
-
-		sync_cmd = (
-			['rclone']
-			+ conf_flag
-			+ clean_flags
-			+ [
-				'--exclude',
-				'@eaDir/**',
-				'--inplace',
-				'--log-file',
-				str(rclone_log),
-				'--log-level',
-				'INFO',
-				'--stats-log-level',
-				'NOTICE',
-				'--stats-one-line',
-				'--stats',
-				stats,
-				'--transfers',
-				transfers,
-				'--checkers',
-				checkers,
-				'--buffer-size',
-				buffer,
-				source,
-				remote,
-			]
-		)
-
 		def _run_sequence():
-			logger.info(f'rclone sync started: {" ".join(sync_cmd)}')
+			logger.info(f'sync started: {shlex.join(sync_cmd)}')
 			proc = _set_proc(
-				subprocess.Popen(sync_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+				subprocess.Popen(
+					sync_cmd,
+					stdin=subprocess.DEVNULL,
+					stdout=subprocess.PIPE,
+					stderr=subprocess.STDOUT,
+				)
 			)
 			_sync['proc'] = proc
 
-			with open(rclone_log, 'r') as f:
-				while proc.poll() is None:
-					line = f.readline()
-					if line:
-						logger.info(f'rclone: {line.rstrip()}')
-					else:
-						time.sleep(0.5)
-				for line in f:
-					if line.strip():
-						logger.info(f'rclone: {line.rstrip()}')
+			last_progress = 0.0
+			for line in _sync_lines(proc.stdout):
+				if _SYNC_PROGRESS_RE.match(line):
+					now = time.monotonic()
+					if now - last_progress < _SYNC_PROGRESS_EVERY:
+						continue
+					last_progress = now
+				logger.info(f'rsync: {line}')
+			proc.wait()
 
 			if proc.returncode == 0:
-				logger.info('rclone sync done (exit 0)')
+				logger.info('sync done (exit 0)')
+			elif proc.returncode < 0:
+				logger.warning('sync terminated by user')
 			else:
-				if proc.returncode < 0:
-					logger.warning('rclone sync terminated by user')
-				else:
-					logger.error(f'rclone sync failed (exit {proc.returncode})')
+				logger.error(f'sync failed (exit {proc.returncode})')
 
 		threading.Thread(target=_run_sequence, daemon=True).start()
 
@@ -1170,13 +1181,10 @@ CONFIG_LABELS = {
 	'log_retention': ('Log Retention', 'text'),
 	'syslog_host': ('Syslog Host (Synology)', 'text'),
 	'syslog_port': ('Syslog Port', 'text'),
-	'rclone_source': ('rclone Source', 'text'),
-	'flacroot_remote': ('rclone Destination', 'text'),
-	'rclone_flags': ('rclone Flags', 'text'),
-	'rclone_transfers': ('rclone Transfers', 'text'),
-	'rclone_checkers': ('rclone Checkers', 'text'),
-	'rclone_buffer_size': ('rclone Buffer Size', 'text'),
-	'rclone_stats': ('rclone Stats Interval', 'text'),
+	'sync_host': ('Sync ROCK SSH Target (user@host)', 'text'),
+	'sync_source': ('Sync Source (user@nas:/path/)', 'text'),
+	'sync_dest': ('Sync Destination on ROCK', 'text'),
+	'sync_ssh_key': ('Sync SSH Key (optional)', 'text'),
 	'cover_max_size': ('Cover Art Max Size (px)', 'text'),
 	'link_url_1': ('Link Button #1 URL', 'text'),
 	'link_url_2': ('Link Button #2 URL', 'text'),
@@ -1214,8 +1222,6 @@ _UNQUOTED = {
 	'rsgain_max_peak',
 	'rsgain_true_peak',
 	'rsgain_skip',
-	'rclone_transfers',
-	'rclone_checkers',
 	'cover_max_size',
 	'syslog_port',
 }

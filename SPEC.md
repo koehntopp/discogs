@@ -122,6 +122,7 @@ uv run webui.py
 4. Manages single active child process state (`_current_proc`); handles emergency termination via `POST /log/kill`.
 5. Automatically fetches and caches favicons for up to 5 custom toolbar link buttons to `config_dir/link_favicon_N.ico`.
 6. Provides an in-place Settings modal to edit `config.py` directly from the web browser.
+7. `GET /sync` (Sync button) runs `ssh -tt -o BatchMode=yes [-i sync_ssh_key] sync_host 'rsync -rlti --delete --inplace --exclude @eaDir/ --info=stats2,progress2 -e ssh sync_source sync_dest'`: ROCK pulls the library from the NAS (config keys `sync_host`, `sync_source`, `sync_dest`, optional `sync_ssh_key`; ADR 0010). Output is split on `\r` and `\n`; each itemized change is logged, progress lines at most every 5 s. Missing keys log an error and start nothing. Kill (`POST /log/kill`) terminates the local `ssh`, which ends the remote rsync.
 
 ---
 

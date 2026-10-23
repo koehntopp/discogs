@@ -94,6 +94,7 @@ Detailed architectural standards and design contracts, loaded automatically as p
 @docs/adr/0007-lrclib-lyrics-submission-proof-of-work.md
 @docs/adr/0008-roon-specific-tag-conventions.md
 @docs/adr/0009-lrc-fix-local-realignment.md
+@docs/adr/0010-library-sync-on-rock.md
 
 ## Approach
 - Read existing files before writing. Don't re-read unless changed.

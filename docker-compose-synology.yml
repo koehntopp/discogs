@@ -10,7 +10,6 @@ services:
     environment:
       - CONFIG_DIR=/config
       - PORT=8000
-      - RCLONE_CONFIG=/config/rclone.conf
     ulimits:
       nofile:
         soft: 65536

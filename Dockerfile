@@ -40,6 +40,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     curl \
     ca-certificates \
+    openssh-client \
     unzip \
     libebur128-1 \
     libinih1 \
@@ -50,13 +51,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy TagLib 2.x from builder
 COPY --from=builder /opt/taglib /opt/taglib
 RUN ldconfig /opt/taglib/lib
-
-# Install rclone from official releases (apt version too old for SMB backend)
-RUN curl -fsSL https://downloads.rclone.org/rclone-current-linux-amd64.zip -o /tmp/rclone.zip \
-    && unzip -q /tmp/rclone.zip -d /tmp/rclone \
-    && cp /tmp/rclone/rclone-*/rclone /usr/local/bin/ \
-    && chmod +x /usr/local/bin/rclone \
-    && rm -rf /tmp/rclone*
 
 # Copy only the rsgain binary from the builder
 COPY --from=builder /tmp/rsgain-build/rsgain /usr/local/bin/rsgain
