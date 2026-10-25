@@ -153,6 +153,7 @@ All config values are also editable via the Settings modal in the web UI.
 | `lrclib_submitter.py` | Submit FLAC file lyrics to LRCLIB (lrclib.net) with PoW challenge solver |
 | `lrclib_client.py` | Shared lrclib.net client identification (User-Agent + public `Lrclib-App-Id`); no CLI |
 | `calculate_dr.py` | Dynamic Range calculation |
+| `check_multidisc.py` | Read-only CSV (with Yate links) of albums that look multi disc: disc count > 1, several `SET SUBTITLE` values, or mixed sample rate / bit depth |
 | `calculate_fp.py` | AcoustID fingerprint generation |
 | `migrate_tags.py` | Tag schema migration to discrete `ALBUM_*` tags |
 | `build_synology.sh` | Build Docker image tar for Synology upload |

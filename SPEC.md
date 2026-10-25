@@ -457,6 +457,23 @@ uv run migrate_tags.py [--write] [DIR]
 
 ---
 
+### `check_multidisc.py` — Multi-disc album report
+
+**Purpose:** Read-only scan listing every album that classifies as multi disc. An album matches on any of: `disc` (highest of `DISCNUMBER`, `DISCTOTAL`/`TOTALDISCS`, the total in `1/2`, the number of distinct `DISCNUMBER` values, or `Disc N` subfolders is > 1), `subtitle` (more than one distinct non-empty `SET SUBTITLE`), `format` (more than one distinct sample rate or bit depth, i.e. bits per sample; FLAC average kbps differs per track and is not compared). A `format`-only match is often a single disc with a hi-res bonus track.
+
+**Usage:**
+```bash
+uv run check_multidisc.py [<flacdir>] [--csv <file.csv>] [--reason disc|subtitle|format]
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `flacdir` | No | Library root (defaults to `config.flacroot_local`). |
+| `--csv` | No | Output CSV (default `multidisc.csv`). Columns: `directory, discs, set_subtitles, formats, reasons, yate_link`. `yate_link` is `tagger_scheme` + directory rebased from `flacroot` onto `flacroot_local`. |
+| `--reason` | No | Keep only albums matching this criterion. |
+
+---
+
 ### `lrc_count.py` — Lyrics coverage report by album artist
 
 **Purpose:** Scan a FLAC library and report lyrics coverage aggregated per album artist, to identify artists most in need of an LRC upgrade pass (e.g. via `align_lyrics.py`).
