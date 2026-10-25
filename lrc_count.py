@@ -4,6 +4,7 @@
 #   "structlog",
 #   "mutagen",
 #   "openpyxl",
+#   "rich",
 # ]
 # ///
 
@@ -61,6 +62,7 @@ from lrc_format import (
 	lrc_problem_line_count,
 	lrc_suspect_reasons,
 )
+from scan_progress import count_albums, scan_progress
 
 
 def _flactag(song: FLAC, tag: str) -> str:
@@ -250,22 +252,26 @@ def scan_album_suspects(directory: str, hints: bool = False) -> list[dict]:
 def scan_library_suspects(flacdir: str, hints: bool = False) -> list[dict]:
 	"""Walk the library root, returning the suspect-LRC rows of every album."""
 	rows: list[dict] = []
-	for root, dirs, files in os.walk(flacdir):
-		dirs.sort()  # deterministic traversal order
-		if is_album_dir(dirs, files):
-			rows.extend(scan_album_suspects(root, hints))
-			dirs.clear()  # don't descend further into an album directory
+	with scan_progress(count_albums(flacdir), 'Scanning', Suspects=0) as tick:
+		for root, dirs, files in os.walk(flacdir):
+			dirs.sort()  # deterministic traversal order
+			if is_album_dir(dirs, files):
+				rows.extend(scan_album_suspects(root, hints))
+				dirs.clear()  # don't descend further into an album directory
+				tick(Suspects=len(rows))
 	return rows
 
 
 def scan_library_tracks(flacdir: str) -> list[dict]:
 	"""Walk the library root, returning one row per track across all albums."""
 	rows: list[dict] = []
-	for root, dirs, files in os.walk(flacdir):
-		dirs.sort()  # deterministic traversal order
-		if is_album_dir(dirs, files):
-			rows.extend(scan_album_tracks(root))
-			dirs.clear()  # don't descend further into an album directory
+	with scan_progress(count_albums(flacdir), 'Scanning', Tracks=0) as tick:
+		for root, dirs, files in os.walk(flacdir):
+			dirs.sort()  # deterministic traversal order
+			if is_album_dir(dirs, files):
+				rows.extend(scan_album_tracks(root))
+				dirs.clear()  # don't descend further into an album directory
+				tick(Tracks=len(rows))
 	return rows
 
 
@@ -278,16 +284,18 @@ def scan_library(flacdir: str) -> tuple[dict[str, dict[str, int]], int]:
 		lambda: {'lrc': 0, 'txt': 0, 'none': 0, 'instrumental': 0}
 	)
 	album_count = 0
-	for root, dirs, files in os.walk(flacdir):
-		dirs.sort()  # deterministic traversal order
-		if is_album_dir(dirs, files):
-			result = scan_album(root)
-			if result is not None:
-				artist, counts = result
-				for status, n in counts.items():
-					artist_counts[artist][status] += n
-				album_count += 1
-			dirs.clear()  # don't descend further into an album directory
+	with scan_progress(count_albums(flacdir), 'Scanning', Artists=0) as tick:
+		for root, dirs, files in os.walk(flacdir):
+			dirs.sort()  # deterministic traversal order
+			if is_album_dir(dirs, files):
+				result = scan_album(root)
+				if result is not None:
+					artist, counts = result
+					for status, n in counts.items():
+						artist_counts[artist][status] += n
+					album_count += 1
+				dirs.clear()  # don't descend further into an album directory
+				tick(Artists=len(artist_counts))
 	return artist_counts, album_count
 
 

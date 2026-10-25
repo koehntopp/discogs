@@ -45,6 +45,8 @@ We adopt the following general Python standards and architectural rules across a
   * **Interactive TTY**: Displays live updating progress bars with fixed positional counter fields (`LRC`, `TXT`, `None`, `New`).
   * **Non-TTY (Web UI / Background Tasks)**: Disables ANSI terminal control codes to prevent log output corruption, falling back to periodic `logger.info()` progress broadcasts every 5 seconds.
 
+* **Directory Scanners**: Programs that scan many album directories use the shared `scan_progress.py` (`with scan_progress(total, label, **counters) as tick:`), which implements the two modes above with the album count as total and a 5-second log interval (SPEC.md "Progress reporting for scanners").
+
 ### 5. Tagging Safety & Metadata Preservation (`mutagen`)
 * **Authority Anchor**: User-set tags (e.g. `DISCOGS_RELEASE_ID`) are treated as authoritative and must never be overwritten arbitrarily.
 * **Header Parsing Robustness**: Metadata header parsing and regex operations (such as LRC tag headers `[ar:...]`, `[ti:...]`) must use greedy line-boundary matching (e.g. `^\[([a-zA-Z]{2,10}):.*\]\s*$`) to safely handle bracketed values (e.g. titles with `[Remaster]`) without generating duplicate metadata entries. For LRC headers specifically, only the tool's own managed keys (`ar`/`ti`/`al`/`length`) are rewritten in place; any other id-tag line (e.g. another tool's `[re:...]`) must be left untouched at its original position rather than stripped and relocated — see ADR 0002 §6.

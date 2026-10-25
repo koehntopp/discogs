@@ -12,24 +12,15 @@
 
 import argparse
 import os
-import sys
 import time
 from json import JSONDecodeError
 from pathlib import Path, PurePosixPath
 
 from discogs_client.exceptions import HTTPError
 from mutagen.flac import FLAC
-from rich.console import Console
-from rich.progress import (
-	BarColumn,
-	MofNCompleteColumn,
-	Progress,
-	SpinnerColumn,
-	TextColumn,
-	TimeRemainingColumn,
-)
 
-from log import _console_handler, logger, success
+from log import logger, success
+from scan_progress import scan_progress
 
 
 def discogs_fetch(fn, *args, retries: int = 3, backoff: float = 60.0):
@@ -597,34 +588,13 @@ def main() -> None:
 		else discogs_client.Client('PyDiscogsTagger/0.1', user_token=api_key)
 	)
 
-	is_tty = sys.stderr.isatty()
-	console = Console(stderr=True)
-
-	progress = Progress(
-		SpinnerColumn(),
-		TextColumn('[progress.description]{task.description}'),
-		BarColumn(),
-		MofNCompleteColumn(),
-		TimeRemainingColumn(),
-		console=console,
-		disable=not is_tty,
-	)
-
-	orig_stream = _console_handler.stream
-	with progress:
-		if is_tty:
-			_console_handler.stream = sys.stderr
-		try:
-			task_id = progress.add_task('Fixing tags', total=len(flac_directories))
-			for directory in flac_directories:
-				if args.languages_only:
-					fix_languages(directory, args.refresh_musicbrainz)
-				else:
-					fixdir(directory, dclient, args.refresh_musicbrainz)
-				progress.update(task_id, advance=1)
-		finally:
-			if is_tty:
-				_console_handler.stream = orig_stream
+	with scan_progress(len(flac_directories), 'Fixing tags') as tick:
+		for directory in flac_directories:
+			if args.languages_only:
+				fix_languages(directory, args.refresh_musicbrainz)
+			else:
+				fixdir(directory, dclient, args.refresh_musicbrainz)
+			tick()
 
 
 if __name__ == '__main__':

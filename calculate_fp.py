@@ -5,6 +5,7 @@
 #   "mutagen",
 #   "requests",
 #   "pyacoustid",
+#   "rich",
 # ]
 # ///
 
@@ -18,6 +19,7 @@ import acoustid
 from mutagen.flac import FLAC
 
 from log import logger
+from scan_progress import scan_progress
 
 
 # calculate acoustic fingerprints and write tags to files
@@ -92,9 +94,11 @@ def main() -> None:
 			if file.endswith('.flac'):
 				flac_directories.append(root)
 				break
-	for directory in flac_directories:
-		logger.info(f'Starting AcoustID fingerprint generation in {directory}')
-		calculate_fp(directory)
+	with scan_progress(len(flac_directories), 'Fingerprinting') as tick:
+		for directory in flac_directories:
+			logger.info(f'Starting AcoustID fingerprint generation in {directory}')
+			calculate_fp(directory)
+			tick()
 
 
 if __name__ == '__main__':

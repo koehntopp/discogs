@@ -3,6 +3,7 @@
 # dependencies = [
 #   "structlog",
 #   "mutagen",
+#   "rich",
 # ]
 # ///
 
@@ -35,6 +36,7 @@ from mutagen.flac import FLAC
 
 from disc_layout import album_flacs, is_album_dir, is_disc_dir
 from log import logger
+from scan_progress import count_albums, scan_progress
 
 REASONS = ('disc', 'subtitle', 'format')
 FIELDS = ['directory', 'discs', 'set_subtitles', 'formats', 'reasons', 'yate_link']
@@ -114,13 +116,15 @@ def scan_album(directory: str) -> dict | None:
 
 def scan_library(flacdir: str) -> list[dict]:
 	rows = []
-	for root, dirs, files in os.walk(flacdir):
-		dirs.sort()
-		if is_album_dir(dirs, files):
-			row = scan_album(root)
-			if row:
-				rows.append(row)
-			dirs.clear()  # an album's Disc N folders belong to it
+	with scan_progress(count_albums(flacdir), 'Scanning', Multi=0) as tick:
+		for root, dirs, files in os.walk(flacdir):
+			dirs.sort()
+			if is_album_dir(dirs, files):
+				row = scan_album(root)
+				if row:
+					rows.append(row)
+				dirs.clear()  # an album's Disc N folders belong to it
+				tick(Multi=len(rows))
 	return rows
 
 

@@ -5,6 +5,7 @@
 #   "pandas",
 #   "matplotlib",
 #   "mutagen",
+#   "rich",
 # ]
 # ///
 
@@ -17,6 +18,7 @@ import matplotlib
 
 from disc_layout import album_flacs, album_root
 from log import logger
+from scan_progress import scan_progress
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -200,19 +202,20 @@ def main() -> None:
 	new_cache = {}
 	to_scan = []
 
-	for d in flac_dirs:
-		try:
-			flacs = album_flacs(d)
-			if not flacs:
-				continue
-			mtime = max(os.path.getmtime(f) for f in flacs)
-		except OSError:
-			continue
-		entry = cache.get(d)
-		if entry and entry.get('mtime') == mtime and 'data' in entry:
-			new_cache[d] = entry
-		else:
-			to_scan.append((d, mtime))
+	with scan_progress(len(flac_dirs), 'Checking cache', Modified=0) as tick:
+		for d in flac_dirs:
+			try:
+				flacs = album_flacs(d)
+				mtime = max(os.path.getmtime(f) for f in flacs) if flacs else None
+			except OSError:
+				mtime = None
+			if mtime is not None:
+				entry = cache.get(d)
+				if entry and entry.get('mtime') == mtime and 'data' in entry:
+					new_cache[d] = entry
+				else:
+					to_scan.append((d, mtime))
+			tick(Modified=len(to_scan))
 
 	cache_hits = len(flac_dirs) - len(to_scan)
 	if cache_hits > 0:
@@ -222,16 +225,18 @@ def main() -> None:
 
 	if to_scan:
 		workers = min(32, (os.cpu_count() or 4) * 4)
-		with ThreadPoolExecutor(max_workers=workers) as pool:
+		with (
+			ThreadPoolExecutor(max_workers=workers) as pool,
+			scan_progress(len(to_scan), 'Reading albums') as tick,
+		):
 			futures = {pool.submit(read_album, d): (d, mtime) for d, mtime in to_scan}
-			for done, fut in enumerate(as_completed(futures), start=1):
+			for fut in as_completed(futures):
 				d, mtime = futures[fut]
 				result = fut.result()
 				if result:
 					albums.append(result)
 					new_cache[d] = {'mtime': mtime, 'data': result}
-				if done % 50 == 0 or done == len(to_scan):
-					logger.info(f'Scanned {done}/{len(to_scan)} modified albums')
+				tick()
 
 	try:
 		cache_file.write_text(json.dumps(new_cache, indent=2), encoding='utf-8')

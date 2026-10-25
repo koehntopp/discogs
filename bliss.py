@@ -27,20 +27,12 @@ if _config_dir and _config_dir not in sys.path:
 from mutagen.flac import FLAC
 from mutagen.mp3 import MP3
 from pathvalidate import sanitize_filename
-from rich.console import Console
-from rich.progress import (
-	BarColumn,
-	MofNCompleteColumn,
-	Progress,
-	SpinnerColumn,
-	TextColumn,
-	TimeRemainingColumn,
-)
 from slugify import slugify
 
 from config import flacroot, mp3root
 from disc_layout import is_disc_dir
-from log import _console_handler, _is_tty, logger, success
+from log import logger, success
+from scan_progress import scan_progress
 
 
 def read_audio_tags(filepath: str) -> dict[str, list[str]]:
@@ -500,32 +492,14 @@ def createMP3() -> None:
 		if any(f.endswith('.flac') for f in files):
 			album_dirs.append(root)
 
-	total_albums = len(album_dirs)
-	use_tty = _is_tty
-	console = Console(stderr=True)
-
-	progress = Progress(
-		SpinnerColumn(),
-		TextColumn('[progress.description]{task.description}'),
-		BarColumn(),
-		MofNCompleteColumn(),
-		TimeRemainingColumn(),
-		console=console,
-		disable=not use_tty,
-	)
-
-	orig_stream = _console_handler.stream
-	with progress:
-		if use_tty:
-			_console_handler.stream = sys.stderr
-		task_id = progress.add_task('Transcoding MP3s...', total=total_albums)
-
+	transcoded = 0
+	with scan_progress(len(album_dirs), 'Transcoding MP3s', Transcoded=0) as tick:
 		for album_dir in album_dirs:
 			flac_files = sorted(
 				os.path.join(album_dir, f) for f in os.listdir(album_dir) if f.endswith('.flac')
 			)
 			if not flac_files:
-				progress.update(task_id, advance=1)
+				tick()
 				continue
 
 			album_converted_count = 0
@@ -582,10 +556,8 @@ def createMP3() -> None:
 					f'Transcoded {album_converted_count} MP3 track(s) for album {display_album}'
 				)
 
-			progress.update(task_id, advance=1)
-
-		if use_tty:
-			_console_handler.stream = orig_stream
+			transcoded += album_converted_count
+			tick(Transcoded=transcoded)
 
 	logger.info('Done.')
 

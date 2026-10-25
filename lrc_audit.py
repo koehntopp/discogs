@@ -86,6 +86,7 @@ from lrc_format import (
 	lrc_problem_line_count,
 	lrc_suspect_reasons,
 )
+from scan_progress import scan_progress
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_WORK_DIR = Path.home() / '.cache' / 'lrc_audit'
@@ -296,20 +297,19 @@ def suspect_target(path: Path) -> dict | None:
 
 def scan_targets(root: Path) -> list[dict]:
 	targets: list[dict] = []
-	seen = 0
-	for dirpath, dirs, files in os.walk(root):
-		dirs.sort()
-		flacs = sorted(f for f in files if f.lower().endswith('.flac'))
-		if not flacs:
-			continue
-		for name in flacs:
-			seen += 1
-			target = suspect_target(Path(dirpath) / name)
-			if target:
-				targets.append(target)
-		dirs.clear()  # an album directory is a leaf
-		if seen % 500 < len(flacs):
-			print(f'   scanned {seen} tracks, {len(targets)} suspects so far', flush=True)
+	total = sum(1 for _, _, fs in os.walk(root) if any(f.lower().endswith('.flac') for f in fs))
+	with scan_progress(total, 'Scanning', Suspects=0) as tick:
+		for dirpath, dirs, files in os.walk(root):
+			dirs.sort()
+			flacs = sorted(f for f in files if f.lower().endswith('.flac'))
+			if not flacs:
+				continue
+			for name in flacs:
+				target = suspect_target(Path(dirpath) / name)
+				if target:
+					targets.append(target)
+			dirs.clear()  # an album directory is a leaf
+			tick(Suspects=len(targets))
 	return targets
 
 

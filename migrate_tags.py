@@ -14,18 +14,10 @@ from pathlib import PurePosixPath
 
 import pandas as pd
 from mutagen.flac import FLAC
-from rich.console import Console
-from rich.progress import (
-	BarColumn,
-	MofNCompleteColumn,
-	Progress,
-	SpinnerColumn,
-	TextColumn,
-	TimeRemainingColumn,
-)
 
 from disc_layout import album_flacs, is_album_dir, is_disc_dir
-from log import _is_tty, logger
+from log import logger
+from scan_progress import scan_progress
 
 
 def flactag(tags: dict, key: str) -> str:
@@ -109,26 +101,12 @@ def scan_and_migrate(root_dir: str, write_mode: bool, output_csv: str) -> None:
 	logger.info(f'Found {total_dirs} album directories.')
 
 	records = []
-	use_tty = _is_tty
-	console = Console(stderr=True)
-
-	progress = Progress(
-		SpinnerColumn(),
-		TextColumn('[progress.description]{task.description}'),
-		BarColumn(),
-		MofNCompleteColumn(),
-		TimeRemainingColumn(),
-		console=console,
-		disable=not use_tty,
-	)
-
-	with progress:
-		task = progress.add_task('Migrating ALBUM & VERSION tags...', total=total_dirs)
+	with scan_progress(total_dirs, 'Migrating ALBUM & VERSION tags') as tick:
 		for album_dir in album_dirs:
 			res = process_album_directory(album_dir, write_mode=write_mode)
 			if res:
 				records.append(res)
-			progress.update(task, advance=1)
+			tick()
 
 	df = pd.DataFrame(records)
 	df.to_csv(output_csv, index=False)

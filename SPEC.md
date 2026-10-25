@@ -77,6 +77,16 @@ tag names consistently:
 | rsgain             | nzbfix         | local    | —                    |
 | ffmpeg             | bliss          | local    | —                    |
 
+### Progress reporting for scanners
+
+Every program that scans data across multiple directories (an album library walk) shows the same progress display as `update_lyrics.py`:
+
+* **Terminal** (stderr is a TTY): a `rich` bar on `Console(stderr=True)` with spinner, bar, `M of N`, the program's own counters and time remaining; log lines print above the bar.
+* **Web app / non-TTY**: no bar. One `logger.info('<label>: done/total <counters>')` at most every 5 seconds (`scan_progress.LOG_INTERVAL`), plus a final line.
+* **Total**: the number of album directories (`scan_progress.count_albums`, a `Disc N` folder belongs to its album), counted by a quick walk before the scan.
+
+The display lives once in `scan_progress.py` (`with scan_progress(total, label, **counters) as tick:`, `tick()` per directory, keyword arguments update the counters). Scanners using it: `album_list.py`, `calculate_fp.py`, `fixtags.py`, `bliss.py --mp3`, `migrate_tags.py`, `lrc_count.py`, `lrc_audit.py prepare`, `check_multidisc.py`. `update_lyrics.py` is the reference (its own bar adds per-track counters and retry passes) and keeps its inline version. Single-album tools (`calculate_dr.py`) are exempt.
+
 ## Architectural Decision Records (ADRs)
 
 Detailed architectural standards and design contracts are maintained in `docs/adr/`:
