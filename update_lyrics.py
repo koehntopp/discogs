@@ -14,7 +14,6 @@ import re
 import sys
 import threading
 import time
-from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -80,14 +79,11 @@ def flactag(song: FLAC | dict, tag: str) -> str:
 LRCLIB_GET_URL = 'https://lrclib.net/api/get'
 MAX_ATTEMPTS = 4  # per request; the shared Pacer spaces the attempts
 MAX_RETRY_AFTER = 300.0
-# Request starts (all workers together) allowed per WINDOW seconds: 120/min is two thirds of the
-# ~180/min allowed for a registered Lrclib-App-Id (see lrclib_client.py). A run that needs fewer
-# requests never waits for the budget; BASE_INTERVAL is the steady-state gap once it is used up
-# and the fallback spacing after a 429.
-REQUESTS_PER_MINUTE = 120
-WINDOW = 60.0
-BASE_INTERVAL = WINDOW / REQUESTS_PER_MINUTE
-BURST_GAP = 0.2  # minimum seconds between request starts while the budget lasts
+# Spacing like the official client (lrcget): wait BASE_INTERVAL plus up to REQUEST_JITTER after
+# each response, about 85 requests/min with latency. No burst: bursts provoked 429s (ADR 0007 s.4).
+BASE_INTERVAL = 0.5
+REQUEST_JITTER = 0.25
+DEFAULT_RETRY_AFTER = 1.0  # a 429 without Retry-After, as lrcget treats it
 RETRY_BACKOFF = 1.0  # seconds before the 2nd attempt after a 5xx/network error; doubles each time
 MAX_INTERVAL = 8.0
 RELAX_AFTER = 10  # consecutive successes before the interval shrinks again
@@ -100,20 +96,15 @@ RETRY_ROUNDS = ((30, 2), (60, 2))
 class Pacer:
 	"""Shared request pacing: one request in flight at a time.
 
-	lrclib asks clients to send requests sequentially. While the burst budget lasts (at most
-	REQUESTS_PER_MINUTE starts in any WINDOW seconds) requests start BURST_GAP apart; once it is
-	used up each start waits for the oldest one to leave the window, which is BASE_INTERVAL in
-	steady state. A 429 (a real rate limit) ends burst mode for the run: from then on one request
-	per interval, which doubles on every 429 and shrinks again after a run of successes, so it
-	settles at whatever rate lrclib tolerates. 5xx and network errors do not change the pacing.
+	lrclib asks clients to send requests sequentially. Each request starts `interval` (plus up to
+	REQUEST_JITTER) after the previous one finished. A 429 (a real rate limit) doubles the interval
+	and every run of successes shrinks it again, so it settles at whatever rate lrclib tolerates.
+	5xx and network errors do not change the pacing.
 	"""
 
 	def __init__(self) -> None:
 		self._lock = threading.Lock()
 		self._slot = threading.Semaphore(1)
-		self._starts: deque[float] = deque()  # request starts inside the window (burst mode)
-		self._burst_ok = True
-		self._budget_reported = False
 		self._interval = BASE_INTERVAL
 		self._next_start = 0.0
 		self._floor_until = 0.0  # Retry-After: no request may start before this
@@ -131,30 +122,17 @@ class Pacer:
 		Every acquire() must be paired with a release() once the request has finished.
 		"""
 		self._slot.acquire()
-		exhausted = False
 		with self._lock:
 			now = time.monotonic()
 			start = max(now, self._next_start, self._floor_until)
-			if self._burst_ok:
-				while self._starts and self._starts[0] <= now - WINDOW:
-					self._starts.popleft()
-				if len(self._starts) >= REQUESTS_PER_MINUTE:
-					start = max(start, self._starts.popleft() + WINDOW)
-					exhausted = not self._budget_reported
-					self._budget_reported = True
-				self._starts.append(start)
-				self._next_start = start + BURST_GAP
-			else:
-				self._next_start = start + self._interval
-		if exhausted:
-			logger.info(
-				f'{REQUESTS_PER_MINUTE} lrclib requests used; pacing to one per {BASE_INTERVAL:.1f} s'
-			)
 		if start > now:
 			time.sleep(start - now)
 		return start
 
 	def release(self) -> None:
+		with self._lock:
+			gap = self._interval + random.uniform(0, REQUEST_JITTER)
+			self._next_start = max(self._next_start, time.monotonic() + gap)
 		self._slot.release()
 
 	def failure(
@@ -170,13 +148,13 @@ class Pacer:
 			self._successes = 0
 			self._fail_streak += 1
 			raised = False
-			if rate_limited:
-				self._burst_ok = False
 			if rate_limited and started_at > self._raised_at and self._interval < MAX_INTERVAL:
 				self._interval = min(self._interval * 2, MAX_INTERVAL)
 				self._raised_at = now
 				self._next_start = max(self._next_start, now + self._interval)
 				raised = True
+			if rate_limited and retry_after is None:
+				retry_after = DEFAULT_RETRY_AFTER
 			if retry_after is not None:
 				self._floor_until = max(self._floor_until, now + min(retry_after, MAX_RETRY_AFTER))
 			return self._interval, raised
