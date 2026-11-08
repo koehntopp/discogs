@@ -13,6 +13,7 @@ import os
 
 # import system libraries
 import sys
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path, PurePosixPath
 
 import acoustid
@@ -36,7 +37,28 @@ def calculate_fp(albumpath: str) -> None:
 	total = 0
 	calculated = 0
 
-	for p in Path(albumpath).rglob('*.flac'):
+	paths = list(Path(albumpath).rglob('*.flac'))
+
+	# fpcalc runs as a subprocess, so threads suffice; tags are written sequentially below.
+	def needs_fp(path: Path) -> bool:
+		try:
+			tags = FLAC(str(path)).tags or {}
+		except Exception:  # noqa: BLE001
+			return False  # unreadable: the main loop logs it
+		return not str(
+			(tags.get('ACOUSTID_FINGERPRINT') or tags.get('ACOUSTID FINGERPRINT') or [''])[0]
+		).strip()
+
+	todo = [p for p in paths if needs_fp(p)]
+	pool = ThreadPoolExecutor(max_workers=os.cpu_count() or 1)
+	futures: dict[Path, Future] = {
+		p: pool.submit(
+			acoustid.fingerprint_file, str(PurePosixPath(p)), maxlength=10000, force_fpcalc=False
+		)
+		for p in todo
+	}
+
+	for p in paths:
 		fullfilename = str(PurePosixPath(p))
 		total += 1
 		fingerprint = ''
@@ -53,9 +75,7 @@ def calculate_fp(albumpath: str) -> None:
 
 			if not fingerprint:
 				try:
-					_duration, raw_fp = acoustid.fingerprint_file(
-						fullfilename, maxlength=10000, force_fpcalc=False
-					)
+					_duration, raw_fp = futures[p].result()
 					fingerprint = (
 						raw_fp.decode('utf-8') if isinstance(raw_fp, bytes) else str(raw_fp).strip()
 					)
@@ -74,6 +94,7 @@ def calculate_fp(albumpath: str) -> None:
 			logger.warning(f'Could not read FLAC file {fullfilename}: {e}')
 			continue
 
+	pool.shutdown()
 	logger.info(f'AcoustID fingerprints generated for {calculated} of {total} files.')
 
 

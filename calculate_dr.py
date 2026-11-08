@@ -12,6 +12,7 @@ import os
 
 # import system libraries
 import sys
+from concurrent.futures import Future, ProcessPoolExecutor
 from pathlib import Path, PurePosixPath
 
 import soundfile as sf
@@ -21,6 +22,21 @@ from mutagen.flac import FLAC
 
 from disc_layout import album_root_of_file
 from log import logger
+
+
+def _track_dr(path: str) -> int:
+	"""Decode one file and return its rounded DR score (runs in a worker process)."""
+	with sf.SoundFile(path) as data:
+		return round(dynamic_range(AudioData.from_soundfile(data)).overall_dr_score)
+
+
+def _has_dr(path: Path) -> bool:
+	try:
+		tags = FLAC(str(path)).tags or {}
+	except Exception:  # noqa: BLE001
+		return True  # unreadable: the main loop logs it, nothing to compute
+	val = (tags.get('DYNAMIC_RANGE') or tags.get('DYNAMIC RANGE') or [''])[0]
+	return val.isdigit() and int(val) != 0
 
 
 # calculate song and album dynamic range and write tags to files
@@ -50,6 +66,15 @@ def calculate_dr(albumpath: str) -> None:
 	if not albums:
 		logger.error(f'No FLAC files found in {albumpath}')
 		return
+
+	# Decode all tracks lacking a DR tag in parallel; tags are written sequentially below.
+	todo = [p for ps in albums.values() for p in ps if not _has_dr(p)]
+	pool = (
+		ProcessPoolExecutor(max_workers=max(1, min(os.cpu_count() or 1, len(todo))))
+		if todo
+		else None
+	)
+	futures: dict[Path, Future] = {p: pool.submit(_track_dr, str(p)) for p in todo} if pool else {}
 
 	# Process each album directory separately
 	for album_dir, flac_paths in sorted(albums.items()):
@@ -81,12 +106,10 @@ def calculate_dr(albumpath: str) -> None:
 					dr_song = 0
 
 				if dr_song == 0:
-					with sf.SoundFile(fullfilename) as data:
-						try:
-							result = dynamic_range(AudioData.from_soundfile(data))
-							DR = round(result.overall_dr_score)
-						except Exception as e:  # noqa: BLE001
-							logger.error(f'DR calculation failed for {fullfilename}: {e}')
+					try:
+						DR = futures[p].result() if p in futures else _track_dr(fullfilename)
+					except Exception as e:  # noqa: BLE001
+						logger.error(f'DR calculation failed for {fullfilename}: {e}')
 
 					if DR != dr_song:
 						title_str = (audio.tags.get('TITLE') or ['Unknown'])[0]
@@ -160,6 +183,9 @@ def calculate_dr(albumpath: str) -> None:
 				logger.info(f'Album DR {dr_album} unchanged for {last_album_name}')
 		else:
 			logger.error(f'Could not calculate DR for {album_dir}')
+
+	if pool:
+		pool.shutdown()
 
 
 def main() -> None:

@@ -12,11 +12,13 @@ import os
 import re
 from pathlib import Path
 
-DISC_DIR_RE = re.compile(r'^Disc (\d+)$')
+# 'Disc 2' as bliss.py writes it, and the 'CD1' / 'disc 2' spellings Roon also accepts for box-set discs. Every
+# disc folder is part of its parent album, so ALBUM_DR (hence VERSION and the album folder name) is the same for all discs.
+DISC_DIR_RE = re.compile(r'^(?:Disc|CD)\s*(\d+)$', re.IGNORECASE)
 
 
 def is_disc_dir(name: str) -> bool:
-	"""True if a directory name is a disc subfolder (``Disc 2``)."""
+	"""True if a directory name is a disc subfolder (``Disc 2``, ``CD1``)."""
 	return DISC_DIR_RE.match(name) is not None
 
 

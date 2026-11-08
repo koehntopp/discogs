@@ -26,7 +26,7 @@ We establish the following architectural rules for library organization, MP3 mir
   An album is multi-disc when, among the files of the run, any has `DISCNUMBER` > 1 or a disc
   total > 1 (`1/2`, `DISCTOTAL`, `TOTALDISCS`), or when its album directory already has `Disc N`
   subfolders. Single-disc albums stay flat. `--full` and the no-flag quick scan migrate existing flat multi-disc albums.
-  Every other script treats a `Disc N` folder as part of its parent album through the shared
+  Every other script treats a disc folder (`Disc N`, or `CD N` in any case, which Roon also accepts) as part of its parent album through the shared
   `disc_layout.py` (`fixtags.py`, `album_list.py`, `webui.py`, `lrc_count.py`, `migrate_tags.py`,
   `calculate_dr.py`, so `ALBUM_DR` is the mean over all discs).
 

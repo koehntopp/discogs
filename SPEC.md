@@ -235,6 +235,8 @@ At least one of the two must be provided; otherwise help is printed.
 
 **Purpose:** Compute and store the EBU R 128 / DR-meter Dynamic Range score for each track and album.
 
+Tracks without a `DYNAMIC_RANGE` tag are decoded in parallel, one process per CPU core; the tags are still written one file at a time in file order, so the result and the log are the same as a sequential run. `ALBUM_DR` is the mean over all discs of an album (`Disc N` and `CD N` folders are one album, `disc_layout.py`).
+
 **Usage:**
 
 ```
@@ -264,6 +266,8 @@ uv run calculate_dr.py [FLAC_DIR]
 ### `calculate_fp.py` — AcoustID fingerprint generation
 
 **Purpose:** Compute and store AcoustID acoustic fingerprints for every FLAC track.
+
+The `fpcalc` runs for the tracks without a fingerprint execute in parallel (one thread per CPU core); the tags are written one file at a time in file order.
 
 **Usage:**
 
@@ -361,7 +365,7 @@ uv run bliss.py [--ingest DIR | --full | --mp3]
 <mp3root>/<ALBUMARTIST>/<ALBUM>/<DISCNUMBER>_<TRACKNUMBER>_<TITLE>.mp3
 ```
 
-Multi-disc albums (any `DISCNUMBER` > 1, a disc total > 1, or an album directory that already has `Disc N` folders) get a `Disc <n>/` level between `<ALBUM>` and the file, in both trees (Roon box sets, ADR 0008 §2, ADR 0005 §1). `--full` and the quick scan migrate existing flat multi-disc albums. Other scripts see a `Disc N` folder as part of its parent album via `disc_layout.py`.
+Multi-disc albums (any `DISCNUMBER` > 1, a disc total > 1, or an album directory that already has `Disc N` folders) get a `Disc <n>/` level between `<ALBUM>` and the file, in both trees (Roon box sets, ADR 0008 §2, ADR 0005 §1). `--full` and the quick scan migrate existing flat multi-disc albums. Other scripts see a disc folder (`Disc N` or `CD N`, any case) as part of its parent album via `disc_layout.py`, so `ALBUM_DR` is always the mean over all discs and every disc gets the same `VERSION` and album folder.
 
 All path components are sanitised by `clean()`: punctuation removed, spaces replaced
 with underscores, German umlauts transliterated.
