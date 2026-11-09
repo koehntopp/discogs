@@ -104,8 +104,6 @@ def read_album(directory: str) -> dict[str, str] | None:
 		album_result['VERSION'] = (
 			tags.get('VERSION', [''])[0] or tags.get('SUBTITLE', [''])[0] or ''
 		)
-	if not album_result.get('ALBUM_DR'):
-		album_result['ALBUM_DR'] = tags.get('ALBUM DYNAMIC RANGE', [''])[0] or ''
 	if not album_result.get('CATALOGNUMBER'):
 		album_result['CATALOGNUMBER'] = (
 			tags.get('CATALOGNUMBER', [''])[0]
@@ -140,7 +138,7 @@ def save_csv(df: pd.DataFrame, out: Path) -> None:
 
 
 def save_chart(df: pd.DataFrame, out: Path) -> None:
-	dr_col = 'ALBUM_DR' if 'ALBUM_DR' in df.columns else 'ALBUM DYNAMIC RANGE'
+	dr_col = 'ALBUM_DR'
 	if dr_col not in df.columns:
 		return
 	dr = df[dr_col].fillna('').astype(str).str.strip()

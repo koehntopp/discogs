@@ -812,8 +812,6 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
 			)
 			for t in ALBUM_TAGS
 		}
-		if not row.get('DR'):
-			row['DR'] = raw.get('ALBUM DYNAMIC RANGE', [''])[0] or ''
 
 		cat_val = (
 			raw.get('CATALOGNUMBER', [''])[0]

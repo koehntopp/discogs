@@ -385,11 +385,7 @@ def fixdir(fixdir: str, dclient: discogs_client.Client, refresh_musicbrainz: boo
 		album_format = first_tags.get('ALBUM_FORMAT', [''])[0] or subtitle or 'CD'
 		album_edition = first_tags.get('ALBUM_EDITION', [''])[0]
 
-		dr_rating = (
-			first_tags.get('ALBUM_DR', [''])[0]
-			or first_tags.get('ALBUM DYNAMIC RANGE', [''])[0].strip()
-			or ''
-		)
+		dr_rating = first_tags.get('ALBUM_DR', [''])[0]
 
 		catalog_number = (
 			first_tags.get('CATALOGNUMBER', [''])[0]

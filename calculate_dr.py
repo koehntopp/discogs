@@ -35,7 +35,7 @@ def _has_dr(path: Path) -> bool:
 		tags = FLAC(str(path)).tags or {}
 	except Exception:  # noqa: BLE001
 		return True  # unreadable: the main loop logs it, nothing to compute
-	val = (tags.get('DYNAMIC_RANGE') or tags.get('DYNAMIC RANGE') or [''])[0]
+	val = (tags.get('DYNAMIC_RANGE') or [''])[0]
 	return val.isdigit() and int(val) != 0
 
 
@@ -44,10 +44,10 @@ def calculate_dr(albumpath: str) -> None:
 	"""Calculate the Dynamic Range score for every track and album under the target directory.
 
 	Iterates all FLAC files in albumpath (recursively), grouping them by parent directory.
-	For each directory (representing an album), reads the existing DYNAMIC RANGE tag; if absent,
+	For each directory (representing an album), reads the existing DYNAMIC_RANGE tag; if absent,
 	computes it with drmeter and writes the result back. After processing all tracks for a
 	given album, derives the album-level DR score as the mean of per-track scores and writes
-	ALBUM DYNAMIC RANGE to every file in the album if the value changed.
+	ALBUM_DR to every file in the album if the value changed.
 
 	Logs a warning when some tracks are missing a DR score (e.g. corrupt files).
 
@@ -99,7 +99,7 @@ def calculate_dr(albumpath: str) -> None:
 				if not audio.tags:
 					audio.add_tags()
 
-				dr_val = audio.tags.get('DYNAMIC_RANGE') or audio.tags.get('DYNAMIC RANGE') or ['']
+				dr_val = audio.tags.get('DYNAMIC_RANGE') or ['']
 				try:
 					dr_song = int(dr_val[0])
 				except (ValueError, TypeError, IndexError):
@@ -151,11 +151,7 @@ def calculate_dr(albumpath: str) -> None:
 				for fullfilename in flac_files:
 					try:
 						audio = FLAC(fullfilename)
-						val = (
-							audio.tags.get('ALBUM_DR')
-							or audio.tags.get('ALBUM DYNAMIC RANGE')
-							or ['']
-						)
+						val = audio.tags.get('ALBUM_DR') or ['']
 						dr_old = val[0] if val else ''
 						if dr_old != dr_album:
 							needs_update = True
