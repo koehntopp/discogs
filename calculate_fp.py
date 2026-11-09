@@ -51,9 +51,10 @@ def calculate_fp(albumpath: str) -> None:
 
 	todo = [p for p in paths if needs_fp(p)]
 	pool = ThreadPoolExecutor(max_workers=os.cpu_count() or 1)
+	# AcoustID matches on the first 120 s; decoding a whole file made fpcalc exit 3 on some hi-res FLACs.
 	futures: dict[Path, Future] = {
 		p: pool.submit(
-			acoustid.fingerprint_file, str(PurePosixPath(p)), maxlength=10000, force_fpcalc=False
+			acoustid.fingerprint_file, str(PurePosixPath(p)), maxlength=120, force_fpcalc=False
 		)
 		for p in todo
 	}
