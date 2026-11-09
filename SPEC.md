@@ -370,6 +370,8 @@ Multi-disc albums (any `DISCNUMBER` > 1, a disc total > 1, or an album directory
 All path components are sanitised by `clean()`: punctuation removed, spaces replaced
 with underscores, German umlauts transliterated.
 
+Log output: one `Moved album <Artist>/<Album> (<n> tracks)` line per album that had files moved (after its last move); albums where nothing moved log nothing. Warnings and errors stay per file.
+
 Paths are compared case-sensitively (after NFD normalisation): a folder or file whose name differs from the tags only in case (`Chris_De_Burgh` vs tag `Chris de Burgh`) is renamed in place via a temporary name, because a case-insensitive share reports `[Errno 17]` for a plain mkdir or move. If two files of one run spell the same folder differently (up to case), the first spelling wins and the others are skipped with a warning; fix the tags.
 
 **Tags read:** `TITLE`, `ALBUM`, `ALBUMARTIST`, `DISCNUMBER`, `TRACKNUMBER`

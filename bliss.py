@@ -238,6 +238,25 @@ def _rename_case(parent: str, wanted: str) -> bool:
 	return False
 
 
+class _AlbumReport:
+	"""Counts moved files per album and announces each album once, after its last move."""
+
+	def __init__(self) -> None:
+		self.name = ''
+		self.count = 0
+
+	def add(self, name: str) -> None:
+		if name != self.name:
+			self.flush()
+			self.name = name
+		self.count += 1
+
+	def flush(self) -> None:
+		if self.count:
+			success(f'Moved album {self.name} ({self.count} track{"s" if self.count != 1 else ""})')
+		self.name, self.count = '', 0
+
+
 def move_flac_file(
 	source_file: str, target_path: str, target_filename: str, root_dir: str | None = None
 ) -> bool:
@@ -341,7 +360,7 @@ def movefiles(flacroot: str, full: bool = False) -> None:
 		f'Checking FLAC folders in {flacroot}'
 		+ (' (full recursive)' if full else ' (root-level files and flat multi-disc albums)')
 	)
-	currentalbum = ''
+	report = _AlbumReport()
 	flac_files = [
 		str(PurePosixPath(p))
 		for p in (Path(flacroot).rglob('*.flac') if full else Path(flacroot).glob('*.flac'))
@@ -380,16 +399,13 @@ def movefiles(flacroot: str, full: bool = False) -> None:
 			tobepathname = flacroot + sartist + '/' + salbumtitle + '/'
 			if os.path.join(flacroot, sartist, salbumtitle) in multi_disc:
 				tobepathname += disc_subdir(tags)
-			tobefullname = tobepathname + tobefilename
 
-			if _nfd(_follow_renames(fullfilename)) != _nfd(tobefullname):
-				if salbumtitle != currentalbum:
-					currentalbum = salbumtitle
-					success(f'Moving album {salbumtitle}')
-				move_flac_file(fullfilename, tobepathname, tobefilename, flacroot)
+			if move_flac_file(fullfilename, tobepathname, tobefilename, flacroot):
+				report.add(f'{sartist}/{salbumtitle}')
 		except Exception as e:  # noqa: BLE001
 			logger.error(f'Error moving file {fullfilename}: {e}')
 			continue
+	report.flush()
 	logger.info('Done.')
 
 
@@ -404,7 +420,7 @@ def ingestfiles(ingest_dir: str) -> None:
 	    ingest_dir: Source directory containing freshly downloaded/ripped FLAC files.
 	"""
 	logger.info(f'Ingesting FLAC files from {ingest_dir}')
-	currentalbum = ''
+	report = _AlbumReport()
 
 	if not os.path.exists(ingest_dir):
 		logger.error(f'Error: Directory does not exist: {ingest_dir}')
@@ -428,15 +444,12 @@ def ingestfiles(ingest_dir: str) -> None:
 				logger.warning(f'Skipping ingest for file with unreadable tags: {fullfilename}')
 				continue
 
-			if metadata['album'] != currentalbum:
-				currentalbum = metadata['album']
-				logger.info(f'Ingesting album {metadata["album"]}')
-
 			if move_flac_file(fullfilename, target_path, target_filename, flacroot):
-				success(f'Ingested {metadata["track"]}')
+				report.add(f'{metadata["artist"]}/{metadata["album"]}')
 		except Exception as e:  # noqa: BLE001
 			logger.error(f'Error ingesting file {fullfilename}: {e}')
 
+	report.flush()
 	logger.info('Done. Ingest complete.')
 
 
