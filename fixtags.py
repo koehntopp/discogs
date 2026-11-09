@@ -12,6 +12,7 @@
 
 import argparse
 import os
+import re
 import time
 from json import JSONDecodeError
 from pathlib import Path, PurePosixPath
@@ -274,6 +275,95 @@ def fix_languages(album_dir: str, refresh: bool = False) -> None:
 		logger.info(f'{LANGUAGE_TAG} already up to date in {name}')
 
 
+# Tag families written from the Discogs release; keys vary per release, so stale ones are
+# swept by prefix in fixdir.
+DISCOGS_TAG_PREFIXES = ('ALBUM_COMPANY_', 'ALBUM_CREDIT_', 'ALBUM_IDENT_')
+# Fixed-name tags from discogs_extra_tags, removed from files when Discogs no longer has a value.
+DISCOGS_EXTRA_FIXED = (
+	'ALBUM_RELEASE_LABELS',
+	'ALBUM_RELEASE_CATALOGNUMBERS',
+	'ALBUM_RELEASE_FORMAT',
+	'ALBUM_RELEASE_FORMAT_DESCRIPTIONS',
+	'ALBUM_RELEASE_FORMAT_TEXT',
+	'ALBUM_RELEASE_GENRES',
+	'ALBUM_RELEASE_STYLES',
+	'ALBUM_RELEASE_NOTES',
+	'ALBUM_RELEASE_DATE_FULL',
+	'ALBUM_RELEASE_DATA_QUALITY',
+	'ALBUM_RELEASE_SERIES',
+)
+
+
+def _tag_key(prefix: str, text: str) -> str:
+	"""'Glass Mastered At' -> '<prefix>GLASS_MASTERED_AT' ('' suffix if nothing usable)."""
+	slug = re.sub(r'[^A-Z0-9]+', '_', text.upper()).strip('_')
+	return f'{prefix}{slug}' if slug else ''
+
+
+def _clean_name(name: str) -> str:
+	"""Drop Discogs' ' (2)' artist disambiguation suffix."""
+	return re.sub(r'\s*\(\d+\)$', '', name.strip())
+
+
+def discogs_extra_tags(data: dict) -> dict[str, list[str]]:
+	"""Map a raw Discogs release dict to quality-relevant, album-level tags.
+
+	    ALBUM_COMPANY_<ROLE>  – companies (Mastered At, Pressed By, Glass Mastered At, ...)
+	    ALBUM_CREDIT_<ROLE>   – extraartists ("Mastered By [detail]" -> value "Name [detail]")
+	    ALBUM_IDENT_<TYPE>    – identifiers (Matrix / Runout, Barcode, Mastering SID Code, ...)
+	    plus labels, catalogue numbers, format, genres, styles, notes, full date, data quality.
+	Empty values are omitted. Order of first appearance is kept, duplicates dropped.
+	"""
+	tags: dict[str, list[str]] = {}
+
+	def add(key: str, value: str) -> None:
+		value = (value or '').strip()
+		if key and value and value not in tags.setdefault(key, []):
+			tags[key].append(value)
+
+	for c in data.get('companies') or []:
+		add(_tag_key('ALBUM_COMPANY_', c.get('entity_type_name', '')), _clean_name(c.get('name', '')))
+
+	for a in data.get('extraartists') or []:
+		role = a.get('role', '')
+		detail = re.search(r'\[(.*)\]', role)
+		base = re.sub(r'\s*\[.*?\]', '', role)
+		name = _clean_name(a.get('name', ''))
+		value = f'{name} [{detail.group(1)}]' if detail and name else name
+		# "Producer, Engineer" credits the same person under both roles
+		for r in base.split(','):
+			add(_tag_key('ALBUM_CREDIT_', r), value)
+
+	for i in data.get('identifiers') or []:
+		desc = (i.get('description') or '').strip()
+		val = (i.get('value') or '').strip()
+		add(_tag_key('ALBUM_IDENT_', i.get('type', '')), f'{val} ({desc})' if desc and val else val)
+
+	for lab in data.get('labels') or []:
+		add('ALBUM_RELEASE_LABELS', _clean_name(lab.get('name', '')))
+		cat = (lab.get('catno') or '').strip()
+		if cat.lower() != 'none':
+			add('ALBUM_RELEASE_CATALOGNUMBERS', cat)
+
+	for f in data.get('formats') or []:
+		add('ALBUM_RELEASE_FORMAT', f.get('name', ''))
+		for d in f.get('descriptions') or []:
+			add('ALBUM_RELEASE_FORMAT_DESCRIPTIONS', d)
+		add('ALBUM_RELEASE_FORMAT_TEXT', f.get('text', ''))
+
+	for g in data.get('genres') or []:
+		add('ALBUM_RELEASE_GENRES', g)
+	for s in data.get('styles') or []:
+		add('ALBUM_RELEASE_STYLES', s)
+	for s in data.get('series') or []:
+		add('ALBUM_RELEASE_SERIES', s.get('name', ''))
+
+	add('ALBUM_RELEASE_NOTES', data.get('notes', ''))
+	add('ALBUM_RELEASE_DATE_FULL', data.get('released', ''))
+	add('ALBUM_RELEASE_DATA_QUALITY', data.get('data_quality', ''))
+	return tags
+
+
 def fixdir(fixdir: str, dclient: discogs_client.Client, refresh_musicbrainz: bool = False) -> None:
 	"""Enrich all FLAC files in a single album directory with Discogs metadata.
 
@@ -285,6 +375,10 @@ def fixdir(fixdir: str, dclient: discogs_client.Client, refresh_musicbrainz: boo
 	    ORIGINALDATE / ORIGINALRELEASEDATE – year of the master (original) release
 	    ALBUM                 – formatted title: "<name> [<year> <desc> <kHz>DR<dr>]"
 	    ORIGINAL_TITLE        – canonical Discogs title (from master release if available)
+
+	Also writes the release's companies, credits, identifiers, labels, format, genres,
+	notes etc. as ALBUM_COMPANY_*, ALBUM_CREDIT_*, ALBUM_IDENT_* and ALBUM_RELEASE_* tags
+	(see discogs_extra_tags); stale ones are removed.
 
 	Also writes DISCSUBTITLE per track (not uniformly like the tags above): that track's
 	own SET SUBTITLE when present, which Roon shows as the disc title of a box set.
@@ -451,6 +545,13 @@ def fixdir(fixdir: str, dclient: discogs_client.Client, refresh_musicbrainz: boo
 		except Exception:  # noqa: BLE001, S110  # optional tag: skipped when Discogs has no value
 			pass
 
+		# Everything else Discogs knows about this pressing (companies, credits, identifiers,
+		# format, notes ...). drelease.data is fully populated once .title has been read.
+		try:
+			new_tags.update(discogs_extra_tags(discogs_fetch(lambda: drelease.data)))
+		except Exception as e:  # noqa: BLE001
+			logger.warning(f'Could not map extra Discogs fields for {discogs_id}: {e}')
+
 		mb_release = load_language_release(first_tags, refresh_musicbrainz)
 		managed_optional = [
 			'ALBUM_EDITION',
@@ -490,7 +591,11 @@ def fixdir(fixdir: str, dclient: discogs_client.Client, refresh_musicbrainz: boo
 
 				language_changed = apply_language(audio, mb_release)
 				stale_removed = bool(legacy_grouping) or disc_subtitle_stale or language_changed
-				for opt_tag in managed_optional:
+				for opt_tag in [
+					*managed_optional,
+					*DISCOGS_EXTRA_FIXED,
+					*(k for k in audio.tags.keys() if k.upper().startswith(DISCOGS_TAG_PREFIXES)),
+				]:
 					if opt_tag not in new_tags and opt_tag in audio.tags:
 						del audio.tags[opt_tag]
 						stale_removed = True
@@ -532,7 +637,10 @@ def fixdir(fixdir: str, dclient: discogs_client.Client, refresh_musicbrainz: boo
 
 		display_title = f'{album_name} [{version_str}]' if version_str else album_name
 		if flac_files > 0:
-			success(f'Album name changed to {display_title}')
+			if first_tags.get('ALBUM', [''])[0] != album_name:
+				success(f'Album name changed to {display_title}')
+			else:
+				success(f'Tags updated in {display_title}')
 		else:
 			logger.info(f'No changes required for {display_title}')
 		resize_covers(fixdir)
