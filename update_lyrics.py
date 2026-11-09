@@ -330,18 +330,23 @@ def _fetch_one(
 	track_names = [title] if stripped_title == title else [title, stripped_title]
 	duration = str(round(length))
 
-	# Try each track_name (full title, then stripped) with album_name, then without.
+	# Try each artist (ALBUMARTIST, then the track's own ARTIST when it differs: compilations and
+	# soundtracks have a "Various Artists" album artist that lrclib does not know), and for each the
+	# track_name (full title, then stripped) with album_name, then without.
+	track_artist = flactag(song, 'ARTIST')
+	search_artists = [artist] if not track_artist or track_artist == artist else [artist, track_artist]
 	variants = [
 		v
+		for artist_name in search_artists
 		for track_name in track_names
 		for v in (
 			{
-				'artist_name': artist,
+				'artist_name': artist_name,
 				'track_name': track_name,
 				'album_name': album,
 				'duration': duration,
 			},
-			{'artist_name': artist, 'track_name': track_name, 'duration': duration},
+			{'artist_name': artist_name, 'track_name': track_name, 'duration': duration},
 		)
 	]
 
