@@ -1,6 +1,7 @@
 #!/usr/bin/env -S uv run
 # /// script
 # dependencies = [
+#   "mutagen",
 #   "structlog",
 # ]
 # ///
@@ -11,6 +12,8 @@ import shutil
 import tempfile
 from pathlib import Path
 from subprocess import DEVNULL, Popen, call
+
+from mutagen.flac import FLAC
 
 from log import logger, set_log_level, success
 
@@ -81,7 +84,16 @@ def main() -> None:
 	preset_file.write(preset_ini)
 	preset_file.close()
 
-	skip_flag = ['-S'] if rsgain_skip else []
+	def has_album_gain(path: str) -> bool:
+		"""True when every FLAC carries REPLAYGAIN_ALBUM_GAIN (track gain alone is not enough)."""
+		files = list(Path(path).rglob('*.flac'))
+		try:
+			return bool(files) and all((FLAC(str(f)).tags or {}).get('REPLAYGAIN_ALBUM_GAIN') for f in files)
+		except Exception:  # noqa: BLE001
+			return False
+
+	# -S skips files with any ReplayGain tag, so an album with track gain only never got its album gain
+	skip_flag = ['-S'] if rsgain_skip and has_album_gain(nzbdir) else []
 
 	parallel = []
 	try:
