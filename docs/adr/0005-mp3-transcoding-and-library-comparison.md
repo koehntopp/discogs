@@ -44,7 +44,7 @@ We establish the following architectural rules for library organization, MP3 mir
   * Replaces whitespace runs with single underscores (`_`).
 
 * **NFD Normalization & Collision Safety**:
-  * Source vs destination path comparison MUST use `unicodedata.normalize('NFD', path.lower())` for HFS+/macOS case-folding safety.
+  * Source vs destination path comparison MUST use `unicodedata.normalize('NFD', path)` (HFS+/macOS composes and decomposes names) and is **case-sensitive**: a path that differs from the tags only in case is wrong and is corrected. A case-insensitive share answers a plain mkdir or move of such a path with `[Errno 17]`, so the existing directory or file is renamed in place via a temporary name (`bliss.py` `_rename_case`) before directories are created. If two files of one run want different spellings of one folder, the first wins and the later ones are skipped with a warning (otherwise the folder would flip back and forth).
   * Snapshot file lists (`flac_files = [str(PurePosixPath(p)) for p in ...]`) MUST be pre-buffered before move loops to prevent live generator re-discovery of moved files.
   * Target collision protection: `bliss.py` refuses to move a file if `tobefullname` already exists.
 
@@ -83,5 +83,5 @@ We establish the following architectural rules for library organization, MP3 mir
 ### Positive
 * **Deterministic Disk Layout**: `bliss.py` guarantees uniform `<Artist>/<Album_Version>/<disc_zz>_<track_zz>_<Title>.flac` path structures across the entire library.
 * **Predictable 6-Step Ingest**: Every newly ingested album undergoes identical, deterministic enrichment (`dot_clean` $\rightarrow$ `DR` $\rightarrow$ `ReplayGain` $\rightarrow$ `AcoustID` $\rightarrow$ `Discogs` $\rightarrow$ `Lyrics`).
-* **HFS+ Unicode Safety**: NFD normalization prevents case-folding loops on macOS/HFS+ filesystems.
+* **HFS+ Unicode Safety**: NFD normalization prevents re-move loops on macOS/HFS+ filesystems; case-only name differences are renamed in place instead of being ignored.
 * **100% Reliability for MP3 Mirror Sync**: Destination directories exist before `ffmpeg` runs.

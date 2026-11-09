@@ -197,39 +197,107 @@ def get_target_path_and_filename(
 	return path, filename, {'artist': artist, 'album': album_title, 'track': track_title}
 
 
-def move_flac_file(source_file: str, target_path: str, target_filename: str) -> bool:
+def _nfd(text: str) -> str:
+	return unicodedata.normalize('NFD', text)
+
+
+# Directories renamed in this run (old full path -> new), so later files still lying under the
+# old spelling are found; and the first spelling seen for each case-folded album directory.
+_renamed: dict[str, str] = {}
+_spelling: dict[tuple[str, ...], tuple[str, ...]] = {}
+
+
+def _follow_renames(path: str) -> str:
+	"""Map a path under a directory renamed in this run to its new location."""
+	for old, new in _renamed.items():
+		if path == old or path.startswith(old + '/'):
+			return new + path[len(old) :]
+	return path
+
+
+def _rename_case(parent: str, wanted: str) -> bool:
+	"""Rename the entry of parent that equals wanted except for case to exactly wanted.
+
+	A case-insensitive share treats both spellings as one name, so a plain move or mkdir
+	collides ([Errno 17]); the entry is renamed via a temporary name instead. Returns True if renamed.
+	"""
+	if not os.path.isdir(parent):
+		return False
+	names = os.listdir(parent)
+	if any(_nfd(n) == _nfd(wanted) for n in names):
+		return False
+	for name in names:
+		if _nfd(name).lower() == _nfd(wanted).lower():
+			src, tmp = os.path.join(parent, name), os.path.join(parent, name + '.bliss-tmp')
+			os.rename(src, tmp)
+			os.rename(tmp, os.path.join(parent, wanted))
+			logger.warning(f'Renamed {src} -> {wanted} (case differs from the tags)')
+			if os.path.isdir(os.path.join(parent, wanted)):
+				_renamed[src] = os.path.join(parent, wanted)
+			return True
+	return False
+
+
+def move_flac_file(
+	source_file: str, target_path: str, target_filename: str, root_dir: str | None = None
+) -> bool:
 	"""Move a FLAC file to its canonical location, creating the directory if needed.
 
-	Uses Unicode NFD normalisation for the path comparison so that case-equivalent
-	names (e.g. on case-insensitive HFS+) are treated as identical and not re-moved.
+	Paths are compared with Unicode NFD normalisation (HFS+) but case-sensitively: a path that
+	differs only in case (``Chris_De_Burgh`` vs ``Chris_de_Burgh``) is wrong and is corrected by
+	renaming the existing directory or file in place. Two files of one run that want different
+	spellings of the same directory are not both honoured: the first spelling wins, the later file
+	is skipped with a warning (the tags have to be fixed).
 
 	Args:
 	    source_file: Absolute path to the FLAC file to move.
 	    target_path: Destination directory (will be created with os.makedirs if absent).
 	    target_filename: Destination filename within target_path.
+	    root_dir: Library root; when given, case-only differences of the folders below it are fixed.
 
 	Returns:
-	    True when the file was actually moved, False when source and destination
-	    are the same path (nothing to do).
+	    True when the file was actually moved or renamed, False when source and destination
+	    are the same path (nothing to do) or the move was refused.
 	"""
+	source_file = _follow_renames(source_file)
+	renamed = False
+	if root_dir and os.path.isdir(root_dir):
+		comps = os.path.relpath(target_path, root_dir).split(os.sep)
+		key = tuple(_nfd(c).lower() for c in comps)
+		if _spelling.setdefault(key, tuple(comps)) != tuple(comps):
+			logger.warning(
+				f'Skipping {source_file}: tags spell {os.sep.join(comps)} differently from '
+				f'{os.sep.join(_spelling[key])} (same folder up to case); fix the tags'
+			)
+			return False
+		parent = root_dir
+		for comp in comps:
+			renamed |= _rename_case(parent, comp)
+			parent = os.path.join(parent, comp)
+		source_file = _follow_renames(source_file)
 	target_fullname = target_path + target_filename
 
 	# Create target directory if it doesn't exist
-	if not os.path.exists(target_path):
-		os.makedirs(target_path)
+	os.makedirs(target_path, exist_ok=True)
 
-	# Only move if paths are different (case-insensitive comparison)
-	if unicodedata.normalize('NFD', source_file.lower()) != unicodedata.normalize(
-		'NFD', target_fullname.lower()
+	if _nfd(source_file) == _nfd(target_fullname):
+		return renamed
+	if (
+		_nfd(os.path.dirname(source_file)) == _nfd(target_path.rstrip('/'))
+		and _nfd(os.path.basename(source_file)).lower() == _nfd(target_filename).lower()
 	):
-		if os.path.exists(target_fullname):
-			logger.error(
-				f'Refusing to move {source_file} -> {target_fullname}: target file already exists!'
-			)
-			return False
-		shutil.move(source_file, target_fullname)
+		# Same file, only the case of its name differs: rename via a temporary name.
+		tmp = source_file + '.bliss-tmp'
+		os.rename(source_file, tmp)
+		os.rename(tmp, target_fullname)
 		return True
-	return False
+	if os.path.exists(target_fullname):
+		logger.error(
+			f'Refusing to move {source_file} -> {target_fullname}: target file already exists!'
+		)
+		return False
+	shutil.move(source_file, target_fullname)
+	return True
 
 
 def flat_multidisc_files(flacroot: str) -> list[str]:
@@ -284,6 +352,7 @@ def movefiles(flacroot: str, full: bool = False) -> None:
 	multi_disc = multi_disc_albums(flac_files, flacroot)
 
 	for fullfilename in flac_files:
+		fullfilename = _follow_renames(fullfilename)
 		if not os.path.isfile(fullfilename):
 			continue
 
@@ -313,20 +382,11 @@ def movefiles(flacroot: str, full: bool = False) -> None:
 				tobepathname += disc_subdir(tags)
 			tobefullname = tobepathname + tobefilename
 
-			if unicodedata.normalize('NFD', fullfilename.lower()) != unicodedata.normalize(
-				'NFD', tobefullname.lower()
-			):
+			if _nfd(_follow_renames(fullfilename)) != _nfd(tobefullname):
 				if salbumtitle != currentalbum:
 					currentalbum = salbumtitle
 					success(f'Moving album {salbumtitle}')
-				if os.path.exists(tobefullname):
-					logger.error(
-						f'Refusing to move {fullfilename} -> {tobefullname}: target file already exists!'
-					)
-					continue
-				if not os.path.exists(tobepathname):
-					os.makedirs(tobepathname)
-				shutil.move(fullfilename, tobefullname)
+				move_flac_file(fullfilename, tobepathname, tobefilename, flacroot)
 		except Exception as e:  # noqa: BLE001
 			logger.error(f'Error moving file {fullfilename}: {e}')
 			continue
@@ -356,6 +416,7 @@ def ingestfiles(ingest_dir: str) -> None:
 	multi_disc = multi_disc_albums(flac_files, flacroot)
 
 	for fullfilename in flac_files:
+		fullfilename = _follow_renames(fullfilename)
 		if not os.path.isfile(fullfilename):
 			continue
 
@@ -371,7 +432,7 @@ def ingestfiles(ingest_dir: str) -> None:
 				currentalbum = metadata['album']
 				logger.info(f'Ingesting album {metadata["album"]}')
 
-			if move_flac_file(fullfilename, target_path, target_filename):
+			if move_flac_file(fullfilename, target_path, target_filename, flacroot):
 				success(f'Ingested {metadata["track"]}')
 		except Exception as e:  # noqa: BLE001
 			logger.error(f'Error ingesting file {fullfilename}: {e}')
