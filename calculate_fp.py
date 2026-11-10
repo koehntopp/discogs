@@ -80,6 +80,11 @@ def calculate_fp(albumpath: str) -> None:
 					fingerprint = (
 						raw_fp.decode('utf-8') if isinstance(raw_fp, bytes) else str(raw_fp).strip()
 					)
+					# Reopen: calculate_dr and rsgain run in parallel (nzbfix) and may have written tags
+					# while fpcalc ran; saving the copy read before the wait would erase their tags.
+					audio = FLAC(fullfilename)
+					if not audio.tags:
+						audio.add_tags()
 					audio['ACOUSTID_FINGERPRINT'] = [fingerprint]
 					audio.save()
 					try:

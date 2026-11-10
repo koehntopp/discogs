@@ -112,6 +112,11 @@ def calculate_dr(albumpath: str) -> None:
 						logger.error(f'DR calculation failed for {fullfilename}: {e}')
 
 					if DR != dr_song:
+						# Reopen: calculate_fp and rsgain run in parallel (nzbfix) and may have written tags
+						# while the DR was computed; saving the copy read before the wait would erase their tags.
+						audio = FLAC(fullfilename)
+						if not audio.tags:
+							audio.add_tags()
 						title_str = (audio.tags.get('TITLE') or ['Unknown'])[0]
 						logger.success(
 							f'DR {str(dr_song).zfill(2)} → {str(DR).zfill(2)}  {title_str}'
