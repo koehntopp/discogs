@@ -24,8 +24,9 @@ def main() -> None:
 	"""Run the full NZB post-processing pipeline on a directory of FLAC files.
 
 	Reads the target directory from config.nzbdir or a single positional command-line
-	argument. Runs dot_clean, then calculate_dr, rsgain, and calculate_fp in parallel,
-	followed by fixtags and update_lyrics sequentially.
+	argument. Runs dot_clean, then calculate_dr, rsgain, calculate_fp, fixtags and
+	update_lyrics one after another: the first three all write tags into the same files,
+	and run in parallel they overwrote each other's tags (Tagwright ADR 0033).
 	"""
 	parser = argparse.ArgumentParser(
 		description='Run the NZB post-processing pipeline on a directory of FLAC files'
@@ -95,7 +96,7 @@ def main() -> None:
 	# -S skips files with any ReplayGain tag, so an album with track gain only never got its album gain
 	skip_flag = ['-S'] if rsgain_skip and has_album_gain(nzbdir) else []
 
-	parallel = []
+	running: list = []  # the child that is running now, killed on Ctrl+C
 	try:
 		if shutil.which('dot_clean'):
 			call(['dot_clean', nzbdir], stdout=DEVNULL, stderr=DEVNULL)
@@ -104,12 +105,14 @@ def main() -> None:
 		if active_log_level in ('SUCCESS', 'WARNING', 'ERROR'):
 			rsgain_cmd.insert(2, '-q')
 		logger.info(f'rsgain command: {" ".join(rsgain_cmd)}')
-		parallel = [
-			('calculate_dr', Popen([str(SCRIPTS_DIR / 'calculate_dr.py'), nzbdir], env=child_env)),
-			('rsgain', Popen(rsgain_cmd, stdout=DEVNULL, stderr=DEVNULL)),
-			('calculate_fp', Popen([str(SCRIPTS_DIR / 'calculate_fp.py'), nzbdir], env=child_env)),
+		tag_steps = [
+			('calculate_dr', [str(SCRIPTS_DIR / 'calculate_dr.py'), nzbdir], {'env': child_env}),
+			('rsgain', rsgain_cmd, {'stdout': DEVNULL, 'stderr': DEVNULL}),
+			('calculate_fp', [str(SCRIPTS_DIR / 'calculate_fp.py'), nzbdir], {'env': child_env}),
 		]
-		for name, p in parallel:
+		for name, cmd, kwargs in tag_steps:
+			p = Popen(cmd, **kwargs)
+			running[:] = [(name, p)]
 			rc = p.wait()
 			if rc != 0:
 				logger.error(f'Warning: {name} exited with code {rc}')
@@ -122,7 +125,7 @@ def main() -> None:
 		call([str(SCRIPTS_DIR / 'update_lyrics.py'), nzbdir], env=child_env)
 	except KeyboardInterrupt:
 		logger.warning('Pipeline interrupted by user (Ctrl+C). Terminating processes...')
-		for name, p in parallel:
+		for name, p in running:
 			try:
 				p.kill()
 			except Exception:  # noqa: BLE001, S110  # best-effort cleanup while interrupted
