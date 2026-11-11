@@ -108,9 +108,7 @@ def submit_to_lrclib(
 
     # 1. Request Challenge
     with console.status("Requesting LRCLIB challenge…"):
-        resp = requests.post(
-            f"{API_URL}/request-challenge", headers=headers, timeout=10
-        )
+        resp = requests.post(f"{API_URL}/request-challenge", headers=headers, timeout=10)
         resp.raise_for_status()
         challenge_data = resp.json()
         prefix = challenge_data["prefix"]
@@ -123,9 +121,7 @@ def submit_to_lrclib(
     # 3. Publish Lyrics
     headers["X-Publish-Token"] = publish_token
     with console.status("Publishing lyrics to LRCLIB…"):
-        pub_resp = requests.post(
-            f"{API_URL}/publish", json=payload, headers=headers, timeout=15
-        )
+        pub_resp = requests.post(f"{API_URL}/publish", json=payload, headers=headers, timeout=15)
 
     if pub_resp.status_code in (200, 201):
         logger.info(

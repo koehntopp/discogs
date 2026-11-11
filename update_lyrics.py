@@ -47,9 +47,7 @@ from lrc_format import (
 from lrclib_client import lrclib_headers
 
 MAX_WORKERS = 8
-LANGUAGE_TAG = (
-    "LYRICS_LANGUAGE"  # written by fixtags.py from MusicBrainz (ADR 0002 section 5b)
-)
+LANGUAGE_TAG = "LYRICS_LANGUAGE"  # written by fixtags.py from MusicBrainz (ADR 0002 section 5b)
 INSTRUMENTAL_LANGUAGE = "zxx"  # ISO 639-3 "no linguistic content"
 TRAILING_BRACKET_RE = re.compile(r"\s*[\(\[][^()\[\]]*[\)\]]\s*$")
 
@@ -87,14 +85,10 @@ MAX_RETRY_AFTER = 300.0
 BASE_INTERVAL = 0.5
 REQUEST_JITTER = 0.25
 DEFAULT_RETRY_AFTER = 1.0  # a 429 without Retry-After, as lrcget treats it
-RETRY_BACKOFF = (
-    1.0  # seconds before the 2nd attempt after a 5xx/network error; doubles each time
-)
+RETRY_BACKOFF = 1.0  # seconds before the 2nd attempt after a 5xx/network error; doubles each time
 MAX_INTERVAL = 8.0
 RELAX_AFTER = 10  # consecutive successes before the interval shrinks again
-DOWN_AFTER = (
-    5  # failures in a row, with no success for DOWN_WINDOW seconds, open the circuit
-)
+DOWN_AFTER = 5  # failures in a row, with no success for DOWN_WINDOW seconds, open the circuit
 DOWN_WINDOW = 60.0
 # (cool-down seconds, workers) for each pass over tracks that lrclib failed to answer
 RETRY_ROUNDS = ((30, 2), (60, 2))
@@ -158,11 +152,7 @@ class Pacer:
             self._successes = 0
             self._fail_streak += 1
             raised = False
-            if (
-                rate_limited
-                and started_at > self._raised_at
-                and self._interval < MAX_INTERVAL
-            ):
+            if rate_limited and started_at > self._raised_at and self._interval < MAX_INTERVAL:
                 self._interval = min(self._interval * 2, MAX_INTERVAL)
                 self._raised_at = now
                 self._next_start = max(self._next_start, now + self._interval)
@@ -170,9 +160,7 @@ class Pacer:
             if rate_limited and retry_after is None:
                 retry_after = DEFAULT_RETRY_AFTER
             if retry_after is not None:
-                self._floor_until = max(
-                    self._floor_until, now + min(retry_after, MAX_RETRY_AFTER)
-                )
+                self._floor_until = max(self._floor_until, now + min(retry_after, MAX_RETRY_AFTER))
             return self._interval, raised
 
     def success(self) -> tuple[float, bool]:
@@ -224,9 +212,7 @@ class Pacer:
             self._floor_until = 0.0
 
 
-def _lrclib_get(
-    session: requests.Session, pacer: Pacer, params: dict, title: str
-) -> dict | None:
+def _lrclib_get(session: requests.Session, pacer: Pacer, params: dict, title: str) -> dict | None:
     """One lrclib lookup: the JSON body on 200, {} on 404, None if lrclib kept failing."""
     reason = ""
     if pacer.is_down():
@@ -250,9 +236,7 @@ def _lrclib_get(
                     body = response.json() if response.status_code == 200 else {}
                     interval, relaxed = pacer.success()
                     if relaxed:
-                        logger.info(
-                            f"lrclib is answering again; one request per {interval:.1f} s"
-                        )
+                        logger.info(f"lrclib is answering again; one request per {interval:.1f} s")
                     return body
                 reason = f"HTTP {response.status_code}"
                 rate_limited = response.status_code == 429
@@ -274,9 +258,7 @@ def _lrclib_get(
                 f"lrclib rate limit hit ({reason}); slowing to one request per {interval:.1f} s"
             )
         if pacer.report_down_once():
-            logger.warning(
-                "lrclib looks down; deferring the remaining tracks to the retry rounds"
-            )
+            logger.warning("lrclib looks down; deferring the remaining tracks to the retry rounds")
         if pacer.is_down():
             break
         if not rate_limited and retry_after is None and attempt < MAX_ATTEMPTS - 1:
@@ -311,14 +293,8 @@ def _fetch_one(
         track = flactag(song, "TRACKNUMBER")
         album = flactag(song, "ALBUM")
         existing_lyrics = flactag(song, "LYRICS").strip()
-        instrumental_language = is_instrumental_language(
-            list(song.get(LANGUAGE_TAG) or [])
-        )
-        length = (
-            float(song.info.length)
-            if song.info and hasattr(song.info, "length")
-            else 0.0
-        )
+        instrumental_language = is_instrumental_language(list(song.get(LANGUAGE_TAG) or []))
+        length = float(song.info.length) if song.info and hasattr(song.info, "length") else 0.0
     except Exception as e:  # noqa: BLE001
         logger.warning(f"Could not read FLAC tags for {flac_path}: {e}")
         return flac_path, "", "", "", "none", "error", "", ""
@@ -359,9 +335,7 @@ def _fetch_one(
     if instrumental_language and not is_lrc(existing_lyrics):
         # MusicBrainz says the track has no vocals: no lrclib request (it can only return wrong
         # lyrics for it). Plain text is replaced; an existing LRC is left to the rule below.
-        logger.info(
-            f"Instrumental via {LANGUAGE_TAG}={INSTRUMENTAL_LANGUAGE}: {artist} - {title}"
-        )
+        logger.info(f"Instrumental via {LANGUAGE_TAG}={INSTRUMENTAL_LANGUAGE}: {artist} - {title}")
         marker_lrc = make_instrumental_lrc(artist, title, album, length)
         return (
             flac_path,
@@ -410,9 +384,7 @@ def _fetch_one(
     # track_name (full title, then stripped) with album_name, then without.
     track_artist = flactag(song, "ARTIST")
     search_artists = (
-        [artist]
-        if not track_artist or track_artist == artist
-        else [artist, track_artist]
+        [artist] if not track_artist or track_artist == artist else [artist, track_artist]
     )
     variants = [
         v
@@ -447,9 +419,7 @@ def _fetch_one(
             break
 
     if found_via_stripped:
-        logger.info(
-            f"Lyrics found via stripped title '{stripped_title}' (original: '{title}')"
-        )
+        logger.info(f"Lyrics found via stripped title '{stripped_title}' (original: '{title}')")
 
     if data.get("instrumental"):
         marker_lrc = make_instrumental_lrc(artist, title, album, length)
@@ -478,9 +448,7 @@ def _fetch_one(
     if data.get("syncedLyrics"):
         lrc = re.sub(r"\[(\d{2}:\d{2}\.\d{2})\d\]", r"[\1]", data["syncedLyrics"])
         if is_invalid_lrc(lrc):
-            logger.warning(
-                f"Invalid LRC timestamps from lrclib, skipping: {title} ({artist})"
-            )
+            logger.warning(f"Invalid LRC timestamps from lrclib, skipping: {title} ({artist})")
         else:
             lrc = apply_headers(lrc, artist, title, album, length)
             lrc = capitalize_lrc(normalize_lrc_text(lrc))
@@ -576,10 +544,7 @@ def prune_cache(
         if len(dirs) != 1 or dirs & broken_dirs:
             continue
         for path in sorted(lyrics_dir.glob(f"{discogs_id}_*")):
-            if (
-                path.suffix in (".lrc", ".txt")
-                and path.stem[len(discogs_id) + 1 :] not in keys
-            ):
+            if path.suffix in (".lrc", ".txt") and path.stem[len(discogs_id) + 1 :] not in keys:
                 path.unlink()
                 removed.append(path)
     return removed
@@ -627,17 +592,13 @@ def _apply_result(result: tuple, stats: dict, lyrics_dir: Path) -> None:
             txt_file.unlink(missing_ok=True)
         else:
             ext = (
-                "lrc"
-                if lyric_type in ("lrc", "instrumental") or lyrics.startswith("[")
-                else "txt"
+                "lrc" if lyric_type in ("lrc", "instrumental") or lyrics.startswith("[") else "txt"
             )
             target_file = lyrics_dir / f"{discogs_id}_{track}.{ext}"
             other_file = txt_file if ext == "lrc" else lrc_file
             other_file.unlink(missing_ok=True)
             stats[
-                "cache_written"
-                if _write_if_changed(target_file, lyrics)
-                else "cache_unchanged"
+                "cache_written" if _write_if_changed(target_file, lyrics) else "cache_unchanged"
             ] += 1
 
 
@@ -656,9 +617,7 @@ def _run_pass(
     """
     failed = []
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = {
-            executor.submit(_fetch_one, path, session, pacer): path for path in paths
-        }
+        futures = {executor.submit(_fetch_one, path, session, pacer): path for path in paths}
         try:
             for future in as_completed(futures):
                 try:
@@ -713,9 +672,7 @@ def main() -> None:
     lyrics_dir.mkdir(parents=True, exist_ok=True)
 
     session = requests.Session()
-    adapter = requests.adapters.HTTPAdapter(
-        pool_connections=MAX_WORKERS, pool_maxsize=MAX_WORKERS
-    )
+    adapter = requests.adapters.HTTPAdapter(pool_connections=MAX_WORKERS, pool_maxsize=MAX_WORKERS)
     session.mount("https://", adapter)
     pacer = Pacer()
 
@@ -740,9 +697,7 @@ def main() -> None:
 
     orig_stream = _console_handler.stream
     failed_info: dict[str, tuple[str, str]] = {}
-    cache_tracks: dict[
-        str, list[tuple[str, str]]
-    ] = {}  # directory -> (discogs_id, track)
+    cache_tracks: dict[str, list[tuple[str, str]]] = {}  # directory -> (discogs_id, track)
     broken_dirs: set[str] = set()  # directories with a track whose key is unknown
 
     def on_interrupt() -> None:
@@ -824,9 +779,7 @@ def main() -> None:
 
     for path in failed:
         artist, title = failed_info.get(path, ("", ""))
-        logger.warning(
-            f"Lyrics not fetched, lrclib unavailable: {artist} - {title} ({path})"
-        )
+        logger.warning(f"Lyrics not fetched, lrclib unavailable: {artist} - {title} ({path})")
 
     # Only after a complete run (an interrupted one exits above): drop cache entries of tracks that
     # no longer exist, e.g. after a TRACKNUMBER retag.

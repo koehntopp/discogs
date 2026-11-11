@@ -81,11 +81,7 @@ def read_album(directory: str) -> dict[str, str] | None:
     flac_path = flacs[0]
     try:
         audio = FLAC(flac_path)
-        tags = (
-            {k.upper(): [str(x) for x in v] for k, v in audio.tags.items()}
-            if audio.tags
-            else {}
-        )
+        tags = {k.upper(): [str(x) for x in v] for k, v in audio.tags.items()} if audio.tags else {}
     except Exception:  # noqa: BLE001
         return None
 
@@ -126,9 +122,7 @@ def find_flac_dirs(root: str) -> list[str]:
     dirs = []
     for dirpath, _, files in os.walk(root):
         if any(f.endswith(".flac") for f in files):
-            dirpath = album_root(
-                dirpath
-            )  # a 'Disc N' folder is part of its parent album
+            dirpath = album_root(dirpath)  # a 'Disc N' folder is part of its parent album
             if dirpath not in dirs:
                 dirs.append(dirpath)
     return dirs
@@ -172,12 +166,8 @@ def main() -> None:
     """
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Scan FLAC library and generate albums.csv"
-    )
-    parser.add_argument(
-        "directory", nargs="?", help="Root directory of the FLAC library"
-    )
+    parser = argparse.ArgumentParser(description="Scan FLAC library and generate albums.csv")
+    parser.add_argument("directory", nargs="?", help="Root directory of the FLAC library")
     parser.add_argument(
         "-f",
         "--force",

@@ -58,9 +58,7 @@ AUDIOPHILE_PATTERNS: list[tuple[str, str, re.Pattern[str]]] = [
     (
         "Gold CD",
         "24k Gold Edition",
-        re.compile(
-            r"\b(24k|24kt|24k[- ]Gold|24-Karat Gold|Gold[- ]?CD)\b", re.IGNORECASE
-        ),
+        re.compile(r"\b(24k|24kt|24k[- ]Gold|24-Karat Gold|Gold[- ]?CD)\b", re.IGNORECASE),
     ),
     (
         "XRCD / K2 HD",
@@ -100,9 +98,7 @@ class DiscogsCachedClient:
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "AudiophileUpgradeFinder/1.0"})
         if self.api_key:
-            self.session.headers.update(
-                {"Authorization": f"Discogs token={self.api_key}"}
-            )
+            self.session.headers.update({"Authorization": f"Discogs token={self.api_key}"})
         self.cache: dict[str, Any] = self._load_cache()
 
     def _load_cache(self) -> dict[str, Any]:
@@ -124,9 +120,7 @@ class DiscogsCachedClient:
         except Exception as e:  # noqa: BLE001
             logger.warning(f"Failed to save cache to {self.cache_path}: {e}")
 
-    def _get(
-        self, url: str, params: dict[str, Any] | None = None
-    ) -> dict[str, Any] | None:
+    def _get(self, url: str, params: dict[str, Any] | None = None) -> dict[str, Any] | None:
         if self.offline:
             return None
 
@@ -281,13 +275,9 @@ def find_audiophile_upgrades(
 
     api_key = getattr(config, "discogs_api_key", getattr(config, "api_key", ""))
     if not api_key and not offline:
-        logger.warning(
-            "discogs_api_key not found in config.py. Requests may be rate-limited."
-        )
+        logger.warning("discogs_api_key not found in config.py. Requests may be rate-limited.")
 
-    client = DiscogsCachedClient(
-        api_key=api_key, cache_path=cache_json, offline=offline
-    )
+    client = DiscogsCachedClient(api_key=api_key, cache_path=cache_json, offline=offline)
 
     library_rows: list[dict[str, str]] = []
     existing_release_ids: set[str] = set()
@@ -347,9 +337,7 @@ def find_audiophile_upgrades(
         if is_tty:
             _console_handler.stream = sys.stderr
         try:
-            task_id = progress.add_task(
-                "Searching audiophile upgrades", total=len(target_rows)
-            )
+            task_id = progress.add_task("Searching audiophile upgrades", total=len(target_rows))
 
             for row in target_rows:
                 artist = row.get("Album Artist", "").strip()
@@ -396,9 +384,7 @@ def find_audiophile_upgrades(
 
                     cat_name, _cat_desc = detection
 
-                    if cat_name.upper() in existing_formats_by_album.get(
-                        album_key, set()
-                    ):
+                    if cat_name.upper() in existing_formats_by_album.get(album_key, set()):
                         continue
 
                     if cat_name in seen_formats_for_album:

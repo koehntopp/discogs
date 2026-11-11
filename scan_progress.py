@@ -67,9 +67,7 @@ def scan_progress(total: int, label: str = "Scanning", **counters: int) -> Itera
     last_report = time.monotonic()
 
     def line() -> str:
-        return f"{label}: {done}/{total}" + "".join(
-            f" {k}: {v}" for k, v in stats.items()
-        )
+        return f"{label}: {done}/{total}" + "".join(f" {k}: {v}" for k, v in stats.items())
 
     def tick(advance: int = 1, **fields: int) -> None:
         nonlocal done, last_report, logged_at

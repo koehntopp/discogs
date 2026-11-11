@@ -97,34 +97,22 @@ DEFAULT_OUT = ROOT / "lrc_suspects_audit"
 MIN_WORDS = 5  # fewer transcript words than this: whisper heard (almost) nothing
 MIN_WORDS_PER_MIN = 10  # fewer than this many words per minute: same
 MATCH_OK = 0.6  # share of matched lines lrc_fix needs to align (its own --min-match)
-SUNG_LOW = (
-    0.2  # share of lyric word pairs found in the transcript: below this, not sung
-)
+SUNG_LOW = 0.2  # share of lyric word pairs found in the transcript: below this, not sung
 SUNG_OK = 0.5  # at or above this the text is sung, whatever the order or structure
-TIMING_OK_SECS = (
-    3.0  # median distance between the tag's timestamps and where whisper hears them
-)
-ENDS_EARLY_BORDERLINE = (
-    0.45  # a tag whose last timestamp is at or past this share of the track
-)
-LRCLIB_COOLDOWN = (
-    30  # seconds to wait before trying lrclib again after its breaker tripped
-)
+TIMING_OK_SECS = 3.0  # median distance between the tag's timestamps and where whisper hears them
+ENDS_EARLY_BORDERLINE = 0.45  # a tag whose last timestamp is at or past this share of the track
+LRCLIB_COOLDOWN = 30  # seconds to wait before trying lrclib again after its breaker tripped
 STACKED = {
     "one_timestamp",
     "shared_timestamps",
 }  # the reasons that mean "timestamps are broken"
 BORDERLINE = 0.05  # report-only: a match share this close to a threshold is flagged
-INSTRUMENTAL_WPM = (
-    3  # an untagged track with fewer words per minute than this is an instrumental
-)
+INSTRUMENTAL_WPM = 3  # an untagged track with fewer words per minute than this is an instrumental
 SHIFTED_MATCH = 0.8  # the strict `shifted` tier: line match at least this ...
 SHIFTED_SUNG = 0.7  # ... sung ratio at least this ...
 SHIFTED_DEV = 10.0  # ... and the timestamps off by more than this many seconds
 TIERS = ("safe", "instrumental", "shifted", "shifted-all", "onetimestamp")
-DEFAULT_TIERS = (
-    "safe,instrumental,shifted,onetimestamp"  # shifted-all (the unsure rest) is opt-in
-)
+DEFAULT_TIERS = "safe,instrumental,shifted,onetimestamp"  # shifted-all (the unsure rest) is opt-in
 
 CATEGORY_TEXT = {
     "not_cacheable": "cannot be cached (no numeric DISCOGS_RELEASE_ID or no TRACKNUMBER)",
@@ -153,23 +141,17 @@ CATEGORY_TEXT = {
 
 # The report's answer to "lrclib or us?": mutually exclusive groups, in this order.
 G_LRCLIB_TS = "Likely bad input from lrclib: stacked timestamps"
-G_LRCLIB_TEXT = "Likely bad input from lrclib: lyrics are not (fully) in the audio, lrclib serves the same text"
+G_LRCLIB_TEXT = (
+    "Likely bad input from lrclib: lyrics are not (fully) in the audio, lrclib serves the same text"
+)
 G_OURS = "Broken by our tools: stacked timestamps written by lrc_fix, or tag worse than lrclib"
-G_NOT_ALIGNABLE = (
-    "Lyrics are sung, but lrc_fix cannot align them (order or structure differs)"
-)
-G_TEXT_OTHER = (
-    "Lyrics are not (fully) in the audio, and the tag text differs from lrclib"
-)
-G_INSTRUMENTAL = (
-    "Instrumental tracks whose tag holds lyrics (lrc_audit marks them instrumental)"
-)
+G_NOT_ALIGNABLE = "Lyrics are sung, but lrc_fix cannot align them (order or structure differs)"
+G_TEXT_OTHER = "Lyrics are not (fully) in the audio, and the tag text differs from lrclib"
+G_INSTRUMENTAL = "Instrumental tracks whose tag holds lyrics (lrc_audit marks them instrumental)"
 G_SHIFTED = "Timestamps shifted against the audio (lrc_fix can fix them)"
 G_FINE = "Probably fine: ends early only with confirmed timing, or hearts only"
 G_CHANGED = "Tag changed since the audit"
-G_UNKNOWN = (
-    "Cannot tell (no audio evidence, lrclib not comparable, not transcribed, failed)"
-)
+G_UNKNOWN = "Cannot tell (no audio evidence, lrclib not comparable, not transcribed, failed)"
 GROUPS = [
     G_INSTRUMENTAL,
     G_LRCLIB_TS,
@@ -191,11 +173,7 @@ def group_of(r: dict) -> str:
     if cat in ("lrclib_bad_timestamps", "lrclib_bad_other_version"):
         return G_LRCLIB_TS
     if cat in ("text_mismatch", "text_partial"):
-        return (
-            G_LRCLIB_TEXT
-            if r.get("text_source") == "lrclib_same_text"
-            else G_TEXT_OTHER
-        )
+        return G_LRCLIB_TEXT if r.get("text_source") == "lrclib_same_text" else G_TEXT_OTHER
     if cat == "text_ok_not_alignable":
         return G_NOT_ALIGNABLE
     if cat in (
@@ -322,9 +300,7 @@ def suspect_target(path: Path) -> dict | None:
 
 def scan_targets(root: Path) -> list[dict]:
     targets: list[dict] = []
-    total = sum(
-        1 for _, _, fs in os.walk(root) if any(f.lower().endswith(".flac") for f in fs)
-    )
+    total = sum(1 for _, _, fs in os.walk(root) if any(f.lower().endswith(".flac") for f in fs))
     with scan_progress(total, "Scanning", Suspects=0) as tick:
         for dirpath, dirs, files in os.walk(root):
             dirs.sort()
@@ -383,9 +359,7 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         ),
         encoding="utf-8",
     )
-    print(
-        f"   {len(targets)} suspect tracks in {albums} albums -> {targets_path(args.work_dir)}"
-    )
+    print(f"   {len(targets)} suspect tracks in {albums} albums -> {targets_path(args.work_dir)}")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -424,9 +398,7 @@ def cache_state(target: dict, args: argparse.Namespace) -> tuple[str, dict | Non
     cache_file = lrc_fix.cache_path(flac, args.cache_dir)
     if cache_file is None:
         return "not_cacheable", None
-    payload = lrc_fix.load_cache(
-        cache_file, lrc_fix.cache_key(lrc_fix_namespace(args), flac)
-    )
+    payload = lrc_fix.load_cache(cache_file, lrc_fix.cache_key(lrc_fix_namespace(args), flac))
     return ("cached", payload) if payload else ("missing", None)
 
 
@@ -474,9 +446,7 @@ def run_lrc_fix(
 def status_lines(stdout: str) -> list[str]:
     """lrc_fix's own progress lines (indented), not the LRC it prints."""
     lines = [line.strip() for line in stdout.splitlines() if line.startswith("   ")]
-    return [
-        line for line in lines if not line.startswith("would ")
-    ]  # a dry run: noise here
+    return [line for line in lines if not line.startswith("would ")]  # a dry run: noise here
 
 
 def percent(value: float | None) -> str:
@@ -515,9 +485,7 @@ def summary_lines(row: dict) -> list[str]:
     else:
         out.append(f"lrclib:  {status.replace('_', ' ')}")
     if row.get("transcript_words") is not None:
-        out.append(
-            f"whisper: {row['transcript_words']} words ({row['words_per_min']:.0f}/min)"
-        )
+        out.append(f"whisper: {row['transcript_words']} words ({row['words_per_min']:.0f}/min)")
         out.append(
             f"match:   {row['lines_matched']} of {row['lines_counted']} lines in order "
             f"({percent(row['line_match'])}), {percent(row['sung_ratio'])} of the lyric's word "
@@ -531,11 +499,7 @@ def summary_lines(row: dict) -> list[str]:
         fix = row["fix_status"].replace("_", " ") + (
             f", {row['fix_detail']}" if row["fix_detail"] else ""
         )
-        safe = (
-            "; SAFE BET: fix --apply repairs it from the cache"
-            if row.get("safe_bet")
-            else ""
-        )
+        safe = "; SAFE BET: fix --apply repairs it from the cache" if row.get("safe_bet") else ""
         out.append(f"verdict: {row['category']} (today's lrc_fix: {fix}{safe})")
     elif row.get("fail_reason"):
         out.append(f"verdict: {row['category']}: {row['fail_reason']}")
@@ -559,11 +523,7 @@ def load_failures(work_dir: Path) -> dict[str, str]:
 def failure_reason(rc: int, out: str, err: str) -> str:
     """Why a transcription produced no cache entry: lrc_fix's own `skip:`/`warning:` line if it
     printed one, else the last stderr line of a crash (the ML libraries' warnings are noise)."""
-    notes = [
-        ln.strip()
-        for ln in out.splitlines()
-        if ln.strip().startswith(("skip:", "warning:"))
-    ]
+    notes = [ln.strip() for ln in out.splitlines() if ln.strip().startswith(("skip:", "warning:"))]
     if notes:
         return notes[-1]
     if rc != 0 and err.strip():
@@ -608,9 +568,7 @@ def select_extra(
     out = []
     failures = load_failures(args.work_dir)
     for t in targets:
-        row = analyze_target(
-            t, args, load_lrclib_cached(args.work_dir, t["path"]), failures
-        )
+        row = analyze_target(t, args, load_lrclib_cached(args.work_dir, t["path"]), failures)
         _, payload = cache_state(t, args)
         langs = sung_languages(row)
         if "stale-language" in args.extra:
@@ -622,11 +580,7 @@ def select_extra(
                 and language[0] not in (None, "en")
             ):
                 out.append((t, ["--refresh-cache"], "stale-language"))
-        if (
-            "zxx" in args.extra
-            and row["category"] == "language_skipped"
-            and langs == ["zxx"]
-        ):
+        if "zxx" in args.extra and row["category"] == "language_skipped" and langs == ["zxx"]:
             out.append((t, ["--ignore-language-tag"], "zxx"))
         if (
             "onsets" in args.extra
@@ -652,10 +606,7 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
             todo.append((t, [], "missing"))
     if args.extra:
         todo = [(t, flags, why) for t, flags, why in select_extra(subset, args)]
-        print(
-            f"   extra passes {args.extra}: "
-            + str(dict(Counter(why for _, _, why in todo)))
-        )
+        print(f"   extra passes {args.extra}: " + str(dict(Counter(why for _, _, why in todo))))
     print(
         f"== transcribe: {len(subset)} tracks, {counts['cached']} already cached, "
         f"{counts['not_cacheable']} not cacheable, {counts['file_missing']} missing, "
@@ -678,9 +629,7 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
             label = f"{t['artist']} - {t['title']}"
             print(f"[{i}/{len(todo)}] {label}", flush=True)
             rc, out, err = run_lrc_fix(t["path"], args, flags)
-            log.write(
-                f"=== {datetime.now().isoformat(timespec='seconds')} rc={rc} {t['path']}\n"
-            )
+            log.write(f"=== {datetime.now().isoformat(timespec='seconds')} rc={rc} {t['path']}\n")
             log.write(out + "\n" + err[-4000:] + "\n")
             log.flush()
             for line in status_lines(out):
@@ -719,9 +668,7 @@ def cmd_transcribe(args: argparse.Namespace) -> None:
         log.close()
         if awake:
             awake.terminate()
-    print(
-        f"== transcribe done: {len(todo) - failed} ok, {failed} failed (see {failed_path})"
-    )
+    print(f"== transcribe done: {len(todo) - failed} ok, {failed} failed (see {failed_path})")
     print_tally(subset, args)
 
 
@@ -741,9 +688,7 @@ def similarity(a_lines: list[str], b_lines: list[str]) -> float | None:
     return SequenceMatcher(a=a, b=b, autojunk=False).ratio()
 
 
-def word_stats(
-    lyric_lines: list[str], words: list[dict]
-) -> tuple[float | None, float | None]:
+def word_stats(lyric_lines: list[str], words: list[dict]) -> tuple[float | None, float | None]:
     """(recall, precision) of the lyric tokens against the transcript tokens."""
     asr = []
     for w in words:
@@ -758,14 +703,10 @@ def word_stats(
     return matched / len(lyric), matched / len(asr)
 
 
-def line_match(
-    lyric_lines: list[str], raw_times: list[float | None]
-) -> tuple[int, int]:
+def line_match(lyric_lines: list[str], raw_times: list[float | None]) -> tuple[int, int]:
     """(lines counted, lines matched), counting only lines that contain a word (like the gate)."""
     counted = [
-        t
-        for line, t in zip(lyric_lines, raw_times, strict=False)
-        if lrc_fix._tokenize(line)
+        t for line, t in zip(lyric_lines, raw_times, strict=False) if lrc_fix._tokenize(line)
     ]
     return len(counted), sum(t is not None for t in counted)
 
@@ -783,9 +724,7 @@ def simulate_fix(
 
     A pure simulation on the cached transcript: nothing is written anywhere.
     """
-    why = lrc_fix.alignment_rejection(
-        lyric_lines, raw_times, min_match, words, min_sung
-    )
+    why = lrc_fix.alignment_rejection(lyric_lines, raw_times, min_match, words, min_sung)
     if why:
         return "would_reject", why, []
     times = lrc_fix.finalize_times(raw_times, onsets or [], length or None)
@@ -825,9 +764,7 @@ def musicbrainz_state(path: Path, language_tag: str) -> str:
     if language_tag:
         return "tagged"
     try:
-        return (
-            "id_no_language" if _first(FLAC(path), "MUSICBRAINZ_ALBUMID") else "no_id"
-        )
+        return "id_no_language" if _first(FLAC(path), "MUSICBRAINZ_ALBUMID") else "no_id"
     except Exception:  # noqa: BLE001  # missing or unreadable
         return "no_id"
 
@@ -840,9 +777,7 @@ def classify(r: dict) -> tuple[str, str]:
     if r.get("lrclib_status") == "found":
         sim = r.get("lrclib_text_similarity")
         text_source = (
-            "lrclib_same_text"
-            if sim is not None and sim >= 0.9
-            else "differs_from_lrclib"
+            "lrclib_same_text" if sim is not None and sim >= 0.9 else "differs_from_lrclib"
         )
     if is_instrumental_row(r):
         return "instrumental_has_lyrics", text_source
@@ -866,9 +801,7 @@ def classify(r: dict) -> tuple[str, str]:
             return "timestamps_shifted", text_source
         share = r["tag_last_ts"] / r["length"] if r["length"] else 0.0
         borderline = share >= ENDS_EARLY_BORDERLINE
-        return (
-            "ends_early_borderline" if borderline else "ends_early_confirmed"
-        ), text_source
+        return ("ends_early_borderline" if borderline else "ends_early_confirmed"), text_source
     if match is None or match < MATCH_OK:
         return "text_ok_not_alignable", text_source
     if r["lrclib_status"] != "found" or not r["lrclib_has_synced"]:
@@ -877,9 +810,7 @@ def classify(r: dict) -> tuple[str, str]:
         return "timestamps_bad_source_unknown", text_source
     if set(r["lrclib_reasons"]) & STACKED:
         same = r["lrclib_same_timestamps"]
-        return (
-            "lrclib_bad_timestamps" if same else "lrclib_bad_other_version"
-        ), text_source
+        return ("lrclib_bad_timestamps" if same else "lrclib_bad_other_version"), text_source
     if r["tag_origin"] == "lrc_fix":
         return "tag_worse_than_lrclib_lrc_fix", text_source
     return "tag_worse_than_lrclib_other", text_source
@@ -891,9 +822,7 @@ def timing_agreement(
     """(median seconds between the tag's timestamps and where whisper hears the same lines,
     number of lines compared); (None, n) when fewer than MATCH_OK of the lines are found."""
     heard = lrc_fix.match_line_times(tag_texts, words)
-    counted = [
-        h for text, h in zip(tag_texts, heard, strict=False) if lrc_fix._tokenize(text)
-    ]
+    counted = [h for text, h in zip(tag_texts, heard, strict=False) if lrc_fix._tokenize(text)]
     devs = [abs(t - h) for t, h in zip(tag_times, heard, strict=False) if h is not None]
     if not counted or len(devs) / len(counted) < MATCH_OK or not devs:
         return None, len(devs)
@@ -989,9 +918,7 @@ def fetch_lrclib(targets: list[dict], args: argparse.Namespace) -> dict[str, dic
 
 
 def same_times(a: list[float], b: list[float]) -> bool:
-    return len(a) == len(b) and all(
-        abs(x - y) < 0.011 for x, y in zip(a, b, strict=False)
-    )
+    return len(a) == len(b) and all(abs(x - y) < 0.011 for x, y in zip(a, b, strict=False))
 
 
 def compare_lrclib(t: dict, entry: dict | None) -> dict:
@@ -1012,12 +939,8 @@ def compare_lrclib(t: dict, entry: dict | None) -> dict:
     body = entry["body"]
     res["lrclib_instrumental"] = bool(body.get("instrumental"))
     if body.get("duration") is not None:
-        res["lrclib_duration_delta"] = round(
-            abs(float(body["duration"]) - t["length"]), 1
-        )
-    synced = re.sub(
-        r"\[(\d{2}:\d{2}\.\d{2})\d\]", r"[\1]", body.get("syncedLyrics") or ""
-    )
+        res["lrclib_duration_delta"] = round(abs(float(body["duration"]) - t["length"]), 1)
+    synced = re.sub(r"\[(\d{2}:\d{2}\.\d{2})\d\]", r"[\1]", body.get("syncedLyrics") or "")
     plain = body.get("plainLyrics") or ""
     tag_times, tag_texts = lrc_body(t["lyrics"])
     if synced:
@@ -1214,9 +1137,7 @@ def write_tables(rows: list[dict], out_base: Path) -> None:
     need a human: lyrics not (fully) in the audio, and failed transcriptions."""
     records = [[cell(r.get(c)) for c in COLUMNS] for r in rows]
     review = [
-        [cell(r.get(c)) for c in REVIEW_COLUMNS]
-        for r in rows
-        if r["category"] in REVIEW_CATEGORIES
+        [cell(r.get(c)) for c in REVIEW_COLUMNS] for r in rows if r["category"] in REVIEW_CATEGORIES
     ]
     with out_base.with_suffix(".csv").open("w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
@@ -1296,9 +1217,7 @@ def musicbrainz_section(rows: list[dict]) -> list[str]:
 def build_report(rows: list[dict], meta: dict) -> str:
     total = len(rows)
     by_cat = Counter(r["category"] for r in rows)
-    would_fix = Counter(
-        r["category"] for r in rows if r.get("fix_status") == "would_fix"
-    )
+    would_fix = Counter(r["category"] for r in rows if r.get("fix_status") == "would_fix")
     n_would_fix = sum(would_fix.values())
     shown = [c for c in CATEGORY_TEXT if by_cat[c]]
     intro = (
@@ -1376,9 +1295,7 @@ def build_report(rows: list[dict], meta: dict) -> str:
         sub = [r for r in rows if reason in r["tag_reasons"]]
         cnt = Counter(r["category"] for r in sub)
         lines.append(
-            f"| `{reason}` | {len(sub)} | "
-            + " | ".join(str(cnt[c]) for c in shown)
-            + " |"
+            f"| `{reason}` | {len(sub)} | " + " | ".join(str(cnt[c]) for c in shown) + " |"
         )
     lines += [
         "",
@@ -1389,9 +1306,7 @@ def build_report(rows: list[dict], meta: dict) -> str:
     ]
     for origin, n in Counter(r["tag_origin"] for r in rows).most_common():
         fx = sum(
-            1
-            for r in rows
-            if r["tag_origin"] == origin and r.get("fix_status") == "would_fix"
+            1 for r in rows if r["tag_origin"] == origin and r.get("fix_status") == "would_fix"
         )
         lines.append(f"| `{origin}` | {n} | {fx} |")
     border = [
@@ -1454,9 +1369,7 @@ def build_report(rows: list[dict], meta: dict) -> str:
         ),
     ]
     buckets = Counter(
-        min(int(r["sung_ratio"] * 10), 9)
-        for r in rows
-        if r.get("sung_ratio") is not None
+        min(int(r["sung_ratio"] * 10), 9) for r in rows if r.get("sung_ratio") is not None
     )
     lines += [
         "",
@@ -1468,9 +1381,7 @@ def build_report(rows: list[dict], meta: dict) -> str:
     for b in range(10):
         hi = f"{(b + 1) * 10}%" if b < 9 else "100%"
         lines.append(f"| {b * 10}% to {hi} | {buckets[b]} |")
-    lines += (
-        ["", "## Rules and thresholds", ""] + [f"- {rule}" for rule in rules] + [""]
-    )
+    lines += ["", "## Rules and thresholds", ""] + [f"- {rule}" for rule in rules] + [""]
     lines += ["## Examples", ""]
     for cat in shown:
         sample = [r for r in rows if r["category"] == cat][:5]
@@ -1587,9 +1498,7 @@ def instrumental_text(path: Path, old: str) -> str:
 def plain_text(old: str) -> str:
     """The lyric text of an LRC tag without header lines and timestamps."""
     _, lines = lrc_fix.strip_lyric_lines(old)
-    return "\n".join(
-        lrc_fix.capitalize_line(lrc_fix.normalize_text(line)) for line in lines
-    )
+    return "\n".join(lrc_fix.capitalize_line(lrc_fix.normalize_text(line)) for line in lines)
 
 
 def realign(path: Path, args: argparse.Namespace, index: int, total: int) -> None:
@@ -1612,18 +1521,14 @@ def realign(path: Path, args: argparse.Namespace, index: int, total: int) -> Non
             mock.patch.stopall()
 
 
-def apply_fix(
-    t: dict, row: dict, args: argparse.Namespace, index: int, total: int
-) -> str:
+def apply_fix(t: dict, row: dict, args: argparse.Namespace, index: int, total: int) -> str:
     """Repair one track by its tier's action, from the cache. Returns the outcome."""
     path = Path(t["path"])
     old = current_tag(path)
     if old != t["lyrics"]:
         return "skipped: the tag changed since prepare"
     action, tier = row["fix_action"], row["fix_tier"]
-    log_fix(
-        args.work_dir, {"event": "before", "path": t["path"], "old": old, "tier": tier}
-    )
+    log_fix(args.work_dir, {"event": "before", "path": t["path"], "old": old, "tier": tier})
     try:
         if action == "instrumental":
             write_tag(path, instrumental_text(path, old))
@@ -1633,15 +1538,10 @@ def apply_fix(
             realign(path, args, index, total)
     except Exception as exc:  # noqa: BLE001  # one track failing must not stop the others
         write_tag(path, old)
-        log_fix(
-            args.work_dir, {"event": "restored", "path": t["path"], "why": str(exc)}
-        )
+        log_fix(args.work_dir, {"event": "restored", "path": t["path"], "why": str(exc)})
         return f"restored the old tag: {exc}"
     new = current_tag(path)
-    still_bad = (
-        action == "realign"
-        and set(lrc_suspect_reasons(new or "", t["length"])) & STACKED
-    )
+    still_bad = action == "realign" and set(lrc_suspect_reasons(new or "", t["length"])) & STACKED
     if not new or new == old or still_bad:
         write_tag(path, old)
         why = "unchanged" if new == old else "still stacked or empty"
@@ -1673,9 +1573,7 @@ def cmd_fix(args: argparse.Namespace) -> None:
     failures = load_failures(args.work_dir)
     todo = []
     for t in targets:
-        row = analyze_target(
-            t, args, load_lrclib_cached(args.work_dir, t["path"]), failures
-        )
+        row = analyze_target(t, args, load_lrclib_cached(args.work_dir, t["path"]), failures)
         if row["fix_tier"] in tiers:
             todo.append((t, row))
     counts = Counter(row["fix_tier"] for _, row in todo)
@@ -1690,13 +1588,9 @@ def cmd_fix(args: argparse.Namespace) -> None:
             if row.get("sung_ratio") is not None
             else row["category"]
         )
-        print(
-            f"   [{row['fix_tier']}/{row['fix_action']}] {t['artist']} - {t['title']} ({detail})"
-        )
+        print(f"   [{row['fix_tier']}/{row['fix_action']}] {t['artist']} - {t['title']} ({detail})")
     if not args.apply:
-        print(
-            '   preview only: add --apply to write them (the old tags are saved for "revert")'
-        )
+        print('   preview only: add --apply to write them (the old tags are saved for "revert")')
         return
     outcomes: Counter[str] = Counter()
     for i, (t, row) in enumerate(todo, 1):
@@ -1748,9 +1642,7 @@ def cmd_run(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--work-dir", type=Path, default=DEFAULT_WORK_DIR)
-    common.add_argument(
-        "--root", type=Path, default=None, help="library root (default flacroot)"
-    )
+    common.add_argument("--root", type=Path, default=None, help="library root (default flacroot)")
     common.add_argument("--whisper-model", default="medium")
     common.add_argument("--language", default=None)
     common.add_argument("--device", default="cpu")
@@ -1763,20 +1655,12 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--jobs", type=int, default=min(4, os.cpu_count() or 1))
     common.add_argument("--cache-dir", type=Path, default=lrc_fix.DEFAULT_CACHE_DIR)
     common.add_argument("--timeout", type=int, default=3600, help="seconds per track")
-    common.add_argument(
-        "--limit", type=int, default=0, help="transcribe at most N tracks"
-    )
-    common.add_argument(
-        "--offset", type=int, default=0, help="skip the first N targets"
-    )
+    common.add_argument("--limit", type=int, default=0, help="transcribe at most N tracks")
+    common.add_argument("--offset", type=int, default=0, help="skip the first N targets")
     common.add_argument("--no-caffeinate", action="store_true")
     common.add_argument("--skip-lrclib", action="store_true")
-    common.add_argument(
-        "--refetch", action="store_true", help="ignore cached lrclib answers"
-    )
-    common.add_argument(
-        "--reuse-targets", action="store_true", help="run: keep existing targets"
-    )
+    common.add_argument("--refetch", action="store_true", help="ignore cached lrclib answers")
+    common.add_argument("--reuse-targets", action="store_true", help="run: keep existing targets")
     common.add_argument(
         "--apply",
         action="store_true",

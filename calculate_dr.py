@@ -74,9 +74,7 @@ def calculate_dr(albumpath: str) -> None:
         if todo
         else None
     )
-    futures: dict[Path, Future] = (
-        {p: pool.submit(_track_dr, str(p)) for p in todo} if pool else {}
-    )
+    futures: dict[Path, Future] = {p: pool.submit(_track_dr, str(p)) for p in todo} if pool else {}
 
     # Process each album directory separately
     for album_dir, flac_paths in sorted(albums.items()):
@@ -109,11 +107,7 @@ def calculate_dr(albumpath: str) -> None:
 
                 if dr_song == 0:
                     try:
-                        DR = (
-                            futures[p].result()
-                            if p in futures
-                            else _track_dr(fullfilename)
-                        )
+                        DR = futures[p].result() if p in futures else _track_dr(fullfilename)
                     except Exception as e:  # noqa: BLE001
                         logger.error(f"DR calculation failed for {fullfilename}: {e}")
 
@@ -132,9 +126,7 @@ def calculate_dr(albumpath: str) -> None:
                         try:
                             os.utime(fullfilename, None)
                         except Exception as e:  # noqa: BLE001
-                            logger.warning(
-                                f"Could not touch file mtime for {fullfilename}: {e}"
-                            )
+                            logger.warning(f"Could not touch file mtime for {fullfilename}: {e}")
                         dr_song = DR
                         dra_dirty = True
 
@@ -184,16 +176,10 @@ def calculate_dr(albumpath: str) -> None:
                         try:
                             os.utime(fullfilename, None)
                         except Exception as e:  # noqa: BLE001
-                            logger.warning(
-                                f"Could not touch file mtime for {fullfilename}: {e}"
-                            )
+                            logger.warning(f"Could not touch file mtime for {fullfilename}: {e}")
                     except Exception as e:  # noqa: BLE001
-                        logger.warning(
-                            f"Could not update ALBUM_DR for {fullfilename}: {e}"
-                        )
-                logger.success(
-                    f"Album DR updated to {dr_album} ({reason}) for {last_album_name}"
-                )
+                        logger.warning(f"Could not update ALBUM_DR for {fullfilename}: {e}")
+                logger.success(f"Album DR updated to {dr_album} ({reason}) for {last_album_name}")
             else:
                 logger.info(f"Album DR {dr_album} unchanged for {last_album_name}")
         else:

@@ -46,7 +46,7 @@ metadata, paired with a FastAPI/HTMX web UI. Full CLI/API/tag reference: `SPEC.m
 # Code Style
 Enforced by ruff. Key rules:
 
-Line length: 88 (Black-compatible)
+Line length: 100
 Import order: stdlib → third-party → local, separated by blank lines
 No unused imports — ruff will catch them
 f-strings over .format() and % formatting
@@ -91,7 +91,7 @@ After editing any Python file, run these in order on the files you changed:
 - `uv run ruff format --check .` passes (read-only check; it does not rewrite files)
 
 ### Style
-- Line length: 88 (Black-compatible).
+- Line length: 100.
 - Imports: stdlib → third-party → local, separated by blank lines. Ruff sorts them
   (rule set `I`), so don't reorder them manually.
 - No unused imports.

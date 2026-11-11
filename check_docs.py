@@ -56,9 +56,7 @@ def script_flags(source: str) -> set[str]:
 
 def readme_flags(text: str) -> set[str]:
     """Flags in the first column of the table under '### Options'."""
-    match = re.search(
-        r"^### Options\s*$(.*?)(?=^#{1,3} )", text, re.MULTILINE | re.DOTALL
-    )
+    match = re.search(r"^### Options\s*$(.*?)(?=^#{1,3} )", text, re.MULTILINE | re.DOTALL)
     if not match:
         raise ValueError("no '### Options' section in README-lrc_fix.md")
     return set(re.findall(r"^\|\s*`(--[a-z0-9-]+)`", match.group(1), re.MULTILINE))
@@ -66,14 +64,10 @@ def readme_flags(text: str) -> set[str]:
 
 def script_pins(source: str) -> set[str]:
     """Dependency specifiers from the PEP 723 header, e.g. 'torch>=2.4,<2.6'."""
-    block = re.search(
-        r"^# /// script\s*$(.*?)^# ///\s*$", source, re.MULTILINE | re.DOTALL
-    )
+    block = re.search(r"^# /// script\s*$(.*?)^# ///\s*$", source, re.MULTILINE | re.DOTALL)
     if not block:
         raise ValueError("no PEP 723 header in lrc_fix.py")
-    deps = re.search(
-        r"dependencies\s*=\s*\[(.*?)\]", block.group(1).replace("# ", ""), re.DOTALL
-    )
+    deps = re.search(r"dependencies\s*=\s*\[(.*?)\]", block.group(1).replace("# ", ""), re.DOTALL)
     if not deps:
         raise ValueError("no dependencies list in the lrc_fix.py header")
     return set(re.findall(r'["\']([^"\']+)["\']', deps.group(1)))
@@ -81,16 +75,12 @@ def script_pins(source: str) -> set[str]:
 
 def spec_pins(text: str) -> set[str]:
     """Backticked entries on the 'Dependencies' line of the lrc_fix.py section of SPEC.md."""
-    section = re.search(
-        r"^### `lrc_fix\.py`.*?(?=^### `)", text, re.MULTILINE | re.DOTALL
-    )
+    section = re.search(r"^### `lrc_fix\.py`.*?(?=^### `)", text, re.MULTILINE | re.DOTALL)
     if not section:
         raise ValueError("no lrc_fix.py section in SPEC.md")
     line = re.search(r"^\*\*Dependencies:\*\*(.*)$", section.group(0), re.MULTILINE)
     if not line:
-        raise ValueError(
-            "no '**Dependencies:**' line in the lrc_fix.py section of SPEC.md"
-        )
+        raise ValueError("no '**Dependencies:**' line in the lrc_fix.py section of SPEC.md")
     return set(re.findall(r"`([^`]+)`", line.group(1)))
 
 

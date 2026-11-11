@@ -177,9 +177,7 @@ def tagger_url(directory: str) -> str:
     if not scheme or not directory or not flacroot:
         return ""
     rel = (
-        Path(directory).relative_to(flacroot)
-        if directory.startswith(flacroot)
-        else Path(directory)
+        Path(directory).relative_to(flacroot) if directory.startswith(flacroot) else Path(directory)
     )
     return f"{scheme}{Path(flacroot_local) / rel}"
 
@@ -233,8 +231,7 @@ def scan_album_suspects(directory: str, hints: bool = False) -> list[dict]:
         disc, track = _disc_track(song)
         rows.append(
             {
-                "album_artist": _flactag(song, "ALBUMARTIST")
-                or _flactag(song, "ARTIST"),
+                "album_artist": _flactag(song, "ALBUMARTIST") or _flactag(song, "ARTIST"),
                 "album": _decorated_album(song, directory),
                 "song": _flactag(song, "TITLE") or filename,
                 "reasons": "; ".join(reasons),
@@ -381,9 +378,7 @@ def main() -> None:
     if suspects_mode:
         suspect_rows = scan_library_suspects(flacdir, hints_mode)
         logger.info(f"Found {len(suspect_rows)} tracks with a suspect LRC")
-        suspect_rows.sort(
-            key=lambda r: (-r["_n"], r["album"].lower(), r["_disc"], r["_track"])
-        )
+        suspect_rows.sort(key=lambda r: (-r["_n"], r["album"].lower(), r["_disc"], r["_track"]))
         fieldnames = [
             "album_artist",
             "album",

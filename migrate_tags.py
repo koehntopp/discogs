@@ -33,11 +33,7 @@ def process_album_directory(directory: str, write_mode: bool) -> dict | None:
     first_flac = str(PurePosixPath(flacs[0]))
     try:
         audio = FLAC(first_flac)
-        tags = (
-            {k.upper(): [str(x) for x in v] for k, v in audio.tags.items()}
-            if audio.tags
-            else {}
-        )
+        tags = {k.upper(): [str(x) for x in v] for k, v in audio.tags.items()} if audio.tags else {}
     except Exception as e:  # noqa: BLE001
         logger.warning(f"Could not read first track in {directory}: {e}")
         return None
@@ -55,9 +51,7 @@ def process_album_directory(directory: str, write_mode: bool) -> dict | None:
     )
 
     release_year = (
-        flactag(tags, "ALBUM_RELEASE_YEAR")
-        or flactag(tags, "DATE")
-        or flactag(tags, "RELEASEDATE")
+        flactag(tags, "ALBUM_RELEASE_YEAR") or flactag(tags, "DATE") or flactag(tags, "RELEASEDATE")
     )
 
     ed_str = f" ({album_edition})" if album_edition else ""
@@ -101,9 +95,7 @@ def scan_and_migrate(root_dir: str, write_mode: bool, output_csv: str) -> None:
     for root, _dirs, files in os.walk(root_dir):
         if is_album_dir(_dirs, files):
             album_dirs.append(root)
-            _dirs[:] = [
-                d for d in _dirs if not is_disc_dir(d)
-            ]  # discs belong to this album
+            _dirs[:] = [d for d in _dirs if not is_disc_dir(d)]  # discs belong to this album
 
     total_dirs = len(album_dirs)
     logger.info(f"Found {total_dirs} album directories.")
@@ -125,9 +117,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Migrate FLAC tags (ALBUM & VERSION) and generate summary CSV."
     )
-    parser.add_argument(
-        "directory", nargs="?", default=".", help="Library root directory"
-    )
+    parser.add_argument("directory", nargs="?", default=".", help="Library root directory")
     parser.add_argument(
         "--write",
         action="store_true",

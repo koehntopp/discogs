@@ -21,9 +21,7 @@ INSTRUMENTAL_MARKER = "[instrumental:true]"
 MANUAL_INSTRUMENTAL_MARKER = re.compile(
     r"\[\d{2}:\d{2}\.\d{2}\]\s*(?:\[instrumental\]|\(instrumental\))", re.IGNORECASE
 )
-BARE_INSTRUMENTAL_PLACEHOLDER = re.compile(
-    r"^[\[(]?\s*instrumental\s*[\])]?$", re.IGNORECASE
-)
+BARE_INSTRUMENTAL_PLACEHOLDER = re.compile(r"^[\[(]?\s*instrumental\s*[\])]?$", re.IGNORECASE)
 LA_OR_INSTRUMENTAL_TAG = re.compile(r"^\[(la|instrumental):", re.IGNORECASE)
 INSTRUMENTAL_SUFFIX_LINES = (
     "[la:zxx]",
@@ -39,9 +37,7 @@ SUSPECT_MIN_LINES = 3  # a synced LRC with fewer timestamped lines is not judged
 # (2 lines copying the last time is a normal unmatched tail, so a group of 3-4 is not judged.)
 SUSPECT_SHARED_TIMESTAMP = 5
 SUSPECT_SHARED_SHARE = 0.2
-SUSPECT_STACKED_LINES = (
-    3  # lines on one timestamp that count as stacked, for problem-line counts
-)
+SUSPECT_STACKED_LINES = 3  # lines on one timestamp that count as stacked, for problem-line counts
 SUSPECT_END_RATIO = 0.5  # last timestamp before this share of the track length
 
 
@@ -66,9 +62,7 @@ def resolve_artist(albumartist: str, artist: str) -> str:
 
 def make_headers(artist: str, title: str, album: str, length_secs: float) -> str:
     mins, secs = divmod(int(length_secs), 60)
-    return (
-        f"[ar:{artist}]\n[ti:{title}]\n[al:{album}]\n[length:{mins:02d}:{secs:02d}]\n"
-    )
+    return f"[ar:{artist}]\n[ti:{title}]\n[al:{album}]\n[length:{mins:02d}:{secs:02d}]\n"
 
 
 def refresh_headers(
@@ -110,9 +104,7 @@ def refresh_headers(
     return out
 
 
-def apply_headers(
-    lrc: str, artist: str, title: str, album: str, length_secs: float
-) -> str:
+def apply_headers(lrc: str, artist: str, title: str, album: str, length_secs: float) -> str:
     lines = refresh_headers(lrc.splitlines(), artist, title, album, length_secs)
     return "\n".join(line for line in lines if line).strip()
 
@@ -127,9 +119,7 @@ def build_instrumental_marker(id_tags: list[str]) -> str:
     return "\n".join([*filtered, *INSTRUMENTAL_SUFFIX_LINES])
 
 
-def make_instrumental_lrc(
-    artist: str, title: str, album: str, length_secs: float
-) -> str:
+def make_instrumental_lrc(artist: str, title: str, album: str, length_secs: float) -> str:
     """Build the full canonical instrumental marker from scratch — ar/ti/al/length
     plus the instrumental block — for a track with no existing header lines to
     preserve. For refreshing an already-parsed id_tags list in place instead
@@ -161,9 +151,7 @@ def is_bare_instrumental_placeholder(lyric_lines: list[str]) -> bool:
     which requires an existing [MM:SS.xx] timestamp; this catches the earlier,
     pre-LRC-structure case (e.g. a plain LYRICS=Instrumental tag).
     """
-    return len(lyric_lines) == 1 and bool(
-        BARE_INSTRUMENTAL_PLACEHOLDER.match(lyric_lines[0])
-    )
+    return len(lyric_lines) == 1 and bool(BARE_INSTRUMENTAL_PLACEHOLDER.match(lyric_lines[0]))
 
 
 # Typographic characters mapped to plain ASCII in lyric text. Accented letters, other scripts and
@@ -265,10 +253,7 @@ def lrc_suspect_reasons(lrc: str, length_secs: float = 0.0) -> list[str]:
         reasons.append("one_timestamp")
     else:
         biggest = max(counts.values())
-        if (
-            biggest >= SUSPECT_SHARED_TIMESTAMP
-            and biggest / len(times) >= SUSPECT_SHARED_SHARE
-        ):
+        if biggest >= SUSPECT_SHARED_TIMESTAMP and biggest / len(times) >= SUSPECT_SHARED_SHARE:
             reasons.append("shared_timestamps")
         if length_secs > 0 and times[-1] < SUSPECT_END_RATIO * length_secs:
             reasons.append("ends_early")

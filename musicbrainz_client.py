@@ -28,9 +28,7 @@ USER_AGENT = "DiscogsMusicManager/1.0 (+https://github.com/koehntopp/discogs)"
 RELEASE_URL = "https://musicbrainz.org/ws/2/release/"
 MIN_INTERVAL = 1.0  # seconds between requests
 CACHE_DAYS = 30
-TITLE_MATCH = (
-    0.6  # similarity needed when a file is matched by position instead of by id
-)
+TITLE_MATCH = 0.6  # similarity needed when a file is matched by position instead of by id
 ATTEMPTS = 3
 
 _last_request = 0.0
@@ -58,16 +56,12 @@ def fetch_release(mbid: str) -> dict | None:
                 timeout=30,
             )
         except requests.RequestException as exc:
-            logger.warning(
-                f"MusicBrainz request failed for {mbid}: {type(exc).__name__}"
-            )
+            logger.warning(f"MusicBrainz request failed for {mbid}: {type(exc).__name__}")
         else:
             if response.status_code == 200:
                 return response.json()
             if response.status_code not in (429, 502, 503, 504):
-                logger.warning(
-                    f"MusicBrainz answered {response.status_code} for release {mbid}"
-                )
+                logger.warning(f"MusicBrainz answered {response.status_code} for release {mbid}")
                 return None
             retry_after = response.headers.get("Retry-After", "")
             if retry_after.isdigit():
@@ -83,9 +77,7 @@ def work_languages(recording: dict) -> list[str]:
         work = rel.get("work")
         if not work:
             continue
-        langs = work.get("languages") or (
-            [work["language"]] if work.get("language") else []
-        )
+        langs = work.get("languages") or ([work["language"]] if work.get("language") else [])
         for lang in langs:
             if lang not in out:
                 out.append(lang)
@@ -153,10 +145,7 @@ def find_track(
                 return t
     for t in release["tracks"]:
         if t["disc"] == disc and t["position"] == track:
-            if (
-                SequenceMatcher(a=_norm(t["title"]), b=_norm(title)).ratio()
-                >= TITLE_MATCH
-            ):
+            if SequenceMatcher(a=_norm(t["title"]), b=_norm(title)).ratio() >= TITLE_MATCH:
                 return t
             return None
     return None

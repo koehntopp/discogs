@@ -128,9 +128,7 @@ def _ensure_site_favicons() -> None:
 
 _ensure_site_favicons()
 app = FastAPI()
-app.mount(
-    "/favicon", StaticFiles(directory=str(SCRIPTS_DIR / "favicon")), name="favicon"
-)
+app.mount("/favicon", StaticFiles(directory=str(SCRIPTS_DIR / "favicon")), name="favicon")
 
 _sync: dict = {"proc": None}
 _refresh_done: dict = {"pending": False}
@@ -253,9 +251,7 @@ def dr_class(dr: str) -> str:
         return ""
 
 
-def load_albums(
-    search: str = "", sort: str = "Album Artist", order: str = "asc"
-) -> list[dict]:
+def load_albums(search: str = "", sort: str = "Album Artist", order: str = "asc") -> list[dict]:
     df = _cache_load()
     if df.empty:
         return []
@@ -283,9 +279,7 @@ def _tagger_url(row: dict) -> str:
         return ""
     # make path relative to flacroot, then rebase onto flacroot_local
     rel = (
-        Path(directory).relative_to(flacroot)
-        if directory.startswith(flacroot)
-        else Path(directory)
+        Path(directory).relative_to(flacroot) if directory.startswith(flacroot) else Path(directory)
     )
     local_path = str(Path(flacroot_local) / rel)
     return f"{scheme}{local_path}"
@@ -755,9 +749,7 @@ async def refresh_start() -> HTMLResponse:
 
 
 @app.get("/reprocess", response_class=HTMLResponse)
-async def reprocess(
-    artist_dir: str = Query(...), artist_id: str = Query(...)
-) -> HTMLResponse:
+async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)) -> HTMLResponse:
     import os
 
     from mutagen.flac import FLAC
@@ -829,9 +821,7 @@ async def reprocess(
             return None
         row = {
             DISPLAY[t]: (
-                raw.get(t, [""])[0]
-                if isinstance(raw.get(t), list)
-                else raw.get(t, "") or ""
+                raw.get(t, [""])[0] if isinstance(raw.get(t), list) else raw.get(t, "") or ""
             )
             for t in ALBUM_TAGS
         }
@@ -852,9 +842,7 @@ async def reprocess(
         )
         discogs_val = raw.get("DISCOGS_RELEASE_ID", [""])[0] or ""
         edition_val = raw.get("ALBUM_EDITION", [""])[0] or ""
-        format_val = (
-            raw.get("ALBUM_FORMAT", [""])[0] or raw.get("SUBTITLE", [""])[0] or ""
-        )
+        format_val = raw.get("ALBUM_FORMAT", [""])[0] or raw.get("SUBTITLE", [""])[0] or ""
         version_val = raw.get("VERSION", [""])[0] or format_val
 
         row["Catalog Number"] = cat_val
@@ -965,12 +953,8 @@ async def reprocess(
         # Update cache after fixtags/bliss
         from config import flacroot
 
-        new_artist_dir = (
-            str(Path(flacroot) / clean(album_artist)) if album_artist else artist_dir
-        )
-        search_dir = (
-            Path(new_artist_dir) if Path(new_artist_dir).is_dir() else Path(artist_dir)
-        )
+        new_artist_dir = str(Path(flacroot) / clean(album_artist)) if album_artist else artist_dir
+        search_dir = Path(new_artist_dir) if Path(new_artist_dir).is_dir() else Path(artist_dir)
         target_folders = set()
         if search_dir.is_dir():
             for flac_p in search_dir.rglob("*.flac"):
@@ -1099,9 +1083,7 @@ async def sync_start() -> HTMLResponse:
     sync_cmd = _sync_command(config_read())
 
     if not sync_cmd:
-        logger.error(
-            "sync: sync_script not set in config, or the script does not exist"
-        )
+        logger.error("sync: sync_script not set in config, or the script does not exist")
     else:
         if _sync.get("proc") and _sync["proc"].poll() is None:
             _sync["proc"].terminate()
@@ -1326,9 +1308,7 @@ def _read_log_html() -> str:
             ts = rec.get("timestamp", "")
             event = rec.get("event", line)
             # Extra keys beyond the standard three
-            extras = {
-                k: v for k, v in rec.items() if k not in ("level", "timestamp", "event")
-            }
+            extras = {k: v for k, v in rec.items() if k not in ("level", "timestamp", "event")}
             text = f"{ts} | {level:<8} | {event}"
             if extras:
                 text += "  " + "  ".join(f"{k}={v}" for k, v in extras.items())
@@ -1337,9 +1317,7 @@ def _read_log_html() -> str:
             text = line
         colour = _LOG_COLOURS.get(level)
         escaped = escape(text)
-        out.append(
-            f'<span style="color:{colour}">{escaped}</span>' if colour else escaped
-        )
+        out.append(f'<span style="color:{colour}">{escaped}</span>' if colour else escaped)
     return "\n".join(out)
 
 
@@ -1497,9 +1475,7 @@ def _cache_link_favicon(n: int, url: str) -> None:
         favicon_url = f"{parsed.scheme}://{parsed.netloc}{path}"
         try:
             r = _req.get(favicon_url, timeout=5)
-            logger.info(
-                f"Favicon {n}: {favicon_url} → {r.status_code} ({len(r.content)} bytes)"
-            )
+            logger.info(f"Favicon {n}: {favicon_url} → {r.status_code} ({len(r.content)} bytes)")
             data = r.content
             is_image = (
                 data[:4] == b"\x89PNG"
@@ -1513,9 +1489,7 @@ def _cache_link_favicon(n: int, url: str) -> None:
                 dest.write_bytes(data)
                 return
         except Exception as e:  # noqa: BLE001
-            logger.warning(
-                f"Could not fetch favicon for link {n} at {favicon_url}: {e}"
-            )
+            logger.warning(f"Could not fetch favicon for link {n} at {favicon_url}: {e}")
     logger.warning(f"No favicon found for link {n} ({url})")
 
 
@@ -1530,11 +1504,7 @@ def _render_link_buttons() -> str:
         if not cached.exists():
             _cache_link_favicon(i, url)
         favicon_src = f"/link-favicon/{i}" if cached.exists() else ""
-        img = (
-            f'<img src="{favicon_src}" width="16" height="16" alt="" />'
-            if favicon_src
-            else "🔗"
-        )
+        img = f'<img src="{favicon_src}" width="16" height="16" alt="" />' if favicon_src else "🔗"
         buttons.append(
             f'<a href="{escape(url)}" target="_blank" rel="noopener" class="link-url-btn" title="{escape(url)}">'
             f"{img}"
@@ -1574,9 +1544,7 @@ if __name__ == "__main__":
 
     cfg_dir = _config_dir()
     logger.info(f"Resolved config dir: {cfg_dir}")
-    logger.info(
-        f"config dir exists: {cfg_dir.exists()}, writable: {os.access(cfg_dir, os.W_OK)}"
-    )
+    logger.info(f"config dir exists: {cfg_dir.exists()}, writable: {os.access(cfg_dir, os.W_OK)}")
 
     try:
         import config

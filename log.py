@@ -20,9 +20,7 @@ logging.addLevelName(SUCCESS, "SUCCESS")
 
 
 # Add success method to standard logging.Logger so stdlib wrappers can delegate success() calls
-def _logging_success(
-    self: logging.Logger, msg: object, *args: object, **kwargs: object
-) -> None:
+def _logging_success(self: logging.Logger, msg: object, *args: object, **kwargs: object) -> None:
     if self.isEnabledFor(SUCCESS):
         self._log(SUCCESS, msg, args, **kwargs)
 
@@ -52,8 +50,7 @@ _shared_processors = [
 ]
 
 structlog.configure(
-    processors=_shared_processors
-    + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
+    processors=_shared_processors + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
     logger_factory=structlog.stdlib.LoggerFactory(),
     wrapper_class=CustomBoundLogger,
     cache_logger_on_first_use=True,
@@ -160,9 +157,7 @@ if not os.environ.get("DISCOGS_CHILD"):
                     super().emit(record)
 
         _syslog_handler = _SafeSysLogHandler(address=(syslog_host, int(syslog_port)))
-        _syslog_handler.setFormatter(
-            logging.Formatter("discogs %(levelname)s %(message)s")
-        )
+        _syslog_handler.setFormatter(logging.Formatter("discogs %(levelname)s %(message)s"))
         _root.addHandler(_syslog_handler)
     except ImportError:
         pass

@@ -38,24 +38,18 @@ def album_root_of_file(flac_path: str | Path) -> str:
 
 def is_album_dir(dirs: list[str], files: list[str]) -> bool:
     """os.walk helper: True if a directory has FLACs itself or in ``Disc N`` subfolders."""
-    return any(f.lower().endswith(".flac") for f in files) or any(
-        is_disc_dir(d) for d in dirs
-    )
+    return any(f.lower().endswith(".flac") for f in files) or any(is_disc_dir(d) for d in dirs)
 
 
 def album_flacs(directory: str) -> list[str]:
     """FLAC paths of an album: its own files, then those of its ``Disc N`` subfolders in order."""
     names = os.listdir(directory)
-    flacs = [
-        os.path.join(directory, f) for f in sorted(names) if f.lower().endswith(".flac")
-    ]
+    flacs = [os.path.join(directory, f) for f in sorted(names) if f.lower().endswith(".flac")]
     discs = sorted((int(m.group(1)), n) for n in names if (m := DISC_DIR_RE.match(n)))
     for _, n in discs:
         sub = os.path.join(directory, n)
         if os.path.isdir(sub):
             flacs += [
-                os.path.join(sub, f)
-                for f in sorted(os.listdir(sub))
-                if f.lower().endswith(".flac")
+                os.path.join(sub, f) for f in sorted(os.listdir(sub)) if f.lower().endswith(".flac")
             ]
     return flacs

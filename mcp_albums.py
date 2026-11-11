@@ -58,11 +58,7 @@ def get_album_stats() -> dict:
     if not rows:
         return {}
     drs = [int(r["DR"]) for r in rows if r.get("DR", "").strip().isdigit()]
-    years = [
-        int(r["Original Date"])
-        for r in rows
-        if r.get("Original Date", "").strip().isdigit()
-    ]
+    years = [int(r["Original Date"]) for r in rows if r.get("Original Date", "").strip().isdigit()]
     return {
         "total_albums": len(rows),
         "dr_min": min(drs) if drs else None,
@@ -78,9 +74,7 @@ def get_albums_by_dr(min_dr: int = 0, max_dr: int = 20) -> list[dict]:
     """Return albums with DR score in the given range (inclusive)."""
     rows = _load()
     return [
-        r
-        for r in rows
-        if r.get("DR", "").strip().isdigit() and min_dr <= int(r["DR"]) <= max_dr
+        r for r in rows if r.get("DR", "").strip().isdigit() and min_dr <= int(r["DR"]) <= max_dr
     ]
 
 

@@ -143,9 +143,7 @@ def multi_disc_albums(flac_files: list[str], root_dir: str) -> set[str]:
             multi.add(album_dir)
         elif album_dir not in seen:
             seen.add(album_dir)
-            if os.path.isdir(album_dir) and any(
-                is_disc_dir(d) for d in os.listdir(album_dir)
-            ):
+            if os.path.isdir(album_dir) and any(is_disc_dir(d) for d in os.listdir(album_dir)):
                 multi.add(album_dir)
     return multi
 
@@ -262,9 +260,7 @@ class _AlbumReport:
 
     def flush(self) -> None:
         if self.count:
-            success(
-                f"Moved album {self.name} ({self.count} track{'s' if self.count != 1 else ''})"
-            )
+            success(f"Moved album {self.name} ({self.count} track{'s' if self.count != 1 else ''})")
         self.name, self.count = "", 0
 
 
@@ -372,18 +368,12 @@ def movefiles(flacroot: str, full: bool = False) -> None:
     # If full==True, scan the whole tree recursively.
     logger.info(
         f"Checking FLAC folders in {flacroot}"
-        + (
-            " (full recursive)"
-            if full
-            else " (root-level files and flat multi-disc albums)"
-        )
+        + (" (full recursive)" if full else " (root-level files and flat multi-disc albums)")
     )
     report = _AlbumReport()
     flac_files = [
         str(PurePosixPath(p))
-        for p in (
-            Path(flacroot).rglob("*.flac") if full else Path(flacroot).glob("*.flac")
-        )
+        for p in (Path(flacroot).rglob("*.flac") if full else Path(flacroot).glob("*.flac"))
     ]
     if not full:
         flac_files += flat_multidisc_files(flacroot)
@@ -461,9 +451,7 @@ def ingestfiles(ingest_dir: str) -> None:
                 fullfilename, flacroot, multi_disc
             )
             if not metadata["track"] or not metadata["album"]:
-                logger.warning(
-                    f"Skipping ingest for file with unreadable tags: {fullfilename}"
-                )
+                logger.warning(f"Skipping ingest for file with unreadable tags: {fullfilename}")
                 continue
 
             if move_flac_file(fullfilename, target_path, target_filename, flacroot):
@@ -493,9 +481,7 @@ def removedirs(rootdir: str) -> None:
         if list(dir_path.rglob("*.flac")) or list(dir_path.rglob("*.mp3")):
             continue
         # Skip directories the SMB server is already cleaning up
-        if any(
-            f.name.startswith(".smbdelete") for f in dir_path.rglob("*") if f.is_file()
-        ):
+        if any(f.name.startswith(".smbdelete") for f in dir_path.rglob("*") if f.is_file()):
             logger.info(f"Skipping SMB-pending directory {dir_path}")
             continue
         # No music anywhere under this dir — delete files then the directory
@@ -559,20 +545,14 @@ def checkMP3() -> None:
 
                     salbumtitle = clean(tags.get("ALBUM", ["Unknown Album"])[0])
                     sartist = clean(
-                        tags.get("ALBUMARTIST", tags.get("ARTIST", ["Unknown Artist"]))[
-                            0
-                        ]
+                        tags.get("ALBUMARTIST", tags.get("ARTIST", ["Unknown Artist"]))[0]
                     )
 
                     if not os.path.isfile(firstflac):
-                        logger.warning(
-                            f"MP3 but no FLAC - deleting {sartist} - {salbumtitle}"
-                        )
+                        logger.warning(f"MP3 but no FLAC - deleting {sartist} - {salbumtitle}")
                         shutil.rmtree(mp3dir)
                     elif flac_mtime > mp3_mtime:
-                        logger.warning(
-                            f"FLAC file newer - deleting {sartist} - {salbumtitle}"
-                        )
+                        logger.warning(f"FLAC file newer - deleting {sartist} - {salbumtitle}")
                         shutil.rmtree(mp3dir)
 
                 except Exception as e:  # noqa: BLE001
@@ -600,9 +580,7 @@ def createMP3() -> None:
     with scan_progress(len(album_dirs), "Transcoding MP3s", Transcoded=0) as tick:
         for album_dir in album_dirs:
             flac_files = sorted(
-                os.path.join(album_dir, f)
-                for f in os.listdir(album_dir)
-                if f.endswith(".flac")
+                os.path.join(album_dir, f) for f in os.listdir(album_dir) if f.endswith(".flac")
             )
             if not flac_files:
                 tick()
@@ -640,16 +618,12 @@ def createMP3() -> None:
                             "2",
                             mp3filename,
                         ]
-                        ret = subprocess.run(
-                            flac2mp3, capture_output=True, text=True, check=False
-                        )
+                        ret = subprocess.run(flac2mp3, capture_output=True, text=True, check=False)
                         if ret.returncode == 0:
                             album_converted_count += 1
                         else:
                             err_msg = (
-                                ret.stderr.strip()
-                                if ret.stderr
-                                else f"exit code {ret.returncode}"
+                                ret.stderr.strip() if ret.stderr else f"exit code {ret.returncode}"
                             )
                             display_album = salbumtitle or os.path.basename(album_dir)
                             track_name = os.path.basename(flacfilename)
@@ -687,12 +661,8 @@ def main() -> None:
         nargs="?",
         help="Ingest FLAC files from this directory into the library",
     )
-    parser.add_argument(
-        "--mp3", action="store_true", help="Create missing MP3 files from FLACs"
-    )
-    parser.add_argument(
-        "--full", action="store_true", help="Scan entire flacroot recursively"
-    )
+    parser.add_argument("--mp3", action="store_true", help="Create missing MP3 files from FLACs")
+    parser.add_argument("--full", action="store_true", help="Scan entire flacroot recursively")
     parser.add_argument(
         "--ingest",
         type=str,

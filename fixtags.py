@@ -109,9 +109,7 @@ def resize_covers(directory: str, max_size: int = _cover_max_size) -> None:
                     img = Image.open(io.BytesIO(pic.data))
                     img.load()
                 except Exception as err:  # noqa: BLE001
-                    logger.warning(
-                        f"Corrupt or unparseable embedded image in {flac_path}: {err}"
-                    )
+                    logger.warning(f"Corrupt or unparseable embedded image in {flac_path}: {err}")
                     new_pictures.append(pic)
                     continue
                 w, h = img.size
@@ -183,9 +181,7 @@ def musicbrainz_release_id(tags: dict[str, list[str]]) -> str:
     return ""
 
 
-def load_language_release(
-    first_tags: dict[str, list[str]], refresh: bool = False
-) -> dict | None:
+def load_language_release(first_tags: dict[str, list[str]], refresh: bool = False) -> dict | None:
     """The album's parsed MusicBrainz release, or None: switched off in config, no
     MUSICBRAINZ_ALBUMID, or MusicBrainz could not be asked (then language tags stay as they are)."""
     if not _musicbrainz_languages:
@@ -252,9 +248,7 @@ def fix_languages(album_dir: str, refresh: bool = False) -> None:
     try:
         first = FLAC(str(files[0]))
         first_tags = (
-            {k.upper(): [str(x) for x in v] for k, v in first.tags.items()}
-            if first.tags
-            else {}
+            {k.upper(): [str(x) for x in v] for k, v in first.tags.items()} if first.tags else {}
         )
     except Exception as e:  # noqa: BLE001
         logger.warning(f"Skipping unreadable file {files[0]}: {e}")
@@ -379,9 +373,7 @@ def discogs_extra_tags(data: dict) -> dict[str, list[str]]:
     return tags
 
 
-def fixdir(
-    fixdir: str, dclient: discogs_client.Client, refresh_musicbrainz: bool = False
-) -> None:
+def fixdir(fixdir: str, dclient: discogs_client.Client, refresh_musicbrainz: bool = False) -> None:
     """Enrich all FLAC files in a single album directory with Discogs metadata.
 
     Reads the DISCOGS_RELEASE_ID tag from the first FLAC file found, queries the
@@ -424,9 +416,7 @@ def fixdir(
     try:
         audio = FLAC(first_flac_path)
         first_tags = (
-            {k.upper(): [str(x) for x in v] for k, v in audio.tags.items()}
-            if audio.tags
-            else {}
+            {k.upper(): [str(x) for x in v] for k, v in audio.tags.items()} if audio.tags else {}
         )
         first_sample_rate = audio.info.sample_rate if audio.info else 44100
     except Exception as e:  # noqa: BLE001
@@ -447,9 +437,7 @@ def fixdir(
         release_title = discogs_fetch(lambda: drelease.title.strip())
         try:
             master = discogs_fetch(lambda: drelease.master)
-            master_title = (
-                discogs_fetch(lambda: master.title.strip()) if master else release_title
-            )
+            master_title = discogs_fetch(lambda: master.title.strip()) if master else release_title
         except Exception:  # noqa: BLE001
             master = None
             master_title = release_title
@@ -471,17 +459,11 @@ def fixdir(
                 return 0
 
         max_rate_hz = max(
-            (
-                _read_sr(str(p))
-                for p in Path(fixdir).rglob("*.flac")
-                if p.suffix == ".flac"
-            ),
+            (_read_sr(str(p)) for p in Path(fixdir).rglob("*.flac") if p.suffix == ".flac"),
             default=first_sample_rate,
         )
         max_res_str = (
-            f"{max_rate_hz / 1000:.1f}kHz".replace(".0kHz", "kHz")
-            if max_rate_hz > 0
-            else "44.1kHz"
+            f"{max_rate_hz / 1000:.1f}kHz".replace(".0kHz", "kHz") if max_rate_hz > 0 else "44.1kHz"
         )
 
         # Tool-written tags are never read back as input: the release year comes only from
@@ -490,9 +472,7 @@ def fixdir(
         album_year_release = release_year
         try:
             album_year_master = (
-                discogs_fetch(lambda: master.main_release.year)
-                if master
-                else album_year_release
+                discogs_fetch(lambda: master.main_release.year) if master else album_year_release
             )
         except Exception:  # noqa: BLE001
             logger.warning(
@@ -619,17 +599,11 @@ def fixdir(
                 legacy_grouping = [t for t in ("WORK", "PART") if t in audio.tags]
 
                 language_changed = apply_language(audio, mb_release)
-                stale_removed = (
-                    bool(legacy_grouping) or disc_subtitle_stale or language_changed
-                )
+                stale_removed = bool(legacy_grouping) or disc_subtitle_stale or language_changed
                 for opt_tag in [
                     *managed_optional,
                     *DISCOGS_EXTRA_FIXED,
-                    *(
-                        k
-                        for k in audio.tags
-                        if k.upper().startswith(DISCOGS_TAG_PREFIXES)
-                    ),
+                    *(k for k in audio.tags if k.upper().startswith(DISCOGS_TAG_PREFIXES)),
                 ]:
                     if opt_tag not in new_tags and opt_tag in audio.tags:
                         del audio.tags[opt_tag]
@@ -639,8 +613,7 @@ def fixdir(
                     stale_removed
                     or disc_subtitle_changed
                     or any(
-                        [str(x) for x in audio.tags.get(k, [])] != v
-                        for k, v in new_tags.items()
+                        [str(x) for x in audio.tags.get(k, [])] != v for k, v in new_tags.items()
                     )
                 )
 
@@ -664,9 +637,7 @@ def fixdir(
                         try:
                             os.utime(fullfilename, None)
                         except Exception as e:  # noqa: BLE001
-                            logger.warning(
-                                f"Could not touch file mtime for {fullfilename}: {e}"
-                            )
+                            logger.warning(f"Could not touch file mtime for {fullfilename}: {e}")
                         flac_files += 1
                     except Exception as e:  # noqa: BLE001
                         logger.warning(f"Could not save tags for {fullfilename}: {e}")
@@ -693,12 +664,8 @@ def main() -> None:
     config.py when none is given. Creates a single authenticated Discogs client and
     processes each discovered album directory in sequence.
     """
-    parser = argparse.ArgumentParser(
-        description="Fix FLAC file tags using Discogs metadata"
-    )
-    parser.add_argument(
-        "directory", nargs="?", help="directory containing FLAC files to process"
-    )
+    parser = argparse.ArgumentParser(description="Fix FLAC file tags using Discogs metadata")
+    parser.add_argument("directory", nargs="?", help="directory containing FLAC files to process")
     parser.add_argument(
         "--languages-only",
         action="store_true",

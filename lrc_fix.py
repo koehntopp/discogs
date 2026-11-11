@@ -91,15 +91,9 @@ from lrc_format import is_bare_instrumental_placeholder as is_instrumental
 DEFAULT_LINE_GAP = 4.0  # seconds per line when fewer than two lines matched
 TRAILING_MARGIN = 0.5  # keep spread tail lines this far before the end of the track
 FUZZY_MIN_LENGTH = 4  # words shorter than this are only matched exactly
-FUZZY_WORD_CUTOFF = (
-    0.8  # difflib similarity at which a misheard word counts as the lyric word
-)
-LINE_MIN_SHARE = (
-    0.6  # share of a line's words a transcript stretch must hold to be a candidate
-)
-MAX_SPREAD_STEP = (
-    8.0  # never spread head/tail lines further apart than this, in seconds
-)
+FUZZY_WORD_CUTOFF = 0.8  # difflib similarity at which a misheard word counts as the lyric word
+LINE_MIN_SHARE = 0.6  # share of a line's words a transcript stretch must hold to be a candidate
+MAX_SPREAD_STEP = 8.0  # never spread head/tail lines further apart than this, in seconds
 
 LRC_TIMESTAMP_RE = re.compile(r"^\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]\s*")
 
@@ -203,9 +197,7 @@ def ensure_id_tags(id_tags: list[str], flac: FLAC) -> list[str]:
     separately, by stamp_creator_tag, and only when a run actually changes
     lyric content (see CLAUDE.md).
     """
-    artist = resolve_artist(
-        _flac_value(flac, "ALBUMARTIST"), _flac_value(flac, "ARTIST")
-    )
+    artist = resolve_artist(_flac_value(flac, "ALBUMARTIST"), _flac_value(flac, "ARTIST"))
     title = _flac_value(flac, "TITLE")
     album = _flac_value(flac, "ALBUM")
     length = getattr(flac.info, "length", None) or 0.0
@@ -303,7 +295,9 @@ def has_speech(audio_path: Path) -> bool:
     return len(timestamps) > 0
 
 
-LANGUAGE_TAG = "LYRICS_LANGUAGE"  # written by fixtags.py from MusicBrainz, ISO 639-3, one value per language
+LANGUAGE_TAG = (
+    "LYRICS_LANGUAGE"  # written by fixtags.py from MusicBrainz, ISO 639-3, one value per language
+)
 # ISO 639-3 (the codes MusicBrainz uses) -> whisper's language code, for every language whisper
 # knows. Generated from faster_whisper.tokenizer._LANGUAGE_CODES and pycountry; the repository's
 # tests regenerate it and compare.
@@ -425,14 +419,10 @@ def align_languages() -> set[str] | None:
         from whisperx import alignment
     except ImportError:
         return None
-    return set(alignment.DEFAULT_ALIGN_MODELS_TORCH) | set(
-        alignment.DEFAULT_ALIGN_MODELS_HF
-    )
+    return set(alignment.DEFAULT_ALIGN_MODELS_TORCH) | set(alignment.DEFAULT_ALIGN_MODELS_HF)
 
 
-def track_language(
-    flac: FLAC, args: argparse.Namespace
-) -> tuple[str | None, str | None]:
+def track_language(flac: FLAC, args: argparse.Namespace) -> tuple[str | None, str | None]:
     """(language to force, reason to skip the track); (None, None) means auto-detect.
 
     --language always wins. Otherwise the LYRICS_LANGUAGE tag (sung language per track, from
@@ -445,9 +435,7 @@ def track_language(
         return args.language, None
     if getattr(args, "ignore_language_tag", False):
         return None, None
-    values = [
-        str(v).strip().lower() for v in (flac.get(LANGUAGE_TAG) or []) if str(v).strip()
-    ]
+    values = [str(v).strip().lower() for v in (flac.get(LANGUAGE_TAG) or []) if str(v).strip()]
     if not values:
         return None, None
     if values == ["zxx"]:
@@ -455,11 +443,7 @@ def track_language(
     if len(set(values)) > 1 or values[0] in ("mul", "und", "mis"):
         return None, None
     code = values[0]
-    whisper = (
-        ISO3_TO_WHISPER.get(code)
-        or ISO3_ALIASES.get(code)
-        or LANGUAGE_FALLBACKS.get(code)
-    )
+    whisper = ISO3_TO_WHISPER.get(code) or ISO3_ALIASES.get(code) or LANGUAGE_FALLBACKS.get(code)
     if whisper is None:
         return None, f"language {code} is not supported by whisper"
     aligned = align_languages()
@@ -510,9 +494,7 @@ def transcribe_words(
             f"   no alignment model for language {result['language']}; "
             f"transcribing again as {fallback_language}"
         )
-        result = model.transcribe(
-            audio, language=fallback_language, print_progress=True
-        )
+        result = model.transcribe(audio, language=fallback_language, print_progress=True)
         align_model, metadata = whisperx.load_align_model(
             language_code=result["language"], device=device
         )
@@ -616,9 +598,7 @@ def match_per_line(lyric_lines: list[str], words: list[dict]) -> list[float | No
     if not asr or not any(lines):
         return times
     vocabulary = sorted({tok for tokens in lines for tok in tokens})
-    spelled: dict[
-        str, str
-    ] = {}  # a misheard word is read as the lyric word it nearly is
+    spelled: dict[str, str] = {}  # a misheard word is read as the lyric word it nearly is
     for tok in set(asr):
         if tok not in vocabulary and len(tok) >= FUZZY_MIN_LENGTH:
             close = difflib.get_close_matches(tok, vocabulary, 1, FUZZY_WORD_CUTOFF)
@@ -656,9 +636,7 @@ def match_per_line(lyric_lines: list[str], words: list[dict]) -> list[float | No
         candidates.append([(j, last, w) for j, (last, w) in sorted(found.items())])
 
     # best[i][c] = (total weight, previous state) for choosing candidate c on line i
-    states: list[
-        tuple[int, int, float, int | None]
-    ] = []  # (line, cand idx, total, prev state)
+    states: list[tuple[int, int, float, int | None]] = []  # (line, cand idx, total, prev state)
     for i, cands in enumerate(candidates):
         new_states = []
         for c, (first, _last, weight) in enumerate(cands):
@@ -730,9 +708,7 @@ def alignment_rejection(
     pairs are mostly not in the transcript: single common words can match enough lines to pass the
     line check although the song is not what the text says.
     """
-    counted = [
-        t for line, t in zip(lyric_lines, raw_times, strict=False) if _tokenize(line)
-    ]
+    counted = [t for line, t in zip(lyric_lines, raw_times, strict=False) if _tokenize(line)]
     if not counted:
         return None
     matched = sum(t is not None for t in counted)
@@ -828,9 +804,7 @@ def _fill_and_clamp(times: list[float | None], length: float | None = None) -> N
         return
 
     per_line = [(times[b] - times[a]) / (b - a) for a, b in pairwise(anchors)]
-    gap = min(
-        statistics.median(per_line) if per_line else DEFAULT_LINE_GAP, MAX_SPREAD_STEP
-    )
+    gap = min(statistics.median(per_line) if per_line else DEFAULT_LINE_GAP, MAX_SPREAD_STEP)
 
     n_lead = anchors[0]
     if n_lead:
@@ -865,9 +839,7 @@ def _fill_and_clamp(times: list[float | None], length: float | None = None) -> N
 
 
 def format_lrc_timestamp(seconds: float) -> str:
-    minutes, centis = divmod(
-        round(seconds * 100), 6000
-    )  # round first: 59.996 must not print 60.00
+    minutes, centis = divmod(round(seconds * 100), 6000)  # round first: 59.996 must not print 60.00
     return f"[{minutes:02d}:{centis / 100:05.2f}]"
 
 
@@ -967,9 +939,7 @@ def save_cache(
         payload = {**key, "words": words, "onsets": onsets}
         if language_used:
             payload["language_used"] = language_used
-        tmp_path.write_text(
-            json.dumps(payload, separators=(",", ":")), encoding="utf-8"
-        )
+        tmp_path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
         os.replace(tmp_path, path)
     except OSError as exc:
         print(f"   warning: could not write cache {path}: {exc}", file=sys.stderr)
@@ -997,9 +967,7 @@ def process_file(path: Path, args: argparse.Namespace, index: int, total: int) -
             print("   already complete, no change")
             return
         write_lyrics_tag(flac, new_lrc, args.dry_run)
-        print(
-            f"   {'would complete' if args.dry_run else 'completed'} instrumental marker"
-        )
+        print(f"   {'would complete' if args.dry_run else 'completed'} instrumental marker")
         return
     id_tags = ensure_id_tags(id_tags, flac)
 
@@ -1036,20 +1004,14 @@ def process_file(path: Path, args: argparse.Namespace, index: int, total: int) -
                 audio["path"] = path
                 if not args.no_isolate_vocals:
                     print(f"   isolating vocals (demucs, {args.jobs} job(s))...")
-                    audio["path"] = separate_vocals(
-                        path, args.device, args.jobs, Path(tmp)
-                    )
+                    audio["path"] = separate_vocals(path, args.device, args.jobs, Path(tmp))
             return audio["path"]
 
         if words is None:
             audio_path = get_audio()
             shown = f", language {language}" if language else ""
             print(f"   transcribing ({args.whisper_model}, {args.device}{shown})...")
-            fallback = (
-                None
-                if args.fallback_language.lower() == "none"
-                else args.fallback_language
-            )
+            fallback = None if args.fallback_language.lower() == "none" else args.fallback_language
             words, language_used = transcribe_words(
                 audio_path,
                 args.whisper_model,
@@ -1097,21 +1059,15 @@ def process_file(path: Path, args: argparse.Namespace, index: int, total: int) -
             if cache_file:
                 save_cache(cache_file, key, words, onsets, language_used)
 
-    times = finalize_times(
-        raw_times, onsets, float(flac.info.length) if flac.info else None
-    )
+    times = finalize_times(raw_times, onsets, float(flac.info.length) if flac.info else None)
 
     new_lrc = build_lrc(id_tags, lyric_lines, times)
     if not args.no_quality_gate:
         broken = [
-            r
-            for r in lrc_suspect_reasons(new_lrc)
-            if r in ("one_timestamp", "shared_timestamps")
+            r for r in lrc_suspect_reasons(new_lrc) if r in ("one_timestamp", "shared_timestamps")
         ]
         if broken:
-            print(
-                f"   skip: result would have {' and '.join(broken)} - tag left unchanged"
-            )
+            print(f"   skip: result would have {' and '.join(broken)} - tag left unchanged")
             return
     if _strip_metadata_lines(new_lrc) != _strip_metadata_lines(raw):
         id_tags = stamp_creator_tag(id_tags)

@@ -46,11 +46,7 @@ def calculate_fp(albumpath: str) -> None:
         except Exception:  # noqa: BLE001
             return False  # unreadable: the main loop logs it
         return not str(
-            (
-                tags.get("ACOUSTID_FINGERPRINT")
-                or tags.get("ACOUSTID FINGERPRINT")
-                or [""]
-            )[0]
+            (tags.get("ACOUSTID_FINGERPRINT") or tags.get("ACOUSTID FINGERPRINT") or [""])[0]
         ).strip()
 
     todo = [p for p in paths if needs_fp(p)]
@@ -85,9 +81,7 @@ def calculate_fp(albumpath: str) -> None:
                 try:
                     _duration, raw_fp = futures[p].result()
                     fingerprint = (
-                        raw_fp.decode("utf-8")
-                        if isinstance(raw_fp, bytes)
-                        else str(raw_fp).strip()
+                        raw_fp.decode("utf-8") if isinstance(raw_fp, bytes) else str(raw_fp).strip()
                     )
                     # Reopen: calculate_dr and rsgain run in parallel (nzbfix) and may have written tags
                     # while fpcalc ran; saving the copy read before the wait would erase their tags.
@@ -99,16 +93,12 @@ def calculate_fp(albumpath: str) -> None:
                     try:
                         os.utime(fullfilename, None)
                     except Exception as e:  # noqa: BLE001
-                        logger.warning(
-                            f"Could not touch file mtime for {fullfilename}: {e}"
-                        )
+                        logger.warning(f"Could not touch file mtime for {fullfilename}: {e}")
                     title_str = (audio.tags.get("TITLE") or ["Unknown"])[0]
                     logger.info(f"Calculated AcoustID fingerprint for {title_str}")
                     calculated += 1
                 except Exception as e:  # noqa: BLE001
-                    logger.error(
-                        f"Fingerprint calculation failed for {fullfilename}: {e}"
-                    )
+                    logger.error(f"Fingerprint calculation failed for {fullfilename}: {e}")
         except Exception as e:  # noqa: BLE001
             logger.warning(f"Could not read FLAC file {fullfilename}: {e}")
             continue

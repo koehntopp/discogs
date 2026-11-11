@@ -135,9 +135,7 @@ def main() -> None:
         call([str(SCRIPTS_DIR / "fixtags.py"), nzbdir], env=child_env)
         call([str(SCRIPTS_DIR / "update_lyrics.py"), nzbdir], env=child_env)
     except KeyboardInterrupt:
-        logger.warning(
-            "Pipeline interrupted by user (Ctrl+C). Terminating processes..."
-        )
+        logger.warning("Pipeline interrupted by user (Ctrl+C). Terminating processes...")
         for _name, p in running:
             # best-effort cleanup while interrupted
             with contextlib.suppress(Exception):

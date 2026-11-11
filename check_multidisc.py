@@ -55,9 +55,7 @@ def tagger_url(directory: str) -> str:
     if not scheme or not directory or not flacroot:
         return ""
     rel = (
-        Path(directory).relative_to(flacroot)
-        if directory.startswith(flacroot)
-        else Path(directory)
+        Path(directory).relative_to(flacroot) if directory.startswith(flacroot) else Path(directory)
     )
     return f"{scheme}{Path(flacroot_local) / rel}"
 
@@ -96,9 +94,7 @@ def scan_album(directory: str) -> dict | None:
                 subtitles.add(value.strip())
 
     disc_dirs = [d for d in os.listdir(directory) if is_disc_dir(d)]
-    discs = max(
-        disc_count, max(disc_numbers, default=0), len(disc_numbers), len(disc_dirs), 1
-    )
+    discs = max(disc_count, max(disc_numbers, default=0), len(disc_numbers), len(disc_dirs), 1)
     reasons = []
     if discs > 1:
         reasons.append("disc")
@@ -133,18 +129,12 @@ def scan_library(flacdir: str) -> list[dict]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Report albums that classify as multi disc."
-    )
-    parser.add_argument(
-        "flacdir", nargs="?", help="library root (default: config.flacroot_local)"
-    )
+    parser = argparse.ArgumentParser(description="Report albums that classify as multi disc.")
+    parser.add_argument("flacdir", nargs="?", help="library root (default: config.flacroot_local)")
     parser.add_argument(
         "--csv", default="multidisc.csv", help="output CSV (default: multidisc.csv)"
     )
-    parser.add_argument(
-        "--reason", choices=REASONS, help="only albums matching this criterion"
-    )
+    parser.add_argument("--reason", choices=REASONS, help="only albums matching this criterion")
     args = parser.parse_args()
 
     flacdir = args.flacdir
@@ -161,9 +151,7 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(rows)
     for reason in REASONS:
-        logger.info(
-            "multidisc", reason=reason, albums=sum(reason in r["reasons"] for r in rows)
-        )
+        logger.info("multidisc", reason=reason, albums=sum(reason in r["reasons"] for r in rows))
     logger.info("done", albums=len(rows), csv=args.csv)
 
 
