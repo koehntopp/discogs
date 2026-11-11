@@ -43,15 +43,84 @@ metadata, paired with a FastAPI/HTMX web UI. Full CLI/API/tag reference: `SPEC.m
 
 ## Code Style & Formatting (Ruff)
 
-- Single quotes (`'...'`) for string literals.
-- Tabs for indentation (`indent-width = 4`).
-- Maximum line length: 100 characters.
-- Run formatter and linter:
-  ```bash
-  uvx ruff format .
-  uvx ruff check .
-  ```
+# Code Style
+Enforced by ruff. Key rules:
 
+Line length: 88 (Black-compatible)
+Import order: stdlib → third-party → local, separated by blank lines
+No unused imports — ruff will catch them
+f-strings over .format() and % formatting
+Walrus operator (:=) for pattern-match assignments only
+Type annotations required for:
+
+All function signatures (parameters + return type)
+Class attributes
+Module-level variables that are not obvious primitives
+Anti-Patterns
+No bare except: — always except SpecificError: or except (Error1, Error2):
+No from module import *
+No print() for debug output — use logging.getLogger(__name__)
+No hardcoded credentials or connection strings — use environment variables
+No mutable default arguments: def f(x: list = []) is wrong
+No type: ignore comments without an explanation of why
+No Any unless genuinely necessary (document why)
+
+## Python formatting & linting
+
+## Python: linting, formatting, code style
+
+### Tooling
+- Ruff is the only linter and formatter. Do not install or run Black, isort, or flake8.
+- Always run Ruff through uv: `uv run ruff ...`.
+- Config lives in `pyproject.toml`. Do not modify `[tool.ruff]` unless the task is about tooling.
+- If a lint rule seems wrong for the codebase, say so in your summary instead of disabling it.
+
+### Workflow
+After editing any Python file, run these in order on the files you changed:
+1. `uv run ruff check --fix <changed files>`
+2. `uv run ruff format <changed files>`
+3. `uv run ruff check <changed files>` (must report zero errors)
+
+- Format only the files you changed. Never run `uv run ruff format .` on the whole
+  repo unless explicitly asked, because unrelated reformatting pollutes the diff.
+- Do not use `--unsafe-fixes` unless asked.
+- Never hand-format code to "look nicer". The formatter's output is final.
+
+### Before marking done
+- `uv run ruff check .` passes
+- `uv run ruff format --check .` passes (read-only check; it does not rewrite files)
+
+### Style
+- Line length: 88 (Black-compatible).
+- Imports: stdlib → third-party → local, separated by blank lines. Ruff sorts them
+  (rule set `I`), so don't reorder them manually.
+- No unused imports.
+- Use f-strings, not `.format()` or `%` formatting.
+- Use the walrus operator (`:=`) only to bind a match result in a condition,
+  e.g. `if m := re.match(...)`.
+
+### Type annotations
+Required for:
+- all function signatures (every parameter and the return type)
+- class attributes
+- module-level variables, unless they are obvious primitives
+
+Avoid `Any`. If it's genuinely necessary, add a comment saying why.
+
+### Anti-patterns
+- No bare `except:`. Catch specific errors: `except ValueError:` or `except (A, B):`.
+- No `from module import *`.
+- No `print()` for debug output. Use `logging.getLogger(__name__)`.
+- No hardcoded credentials or connection strings. Use environment variables.
+- No mutable default arguments: `def f(x: list = [])` is wrong; use `None` and
+  create the list inside the function.
+
+### Suppressions
+- Don't add `# noqa`, `# fmt: off`, or `# type: ignore` to silence a warning.
+  Fix the underlying issue.
+- If suppression is truly required, use the narrowest form (`# noqa: B008`,
+  `# type: ignore[arg-type]`, never bare) and add a one-line reason.
+  
 ## Logging Mechanics (`log.py`)
 
 - Import logger via `from log import logger` (or `from log import logger, success`).

@@ -25,175 +25,189 @@ from log import logger
 
 
 def _track_dr(path: str) -> int:
-	"""Decode one file and return its rounded DR score (runs in a worker process)."""
-	with sf.SoundFile(path) as data:
-		return round(dynamic_range(AudioData.from_soundfile(data)).overall_dr_score)
+    """Decode one file and return its rounded DR score (runs in a worker process)."""
+    with sf.SoundFile(path) as data:
+        return round(dynamic_range(AudioData.from_soundfile(data)).overall_dr_score)
 
 
 def _has_dr(path: Path) -> bool:
-	try:
-		tags = FLAC(str(path)).tags or {}
-	except Exception:  # noqa: BLE001
-		return True  # unreadable: the main loop logs it, nothing to compute
-	val = (tags.get('DYNAMIC_RANGE') or [''])[0]
-	return val.isdigit() and int(val) != 0
+    try:
+        tags = FLAC(str(path)).tags or {}
+    except Exception:  # noqa: BLE001
+        return True  # unreadable: the main loop logs it, nothing to compute
+    val = (tags.get("DYNAMIC_RANGE") or [""])[0]
+    return val.isdigit() and int(val) != 0
 
 
 # calculate song and album dynamic range and write tags to files
 def calculate_dr(albumpath: str) -> None:
-	"""Calculate the Dynamic Range score for every track and album under the target directory.
+    """Calculate the Dynamic Range score for every track and album under the target directory.
 
-	Iterates all FLAC files in albumpath (recursively), grouping them by parent directory.
-	For each directory (representing an album), reads the existing DYNAMIC_RANGE tag; if absent,
-	computes it with drmeter and writes the result back. After processing all tracks for a
-	given album, derives the album-level DR score as the mean of per-track scores and writes
-	ALBUM_DR to every file in the album if the value changed.
+    Iterates all FLAC files in albumpath (recursively), grouping them by parent directory.
+    For each directory (representing an album), reads the existing DYNAMIC_RANGE tag; if absent,
+    computes it with drmeter and writes the result back. After processing all tracks for a
+    given album, derives the album-level DR score as the mean of per-track scores and writes
+    ALBUM_DR to every file in the album if the value changed.
 
-	Logs a warning when some tracks are missing a DR score (e.g. corrupt files).
+    Logs a warning when some tracks are missing a DR score (e.g. corrupt files).
 
-	Args:
-	    albumpath: Absolute path to the directory to scan.
-	"""
-	logger.info(f'Starting Dynamic Range calculation in {albumpath}')
+    Args:
+        albumpath: Absolute path to the directory to scan.
+    """
+    logger.info(f"Starting Dynamic Range calculation in {albumpath}")
 
-	# Group FLAC files by their parent directory (each representing an album)
-	albums: dict[Path, list[Path]] = {}
-	# A 'Disc N' folder (Roon box set, see bliss.py) belongs to its parent album, so ALBUM_DR
-	# is the mean over all discs.
-	for p in Path(albumpath).rglob('*.flac'):
-		albums.setdefault(Path(album_root_of_file(p)), []).append(p)
+    # Group FLAC files by their parent directory (each representing an album)
+    albums: dict[Path, list[Path]] = {}
+    # A 'Disc N' folder (Roon box set, see bliss.py) belongs to its parent album, so ALBUM_DR
+    # is the mean over all discs.
+    for p in Path(albumpath).rglob("*.flac"):
+        albums.setdefault(Path(album_root_of_file(p)), []).append(p)
 
-	if not albums:
-		logger.error(f'No FLAC files found in {albumpath}')
-		return
+    if not albums:
+        logger.error(f"No FLAC files found in {albumpath}")
+        return
 
-	# Decode all tracks lacking a DR tag in parallel; tags are written sequentially below.
-	todo = [p for ps in albums.values() for p in ps if not _has_dr(p)]
-	pool = (
-		ProcessPoolExecutor(max_workers=max(1, min(os.cpu_count() or 1, len(todo))))
-		if todo
-		else None
-	)
-	futures: dict[Path, Future] = {p: pool.submit(_track_dr, str(p)) for p in todo} if pool else {}
+    # Decode all tracks lacking a DR tag in parallel; tags are written sequentially below.
+    todo = [p for ps in albums.values() for p in ps if not _has_dr(p)]
+    pool = (
+        ProcessPoolExecutor(max_workers=max(1, min(os.cpu_count() or 1, len(todo))))
+        if todo
+        else None
+    )
+    futures: dict[Path, Future] = (
+        {p: pool.submit(_track_dr, str(p)) for p in todo} if pool else {}
+    )
 
-	# Process each album directory separately
-	for album_dir, flac_paths in sorted(albums.items()):
-		logger.info(f'Processing album in: {album_dir}')
-		dr_sum = 0
-		dr_tracks = 0
-		tracks = 0
-		flac_files: list[str] = []
-		last_album_name = 'Unknown'
-		dra_dirty = False
+    # Process each album directory separately
+    for album_dir, flac_paths in sorted(albums.items()):
+        logger.info(f"Processing album in: {album_dir}")
+        dr_sum = 0
+        dr_tracks = 0
+        tracks = 0
+        flac_files: list[str] = []
+        last_album_name = "Unknown"
+        dra_dirty = False
 
-		# Sort tracks by filename to process sequentially
-		for p in sorted(flac_paths):
-			fullfilename = str(PurePosixPath(p))
-			flac_files.append(fullfilename)
-			tracks += 1
-			dr_song = 0
-			DR = 0
+        # Sort tracks by filename to process sequentially
+        for p in sorted(flac_paths):
+            fullfilename = str(PurePosixPath(p))
+            flac_files.append(fullfilename)
+            tracks += 1
+            dr_song = 0
+            DR = 0
 
-			try:
-				audio = FLAC(fullfilename)
-				if not audio.tags:
-					audio.add_tags()
+            try:
+                audio = FLAC(fullfilename)
+                if not audio.tags:
+                    audio.add_tags()
 
-				dr_val = audio.tags.get('DYNAMIC_RANGE') or ['']
-				try:
-					dr_song = int(dr_val[0])
-				except (ValueError, TypeError, IndexError):
-					dr_song = 0
+                dr_val = audio.tags.get("DYNAMIC_RANGE") or [""]
+                try:
+                    dr_song = int(dr_val[0])
+                except (ValueError, TypeError, IndexError):
+                    dr_song = 0
 
-				if dr_song == 0:
-					try:
-						DR = futures[p].result() if p in futures else _track_dr(fullfilename)
-					except Exception as e:  # noqa: BLE001
-						logger.error(f'DR calculation failed for {fullfilename}: {e}')
+                if dr_song == 0:
+                    try:
+                        DR = (
+                            futures[p].result()
+                            if p in futures
+                            else _track_dr(fullfilename)
+                        )
+                    except Exception as e:  # noqa: BLE001
+                        logger.error(f"DR calculation failed for {fullfilename}: {e}")
 
-					if DR != dr_song:
-						# Reopen: calculate_fp and rsgain run in parallel (nzbfix) and may have written tags
-						# while the DR was computed; saving the copy read before the wait would erase their tags.
-						audio = FLAC(fullfilename)
-						if not audio.tags:
-							audio.add_tags()
-						title_str = (audio.tags.get('TITLE') or ['Unknown'])[0]
-						logger.success(
-							f'DR {str(dr_song).zfill(2)} → {str(DR).zfill(2)}  {title_str}'
-						)
-						audio['DYNAMIC_RANGE'] = [str(DR).zfill(2)]
-						audio.save()
-						try:
-							os.utime(fullfilename, None)
-						except Exception as e:  # noqa: BLE001
-							logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
-						dr_song = DR
-						dra_dirty = True
+                    if dr_song != DR:
+                        # Reopen: calculate_fp and rsgain run in parallel (nzbfix) and may have written tags
+                        # while the DR was computed; saving the copy read before the wait would erase their tags.
+                        audio = FLAC(fullfilename)
+                        if not audio.tags:
+                            audio.add_tags()
+                        title_str = (audio.tags.get("TITLE") or ["Unknown"])[0]
+                        logger.success(
+                            f"DR {str(dr_song).zfill(2)} → {str(DR).zfill(2)}  {title_str}"
+                        )
+                        audio["DYNAMIC_RANGE"] = [str(DR).zfill(2)]
+                        audio.save()
+                        try:
+                            os.utime(fullfilename, None)
+                        except Exception as e:  # noqa: BLE001
+                            logger.warning(
+                                f"Could not touch file mtime for {fullfilename}: {e}"
+                            )
+                        dr_song = DR
+                        dra_dirty = True
 
-				if audio.tags.get('ALBUM'):
-					last_album_name = audio.tags['ALBUM'][0]
-			except Exception as e:  # noqa: BLE001
-				logger.warning(f'Could not process FLAC file {fullfilename}: {e}')
-				continue
+                if audio.tags.get("ALBUM"):
+                    last_album_name = audio.tags["ALBUM"][0]
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"Could not process FLAC file {fullfilename}: {e}")
+                continue
 
-			if dr_song > 0:
-				dr_tracks += 1
-				dr_sum += dr_song
+            if dr_song > 0:
+                dr_tracks += 1
+                dr_sum += dr_song
 
-		if dr_tracks != tracks:
-			logger.warning(
-				f'Incomplete DR: {dr_tracks}/{tracks} tracks have DR scores for {last_album_name}'
-			)
+        if dr_tracks != tracks:
+            logger.warning(
+                f"Incomplete DR: {dr_tracks}/{tracks} tracks have DR scores for {last_album_name}"
+            )
 
-		if dr_tracks > 0:
-			dr_album = str(round(dr_sum / dr_tracks)).zfill(2)
+        if dr_tracks > 0:
+            dr_album = str(round(dr_sum / dr_tracks)).zfill(2)
 
-			# Check if any track lacks the correct ALBUM_DR tag
-			needs_update = dra_dirty
-			reason = 'track DR recalculated'
+            # Check if any track lacks the correct ALBUM_DR tag
+            needs_update = dra_dirty
+            reason = "track DR recalculated"
 
-			if not needs_update:
-				for fullfilename in flac_files:
-					try:
-						audio = FLAC(fullfilename)
-						val = audio.tags.get('ALBUM_DR') or ['']
-						dr_old = val[0] if val else ''
-						if dr_old != dr_album:
-							needs_update = True
-							reason = f"album DR tag missing or outdated (value in files is '{dr_old or 'none'}', calculated '{dr_album}')"
-							break
-					except Exception:  # noqa: BLE001, S110
-						pass
+            if not needs_update:
+                for fullfilename in flac_files:
+                    try:
+                        audio = FLAC(fullfilename)
+                        val = audio.tags.get("ALBUM_DR") or [""]
+                        dr_old = val[0] if val else ""
+                        if dr_old != dr_album:
+                            needs_update = True
+                            reason = f"album DR tag missing or outdated (value in files is '{dr_old or 'none'}', calculated '{dr_album}')"
+                            break
+                    except Exception:  # noqa: BLE001, S110
+                        pass
 
-			if needs_update:
-				for fullfilename in flac_files:
-					try:
-						audio = FLAC(fullfilename)
-						if not audio.tags:
-							audio.add_tags()
-						audio['ALBUM_DR'] = [str(dr_album).zfill(2)]
-						audio.save()
-						try:
-							os.utime(fullfilename, None)
-						except Exception as e:  # noqa: BLE001
-							logger.warning(f'Could not touch file mtime for {fullfilename}: {e}')
-					except Exception as e:  # noqa: BLE001
-						logger.warning(f'Could not update ALBUM_DR for {fullfilename}: {e}')
-				logger.success(f'Album DR updated to {dr_album} ({reason}) for {last_album_name}')
-			else:
-				logger.info(f'Album DR {dr_album} unchanged for {last_album_name}')
-		else:
-			logger.error(f'Could not calculate DR for {album_dir}')
+            if needs_update:
+                for fullfilename in flac_files:
+                    try:
+                        audio = FLAC(fullfilename)
+                        if not audio.tags:
+                            audio.add_tags()
+                        audio["ALBUM_DR"] = [str(dr_album).zfill(2)]
+                        audio.save()
+                        try:
+                            os.utime(fullfilename, None)
+                        except Exception as e:  # noqa: BLE001
+                            logger.warning(
+                                f"Could not touch file mtime for {fullfilename}: {e}"
+                            )
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning(
+                            f"Could not update ALBUM_DR for {fullfilename}: {e}"
+                        )
+                logger.success(
+                    f"Album DR updated to {dr_album} ({reason}) for {last_album_name}"
+                )
+            else:
+                logger.info(f"Album DR {dr_album} unchanged for {last_album_name}")
+        else:
+            logger.error(f"Could not calculate DR for {album_dir}")
 
-	if pool:
-		pool.shutdown()
+    if pool:
+        pool.shutdown()
 
 
 def main() -> None:
-	"""Command line interface for calculating Dynamic Range scores."""
-	albumpath = sys.argv[1] if len(sys.argv) > 1 else '.'
-	calculate_dr(albumpath)
+    """Command line interface for calculating Dynamic Range scores."""
+    albumpath = sys.argv[1] if len(sys.argv) > 1 else "."
+    calculate_dr(albumpath)
 
 
-if __name__ == '__main__':
-	main()
+if __name__ == "__main__":
+    main()

@@ -12,269 +12,288 @@ own FLAC tag reads and passes plain strings in.
 import re
 from collections import Counter
 
-LRC_TIMESTAMP = re.compile(r'\[\d{2}:\d{2}\.\d{2}\]')  # valid: [MM:SS.xx]
-LRC_BAD_TS = re.compile(r'\[\d{3,}:\d{2}:\d{2}\.\d{2}\]')  # invalid: [HH:MM:SS.xx]
-ID_TAG_LINE = re.compile(r'^\[([a-zA-Z]{2,20}):.*\]\s*$')
-LRC_LINE = re.compile(r'^(\[\d{2}:\d{2}\.\d{2}\])(.*)$')
-MANAGED_HEADER_KEYS = ('ar', 'ti', 'al', 'length')
-INSTRUMENTAL_MARKER = '[instrumental:true]'
+LRC_TIMESTAMP = re.compile(r"\[\d{2}:\d{2}\.\d{2}\]")  # valid: [MM:SS.xx]
+LRC_BAD_TS = re.compile(r"\[\d{3,}:\d{2}:\d{2}\.\d{2}\]")  # invalid: [HH:MM:SS.xx]
+ID_TAG_LINE = re.compile(r"^\[([a-zA-Z]{2,20}):.*\]\s*$")
+LRC_LINE = re.compile(r"^(\[\d{2}:\d{2}\.\d{2}\])(.*)$")
+MANAGED_HEADER_KEYS = ("ar", "ti", "al", "length")
+INSTRUMENTAL_MARKER = "[instrumental:true]"
 MANUAL_INSTRUMENTAL_MARKER = re.compile(
-	r'\[\d{2}:\d{2}\.\d{2}\]\s*(?:\[instrumental\]|\(instrumental\))', re.IGNORECASE
+    r"\[\d{2}:\d{2}\.\d{2}\]\s*(?:\[instrumental\]|\(instrumental\))", re.IGNORECASE
 )
-BARE_INSTRUMENTAL_PLACEHOLDER = re.compile(r'^[\[(]?\s*instrumental\s*[\])]?$', re.IGNORECASE)
-LA_OR_INSTRUMENTAL_TAG = re.compile(r'^\[(la|instrumental):', re.IGNORECASE)
-INSTRUMENTAL_SUFFIX_LINES = ('[la:zxx]', '[instrumental:true]', '[00:00.00](Instrumental)')
-LRC_BODY_LINE = re.compile(r'^\[(\d{2}):(\d{2})\.(\d{2})\](.*)$')
+BARE_INSTRUMENTAL_PLACEHOLDER = re.compile(
+    r"^[\[(]?\s*instrumental\s*[\])]?$", re.IGNORECASE
+)
+LA_OR_INSTRUMENTAL_TAG = re.compile(r"^\[(la|instrumental):", re.IGNORECASE)
+INSTRUMENTAL_SUFFIX_LINES = (
+    "[la:zxx]",
+    "[instrumental:true]",
+    "[00:00.00](Instrumental)",
+)
+LRC_BODY_LINE = re.compile(r"^\[(\d{2}):(\d{2})\.(\d{2})\](.*)$")
 # Hearts inside lyric text are credit/decoration from the source text (e.g. '\u2661 J&'). Music notes
 # are NOT junk: a line that is just a note is a legitimate instrumental/music marker.
-JUNK_GLYPHS = re.compile('[\u2661\u2665]')
+JUNK_GLYPHS = re.compile("[\u2661\u2665]")
 SUSPECT_MIN_LINES = 3  # a synced LRC with fewer timestamped lines is not judged
 # A pile-up is a failed alignment: this many lines AND this share of the lines on one timestamp.
 # (2 lines copying the last time is a normal unmatched tail, so a group of 3-4 is not judged.)
 SUSPECT_SHARED_TIMESTAMP = 5
 SUSPECT_SHARED_SHARE = 0.2
-SUSPECT_STACKED_LINES = 3  # lines on one timestamp that count as stacked, for problem-line counts
+SUSPECT_STACKED_LINES = (
+    3  # lines on one timestamp that count as stacked, for problem-line counts
+)
 SUSPECT_END_RATIO = 0.5  # last timestamp before this share of the track length
 
 
 def is_lrc(text: str) -> bool:
-	return bool(LRC_TIMESTAMP.search(text))
+    return bool(LRC_TIMESTAMP.search(text))
 
 
 def is_invalid_lrc(text: str) -> bool:
-	return bool(LRC_BAD_TS.search(text))
+    return bool(LRC_BAD_TS.search(text))
 
 
 def resolve_artist(albumartist: str, artist: str) -> str:
-	"""The one place both tools decide which tag supplies 'the artist' —
-	ALBUMARTIST, falling back to ARTIST only when ALBUMARTIST is empty.
-	See ADR 0002 §6: a track's own ARTIST can carry rip-specific billing
-	(e.g. 'Roy Orbison With Guests') that lrclib.net's artist index won't
-	match, and that two independent copies of this exact fallback silently
-	diverged is why this module exists.
-	"""
-	return albumartist or artist
+    """The one place both tools decide which tag supplies 'the artist' —
+    ALBUMARTIST, falling back to ARTIST only when ALBUMARTIST is empty.
+    See ADR 0002 §6: a track's own ARTIST can carry rip-specific billing
+    (e.g. 'Roy Orbison With Guests') that lrclib.net's artist index won't
+    match, and that two independent copies of this exact fallback silently
+    diverged is why this module exists.
+    """
+    return albumartist or artist
 
 
 def make_headers(artist: str, title: str, album: str, length_secs: float) -> str:
-	mins, secs = divmod(int(length_secs), 60)
-	return f'[ar:{artist}]\n[ti:{title}]\n[al:{album}]\n[length:{mins:02d}:{secs:02d}]\n'
+    mins, secs = divmod(int(length_secs), 60)
+    return (
+        f"[ar:{artist}]\n[ti:{title}]\n[al:{album}]\n[length:{mins:02d}:{secs:02d}]\n"
+    )
 
 
 def refresh_headers(
-	lines: list[str], artist: str, title: str, album: str, length_secs: float
+    lines: list[str], artist: str, title: str, album: str, length_secs: float
 ) -> list[str]:
-	"""Refresh ar/ti/al/length header lines wherever they already sit in `lines`
-	(any other line — lyric body, or a header key this module doesn't manage,
-	e.g. [re:]/[by:]/[offset:] — passes through completely unchanged, at its
-	original position; a fixed output order would make a tag merely sitting in
-	a different position than this run would generate look like a content
-	change and force a rewrite for nothing).
+    """Refresh ar/ti/al/length header lines wherever they already sit in `lines`
+    (any other line — lyric body, or a header key this module doesn't manage,
+    e.g. [re:]/[by:]/[offset:] — passes through completely unchanged, at its
+    original position; a fixed output order would make a tag merely sitting in
+    a different position than this run would generate look like a content
+    change and force a rewrite for nothing).
 
-	A fresh value is only applied when it's non-empty — an empty value falls
-	back to whatever line was already there rather than ever writing a blank
-	header over a previously-good one. Any of ar/ti/al/length missing entirely
-	is inserted at the top, in that order, but only when a fresh value for it
-	actually exists.
-	"""
-	mins, secs = divmod(int(length_secs), 60) if length_secs else (0, 0)
-	fresh = {
-		'ar': artist,
-		'ti': title,
-		'al': album,
-		'length': f'{mins:02d}:{secs:02d}' if length_secs else '',
-	}
-	seen = set()
-	out = []
-	for line in lines:
-		m = ID_TAG_LINE.match(line)
-		key = m.group(1).lower() if m else None
-		if key in fresh:
-			seen.add(key)
-			out.append(f'[{key}:{fresh[key]}]' if fresh[key] else line)
-		else:
-			out.append(line)
-	missing = [k for k in MANAGED_HEADER_KEYS if k not in seen and fresh[k]]
-	if missing:
-		out = [f'[{k}:{fresh[k]}]' for k in missing] + out
-	return out
+    A fresh value is only applied when it's non-empty — an empty value falls
+    back to whatever line was already there rather than ever writing a blank
+    header over a previously-good one. Any of ar/ti/al/length missing entirely
+    is inserted at the top, in that order, but only when a fresh value for it
+    actually exists.
+    """
+    mins, secs = divmod(int(length_secs), 60) if length_secs else (0, 0)
+    fresh = {
+        "ar": artist,
+        "ti": title,
+        "al": album,
+        "length": f"{mins:02d}:{secs:02d}" if length_secs else "",
+    }
+    seen = set()
+    out = []
+    for line in lines:
+        m = ID_TAG_LINE.match(line)
+        key = m.group(1).lower() if m else None
+        if key in fresh:
+            seen.add(key)
+            out.append(f"[{key}:{fresh[key]}]" if fresh[key] else line)
+        else:
+            out.append(line)
+    missing = [k for k in MANAGED_HEADER_KEYS if k not in seen and fresh[k]]
+    if missing:
+        out = [f"[{k}:{fresh[k]}]" for k in missing] + out
+    return out
 
 
-def apply_headers(lrc: str, artist: str, title: str, album: str, length_secs: float) -> str:
-	lines = refresh_headers(lrc.splitlines(), artist, title, album, length_secs)
-	return '\n'.join(line for line in lines if line).strip()
+def apply_headers(
+    lrc: str, artist: str, title: str, album: str, length_secs: float
+) -> str:
+    lines = refresh_headers(lrc.splitlines(), artist, title, album, length_secs)
+    return "\n".join(line for line in lines if line).strip()
 
 
 def build_instrumental_marker(id_tags: list[str]) -> str:
-	"""Append the canonical instrumental block to id_tags, stripping any
-	pre-existing la:/instrumental: lines first so this is idempotent rather
-	than duplicating the sentinel on a file that's already canonically marked.
-	Any other header line already in id_tags (e.g. [re:]) is preserved.
-	"""
-	filtered = [line for line in id_tags if not LA_OR_INSTRUMENTAL_TAG.match(line)]
-	return '\n'.join([*filtered, *INSTRUMENTAL_SUFFIX_LINES])
+    """Append the canonical instrumental block to id_tags, stripping any
+    pre-existing la:/instrumental: lines first so this is idempotent rather
+    than duplicating the sentinel on a file that's already canonically marked.
+    Any other header line already in id_tags (e.g. [re:]) is preserved.
+    """
+    filtered = [line for line in id_tags if not LA_OR_INSTRUMENTAL_TAG.match(line)]
+    return "\n".join([*filtered, *INSTRUMENTAL_SUFFIX_LINES])
 
 
-def make_instrumental_lrc(artist: str, title: str, album: str, length_secs: float) -> str:
-	"""Build the full canonical instrumental marker from scratch — ar/ti/al/length
-	plus the instrumental block — for a track with no existing header lines to
-	preserve. For refreshing an already-parsed id_tags list in place instead
-	(preserving lines this module doesn't manage), use build_instrumental_marker.
-	"""
-	header_lines = make_headers(artist, title, album, length_secs).strip().splitlines()
-	return build_instrumental_marker(header_lines)
+def make_instrumental_lrc(
+    artist: str, title: str, album: str, length_secs: float
+) -> str:
+    """Build the full canonical instrumental marker from scratch — ar/ti/al/length
+    plus the instrumental block — for a track with no existing header lines to
+    preserve. For refreshing an already-parsed id_tags list in place instead
+    (preserving lines this module doesn't manage), use build_instrumental_marker.
+    """
+    header_lines = make_headers(artist, title, album, length_secs).strip().splitlines()
+    return build_instrumental_marker(header_lines)
 
 
 def is_instrumental_marker(text: str) -> bool:
-	return INSTRUMENTAL_MARKER in text
+    return INSTRUMENTAL_MARKER in text
 
 
 def has_manual_instrumental_marker(text: str) -> bool:
-	"""Detect an informal instrumental marker a human (or another tool) left behind:
-	'[00:00.00][Instrumental]' (hand-typed) or a bare '[00:00.00](Instrumental)' line
-	missing the '[la:zxx]'/'[instrumental:true]' sentinel that makes it canonical.
+    """Detect an informal instrumental marker a human (or another tool) left behind:
+    '[00:00.00][Instrumental]' (hand-typed) or a bare '[00:00.00](Instrumental)' line
+    missing the '[la:zxx]'/'[instrumental:true]' sentinel that makes it canonical.
 
-	Distinct from the canonical '[instrumental:true]' block, which is always written
-	in full — this catches anything that looks like someone's intent to mark a track
-	instrumental without actually being the real sentinel.
-	"""
-	return bool(MANUAL_INSTRUMENTAL_MARKER.search(text))
+    Distinct from the canonical '[instrumental:true]' block, which is always written
+    in full — this catches anything that looks like someone's intent to mark a track
+    instrumental without actually being the real sentinel.
+    """
+    return bool(MANUAL_INSTRUMENTAL_MARKER.search(text))
 
 
 def is_bare_instrumental_placeholder(lyric_lines: list[str]) -> bool:
-	"""True if the tag is just a placeholder like 'Instrumental'/'[Instrumental]' —
-	a single line, no timestamp at all. Distinct from has_manual_instrumental_marker,
-	which requires an existing [MM:SS.xx] timestamp; this catches the earlier,
-	pre-LRC-structure case (e.g. a plain LYRICS=Instrumental tag).
-	"""
-	return len(lyric_lines) == 1 and bool(BARE_INSTRUMENTAL_PLACEHOLDER.match(lyric_lines[0]))
+    """True if the tag is just a placeholder like 'Instrumental'/'[Instrumental]' —
+    a single line, no timestamp at all. Distinct from has_manual_instrumental_marker,
+    which requires an existing [MM:SS.xx] timestamp; this catches the earlier,
+    pre-LRC-structure case (e.g. a plain LYRICS=Instrumental tag).
+    """
+    return len(lyric_lines) == 1 and bool(
+        BARE_INSTRUMENTAL_PLACEHOLDER.match(lyric_lines[0])
+    )
 
 
 # Typographic characters mapped to plain ASCII in lyric text. Accented letters, other scripts and
 # music notes are deliberately NOT touched, nor are the joiners U+200C/U+200D (meaningful in some
 # scripts). Header lines ([ti:], [ar:], ...) are never normalized: they come from the user's tags.
 _NORMALIZE_MAP = str.maketrans(
-	{
-		**dict.fromkeys('\u2019\u2018\u201b\u2032', "'"),
-		**dict.fromkeys('\u201c\u201d\u201f\u2033', '"'),
-		**dict.fromkeys('\u2010\u2011\u2012\u2013\u2014', '-'),
-		'\u2026': '...',
-		**dict.fromkeys('\u00a0\u2007\u2009\u202f\u2002\u2003', ' '),
-		# invisible junk: zero-width space, BOM, word joiner, Hangul filler, object replacement
-		**dict.fromkeys('\u200b\ufeff\u2060\u3164\ufffc', None),
-	}
+    {
+        **dict.fromkeys("\u2019\u2018\u201b\u2032", "'"),
+        **dict.fromkeys("\u201c\u201d\u201f\u2033", '"'),
+        **dict.fromkeys("\u2010\u2011\u2012\u2013\u2014", "-"),
+        "\u2026": "...",
+        **dict.fromkeys("\u00a0\u2007\u2009\u202f\u2002\u2003", " "),
+        # invisible junk: zero-width space, BOM, word joiner, Hangul filler, object replacement
+        **dict.fromkeys("\u200b\ufeff\u2060\u3164\ufffc", None),
+    }
 )
-_ACUTE_BETWEEN_LETTERS = re.compile(r'(?<=[^\W\d_])[\u00b4`](?=[^\W\d_])')  # don´t
+_ACUTE_BETWEEN_LETTERS = re.compile(r"(?<=[^\W\d_])[\u00b4`](?=[^\W\d_])")  # don´t
 
 
 def normalize_text(text: str) -> str:
-	"""Map typographic quotes, dashes, ellipsis and odd spaces to ASCII and drop invisible junk.
+    """Map typographic quotes, dashes, ellipsis and odd spaces to ASCII and drop invisible junk.
 
-	Idempotent, a no-op on plain text. ´ and ` become ' only between two letters (checked after the
-	invisible characters are removed, so removing one cannot create a new match on a second pass).
-	"""
-	return _ACUTE_BETWEEN_LETTERS.sub("'", text.translate(_NORMALIZE_MAP))
+    Idempotent, a no-op on plain text. ´ and ` become ' only between two letters (checked after the
+    invisible characters are removed, so removing one cannot create a new match on a second pass).
+    """
+    return _ACUTE_BETWEEN_LETTERS.sub("'", text.translate(_NORMALIZE_MAP))
 
 
 def normalize_lrc_text(lrc: str) -> str:
-	"""normalize_text on the lyric text of an LRC: the text after each timestamp and any untimed
-	line, never the id-tag header lines ([ar:], [ti:], [al:], [length:], [re:], ...)."""
-	out = []
-	for line in lrc.splitlines():
-		m = LRC_LINE.match(line)
-		if m:
-			out.append(m.group(1) + normalize_text(m.group(2)))
-		elif ID_TAG_LINE.match(line):
-			out.append(line)
-		else:
-			out.append(normalize_text(line))
-	return '\n'.join(out)
+    """normalize_text on the lyric text of an LRC: the text after each timestamp and any untimed
+    line, never the id-tag header lines ([ar:], [ti:], [al:], [length:], [re:], ...)."""
+    out = []
+    for line in lrc.splitlines():
+        m = LRC_LINE.match(line)
+        if m:
+            out.append(m.group(1) + normalize_text(m.group(2)))
+        elif ID_TAG_LINE.match(line):
+            out.append(line)
+        else:
+            out.append(normalize_text(line))
+    return "\n".join(out)
 
 
 def capitalize_line(text: str) -> str:
-	"""Uppercase the first non-whitespace character of a line, preserving leading whitespace."""
-	m = re.match(r'^(\s*)(\S)(.*)$', text, re.DOTALL)
-	return m.group(1) + m.group(2).upper() + m.group(3) if m else text
+    """Uppercase the first non-whitespace character of a line, preserving leading whitespace."""
+    m = re.match(r"^(\s*)(\S)(.*)$", text, re.DOTALL)
+    return m.group(1) + m.group(2).upper() + m.group(3) if m else text
 
 
 def capitalize_lrc(lrc: str) -> str:
-	"""Strip whitespace after each [MM:SS.xx] timestamp and capitalize the lyric text.
+    """Strip whitespace after each [MM:SS.xx] timestamp and capitalize the lyric text.
 
-	Header lines ([ar:..], [ti:..], etc.) don't match LRC_LINE and pass through untouched.
-	"""
-	out = []
-	for line in lrc.splitlines():
-		m = LRC_LINE.match(line)
-		out.append(m.group(1) + capitalize_line(m.group(2).lstrip()) if m else line)
-	return '\n'.join(out)
+    Header lines ([ar:..], [ti:..], etc.) don't match LRC_LINE and pass through untouched.
+    """
+    out = []
+    for line in lrc.splitlines():
+        m = LRC_LINE.match(line)
+        out.append(m.group(1) + capitalize_line(m.group(2).lstrip()) if m else line)
+    return "\n".join(out)
 
 
 def capitalize_txt(text: str) -> str:
-	return '\n'.join(capitalize_line(line) for line in text.splitlines())
+    return "\n".join(capitalize_line(line) for line in text.splitlines())
 
 
 def lrc_body(lrc: str) -> tuple[list[float], list[str]]:
-	"""Timestamps (in seconds) and text of every timestamped line of an LRC, in order."""
-	times: list[float] = []
-	texts: list[str] = []
-	for line in lrc.split('\n'):
-		m = LRC_BODY_LINE.match(line.rstrip())
-		if m:
-			times.append(int(m.group(1)) * 60 + int(m.group(2)) + int(m.group(3)) / 100)
-			texts.append(m.group(4))
-	return times, texts
+    """Timestamps (in seconds) and text of every timestamped line of an LRC, in order."""
+    times: list[float] = []
+    texts: list[str] = []
+    for line in lrc.split("\n"):
+        m = LRC_BODY_LINE.match(line.rstrip())
+        if m:
+            times.append(int(m.group(1)) * 60 + int(m.group(2)) + int(m.group(3)) / 100)
+            texts.append(m.group(4))
+    return times, texts
 
 
 def lrc_suspect_reasons(lrc: str, length_secs: float = 0.0) -> list[str]:
-	"""Signs that a synced LRC's timestamps cannot be trusted, empty if it looks sound.
+    """Signs that a synced LRC's timestamps cannot be trusted, empty if it looks sound.
 
-	Shared by lrc_fix.py (refuses to write such a result) and lrc_count.py --suspects (reports
-	existing ones), so the two cannot disagree. Instrumental markers and LRCs with fewer than
-	SUSPECT_MIN_LINES timestamped lines are never judged. Reasons:
-	  one_timestamp      every lyric line has the same timestamp
-	  shared_timestamps  a pile-up: SUSPECT_SHARED_TIMESTAMP or more lines, and at least
-	                     SUSPECT_SHARED_SHARE of all lines, share one timestamp
-	  ends_early         last timestamp before SUSPECT_END_RATIO of length_secs (report-only:
-	                     a long instrumental outro is legitimate)
-	  junk_hearts        hearts inside lyric lines (report-only: source-text junk)
-	"""
-	if INSTRUMENTAL_MARKER in lrc:
-		return []
-	times, texts = lrc_body(lrc)
-	if len(times) < SUSPECT_MIN_LINES:
-		return []
-	reasons = []
-	counts = Counter(times)
-	if len(counts) == 1:
-		reasons.append('one_timestamp')
-	else:
-		biggest = max(counts.values())
-		if biggest >= SUSPECT_SHARED_TIMESTAMP and biggest / len(times) >= SUSPECT_SHARED_SHARE:
-			reasons.append('shared_timestamps')
-		if length_secs > 0 and times[-1] < SUSPECT_END_RATIO * length_secs:
-			reasons.append('ends_early')
-	if any(JUNK_GLYPHS.search(t) for t in texts):
-		reasons.append('junk_hearts')
-	return reasons
+    Shared by lrc_fix.py (refuses to write such a result) and lrc_count.py --suspects (reports
+    existing ones), so the two cannot disagree. Instrumental markers and LRCs with fewer than
+    SUSPECT_MIN_LINES timestamped lines are never judged. Reasons:
+      one_timestamp      every lyric line has the same timestamp
+      shared_timestamps  a pile-up: SUSPECT_SHARED_TIMESTAMP or more lines, and at least
+                         SUSPECT_SHARED_SHARE of all lines, share one timestamp
+      ends_early         last timestamp before SUSPECT_END_RATIO of length_secs (report-only:
+                         a long instrumental outro is legitimate)
+      junk_hearts        hearts inside lyric lines (report-only: source-text junk)
+    """
+    if INSTRUMENTAL_MARKER in lrc:
+        return []
+    times, texts = lrc_body(lrc)
+    if len(times) < SUSPECT_MIN_LINES:
+        return []
+    reasons = []
+    counts = Counter(times)
+    if len(counts) == 1:
+        reasons.append("one_timestamp")
+    else:
+        biggest = max(counts.values())
+        if (
+            biggest >= SUSPECT_SHARED_TIMESTAMP
+            and biggest / len(times) >= SUSPECT_SHARED_SHARE
+        ):
+            reasons.append("shared_timestamps")
+        if length_secs > 0 and times[-1] < SUSPECT_END_RATIO * length_secs:
+            reasons.append("ends_early")
+    if any(JUNK_GLYPHS.search(t) for t in texts):
+        reasons.append("junk_hearts")
+    return reasons
 
 
 def lrc_problem_line_count(lrc: str) -> int:
-	"""How many lyric lines of a synced LRC are wrong on their own (0 if it is not judged).
+    """How many lyric lines of a synced LRC are wrong on their own (0 if it is not judged).
 
-	Counts every line whose timestamp is shared by SUSPECT_STACKED_LINES or more lines (the
-	stacked head/tail of a failed alignment, or every line of a one_timestamp tag) plus every line
-	holding a heart (JUNK_GLYPHS). A pair of lines on one timestamp is legal and common, so it is
-	not counted; ends_early describes the whole track, so it adds nothing. Same exclusions as
-	lrc_suspect_reasons: instrumental markers and tags with fewer than SUSPECT_MIN_LINES lines.
-	"""
-	if INSTRUMENTAL_MARKER in lrc:
-		return 0
-	times, texts = lrc_body(lrc)
-	if len(times) < SUSPECT_MIN_LINES:
-		return 0
-	counts = Counter(times)
-	return sum(
-		1
-		for t, text in zip(times, texts)
-		if counts[t] >= SUSPECT_STACKED_LINES or JUNK_GLYPHS.search(text)
-	)
+    Counts every line whose timestamp is shared by SUSPECT_STACKED_LINES or more lines (the
+    stacked head/tail of a failed alignment, or every line of a one_timestamp tag) plus every line
+    holding a heart (JUNK_GLYPHS). A pair of lines on one timestamp is legal and common, so it is
+    not counted; ends_early describes the whole track, so it adds nothing. Same exclusions as
+    lrc_suspect_reasons: instrumental markers and tags with fewer than SUSPECT_MIN_LINES lines.
+    """
+    if INSTRUMENTAL_MARKER in lrc:
+        return 0
+    times, texts = lrc_body(lrc)
+    if len(times) < SUSPECT_MIN_LINES:
+        return 0
+    counts = Counter(times)
+    return sum(
+        1
+        for t, text in zip(times, texts, strict=False)
+        if counts[t] >= SUSPECT_STACKED_LINES or JUNK_GLYPHS.search(text)
+    )

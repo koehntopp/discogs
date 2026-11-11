@@ -164,7 +164,7 @@ audio, and only the lyric text changes between runs. Their output is therefore c
 ### 7. Deviations from ADR 0001
 
 The formatting rules of ADR 0001 apply: `lrc_fix.py` is formatted and linted with the repository's ruff
-configuration (tabs, single quotes). It deviates in three ways, all because it is a stand-alone ML tool
+configuration (88 columns, `T201` and `E402` ignored for it). It deviates in three ways, all because it is a stand-alone ML tool
 and is not run by `webui.py`:
 
 - Python 3.10-3.12 (`requires-python` in its own PEP 723 header), not >= 3.14, because the pinned

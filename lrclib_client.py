@@ -12,10 +12,10 @@ secret, so it is safe to ship in a client" (the secret one is Lrclib-Api-Key, wh
 here). An invalid value is rejected with 401 Unauthorized.
 """
 
-USER_AGENT = 'DiscogsMusicManager/1.0 (+https://github.com/koehntopp/discogs)'
-LRCLIB_APP_ID = 'Nm2UKEDqSxmkysVsuRQhjw9hWSYkbleD8mGFP7WcBOo'
+USER_AGENT = "DiscogsMusicManager/1.0 (+https://github.com/koehntopp/discogs)"
+LRCLIB_APP_ID = "Nm2UKEDqSxmkysVsuRQhjw9hWSYkbleD8mGFP7WcBOo"
 
 
 def lrclib_headers() -> dict[str, str]:
-	"""Headers identifying this application on every lrclib.net request."""
-	return {'User-Agent': USER_AGENT, 'Lrclib-App-Id': LRCLIB_APP_ID}
+    """Headers identifying this application on every lrclib.net request."""
+    return {"User-Agent": USER_AGENT, "Lrclib-App-Id": LRCLIB_APP_ID}

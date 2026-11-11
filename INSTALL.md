@@ -29,11 +29,11 @@ cp config_demo.py config/config.py
 Open `config/config.py` and fill in the three required values:
 
 ```python
-config_dir = '/config'  # leave as-is for Docker
+config_dir = "/config"  # leave as-is for Docker
 
-discogs_api_key = 'YOUR_TOKEN'  # from https://www.discogs.com/settings/developers
+discogs_api_key = "YOUR_TOKEN"  # from https://www.discogs.com/settings/developers
 
-flacroot = '/flac/'  # path inside the container — matches the volume mount below
+flacroot = "/flac/"  # path inside the container — matches the volume mount below
 ```
 
 Everything else can stay at its default for now.
@@ -127,9 +127,9 @@ flacroot/
 These features work on a staging directory (`nzbdir`) where you drop freshly tagged files before they are enriched and moved into the library:
 
 ```python
-nzbdir = '/nzb/'  # staging area for new albums
+nzbdir = "/nzb/"  # staging area for new albums
 
-flacroot_local = '/Volumes/FLAC/'  # path to flacroot as seen from your Mac
+flacroot_local = "/Volumes/FLAC/"  # path to flacroot as seen from your Mac
 # used for tagger deep-links in the UI
 ```
 
@@ -154,7 +154,7 @@ volumes:
 If you want a parallel MP3 copy of your library (for mobile / car):
 
 ```python
-mp3root = '/mp3/'
+mp3root = "/mp3/"
 ```
 
 ```yaml
@@ -200,7 +200,7 @@ The log modal shows every line the script prints; rsync progress lines are shown
 ### Config value
 
 ```python
-sync_script = 'sync.sh'  # script in the config directory (or an absolute path)
+sync_script = "sync.sh"  # script in the config directory (or an absolute path)
 ```
 
 ---
@@ -210,7 +210,7 @@ sync_script = 'sync.sh'  # script in the config directory (or an absolute path)
 To forward logs to a Synology log server (or any syslog daemon):
 
 ```python
-syslog_host = '192.168.1.1'  # IP of your log server
+syslog_host = "192.168.1.1"  # IP of your log server
 syslog_port = 514  # UDP port (514 is standard)
 ```
 

@@ -22,14 +22,9 @@ We adopt the following general Python standards and architectural rules across a
 * **Inline Dependencies**: Every standalone script must declare its dependencies inline using PEP 723 metadata headers (`# /// script ... # ///`). This ensures scripts remain self-contained and reproducible without manual virtual environment management.
 
 ### 2. Code Formatting & Style (Ruff Standard)
-* **Indentation**: Tabs for indentation (`tab-size = 4`).
-* **String Literals**: Single quotes (`'...'`) preferred for standard string literals.
-* **Line Length**: Maximum 100 characters per line.
-* **Formatting & Linting**: Automated formatting and linting are strictly enforced via:
-  ```bash
-  ruff format .
-  ruff check .
-  ```
+* **Style**: ruff's formatter defaults (Black-compatible: 4-space indentation, double quotes), line length 88. `target-version = "py313"` in `pyproject.toml` keeps `except (A, B):` parenthesized, because scripts run on interpreters older than 3.14 where the unparenthesized form is a syntax error.
+* **Lint rules** (`[tool.ruff.lint]`): `E4 E7 E9 F I UP B SIM ANN T20 PGH`: unused imports, import order, f-strings, bare `except`, mutable defaults, required annotations, no `print()`, no blanket `noqa`/`type: ignore`. Per-file ignores, each with a reason in `pyproject.toml`: `T201` for `lrc_fix.py` (ADR 0009 section 7) and `lrc_audit.py` (CLI report output); `E402` for `bliss.py`, `fixtags.py`, `webui.py`, `lrc_fix.py` (`CONFIG_DIR` goes on `sys.path` before `from config import`).
+* **Tooling**: ruff is a dev dependency, run via `uv run ruff`. After editing, on the changed files only: `ruff check --fix`, `ruff format`, `ruff check`. Before finishing, `uv run ruff check .` and `uv run ruff format --check .` pass.
 
 ### 3. Logging & Structured Diagnostics (`structlog`)
 * **Unified Import**: All scripts must use the central `log.py` module (`from log import logger`).
@@ -37,7 +32,7 @@ We adopt the following general Python standards and architectural rules across a
 * **Environment-Aware Formatting**:
   * **Interactive TTY**: Outputs pretty console-rendered, colorized logs to `sys.stderr`.
   * **Subprocess / Non-TTY (Web UI Child Process)**: Outputs structured JSON lines to `sys.stdout` for line-by-line consumption and UI rendering by `webui.py`.
-* **No Raw `print()`**: Raw `print()` calls in core processing logic are prohibited in favor of structured logging.
+* **No Raw `print()`**: Raw `print()` calls in core processing logic are prohibited in favor of structured logging (enforced by rule `T20`; exceptions listed in section 2).
 
 ### 4. Progress Bars & CLI Display (`rich`)
 * **Console Target**: `rich.progress.Progress` instances must attach to `Console(stderr=True)` to avoid corrupting stdout JSON streams in non-interactive modes.

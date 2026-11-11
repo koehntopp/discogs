@@ -19,8 +19,8 @@ from __future__ import annotations
 import os as _os
 import sys as _sys
 
-if _os.environ.get('PREINSTALL_ONLY'):
-	_sys.exit(0)
+if _os.environ.get("PREINSTALL_ONLY"):
+    _sys.exit(0)
 
 import json
 import re
@@ -29,34 +29,36 @@ import subprocess
 
 
 def _relay_child_line(prefix: str, line: str) -> None:
-	"""Parse a JSON log line from a child process and re-log just the event."""
-	import json
+    """Parse a JSON log line from a child process and re-log just the event."""
+    import json
 
-	line = line.strip()
-	if not line:
-		return
-	try:
-		rec = json.loads(line)
-		event = rec.get('event', line)
-		level = rec.get('level', 'info').lower()
-		if level == 'success':
-			success(f'{prefix}: {event}')
-		else:
-			getattr(logger, level, logger.info)(f'{prefix}: {event}')
-	except (json.JSONDecodeError, ValueError):
-		logger.info(f'{prefix}: {line}')
+    line = line.strip()
+    if not line:
+        return
+    try:
+        rec = json.loads(line)
+        event = rec.get("event", line)
+        level = rec.get("level", "info").lower()
+        if level == "success":
+            success(f"{prefix}: {event}")
+        else:
+            getattr(logger, level, logger.info)(f"{prefix}: {event}")
+    except (json.JSONDecodeError, ValueError):
+        logger.info(f"{prefix}: {line}")
 
 
 import os
 import sys
 import time
+from collections.abc import Iterator
 from html import escape
+from io import BufferedIOBase
 from pathlib import Path
 
 # Allow config.py to live in CONFIG_DIR (e.g. /config in Docker)
-_config_dir = os.environ.get('CONFIG_DIR')
+_config_dir = os.environ.get("CONFIG_DIR")
 if _config_dir and _config_dir not in sys.path:
-	sys.path.insert(0, _config_dir)
+    sys.path.insert(0, _config_dir)
 
 import pandas as pd
 import uvicorn
@@ -72,396 +74,405 @@ SCRIPTS_DIR = Path(__file__).parent
 
 
 def _config_dir() -> Path:
-	# ENV var takes priority (set in Docker); fall back to config.py, then CWD
-	env = os.environ.get('CONFIG_DIR')
-	if env:
-		p = Path(env)
-	else:
-		try:
-			from config import config_dir
+    # ENV var takes priority (set in Docker); fall back to config.py, then CWD
+    env = os.environ.get("CONFIG_DIR")
+    if env:
+        p = Path(env)
+    else:
+        try:
+            from config import config_dir
 
-			p = Path(config_dir)
-		except Exception:  # noqa: BLE001
-			p = Path('.')
-	p.mkdir(parents=True, exist_ok=True)
-	return p
+            p = Path(config_dir)
+        except Exception:  # noqa: BLE001
+            p = Path(".")
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 def _ensure_site_favicons() -> None:
-	"""Fetch and cache site favicons (discogs, musicbrainz, albumartexchange) into SCRIPTS_DIR / 'favicon'."""
-	favicon_dir = SCRIPTS_DIR / 'favicon'
-	favicon_dir.mkdir(parents=True, exist_ok=True)
+    """Fetch and cache site favicons (discogs, musicbrainz, albumartexchange) into SCRIPTS_DIR / 'favicon'."""
+    favicon_dir = SCRIPTS_DIR / "favicon"
+    favicon_dir.mkdir(parents=True, exist_ok=True)
 
-	import requests as _req
+    import requests as _req
 
-	site_favicons = {
-		'discogs.png': ['https://www.discogs.com/favicon.ico', 'https://discogs.com/favicon.ico'],
-		'musicbrainz.png': [
-			'https://musicbrainz.org/static/images/favicons/favicon-32x32.png',
-			'https://musicbrainz.org/favicon.ico',
-		],
-		'albumartexchange.png': [
-			'https://www.albumartexchange.com/favicon.ico',
-			'https://albumartexchange.com/favicon.ico',
-		],
-	}
+    site_favicons = {
+        "discogs.png": [
+            "https://www.discogs.com/favicon.ico",
+            "https://discogs.com/favicon.ico",
+        ],
+        "musicbrainz.png": [
+            "https://musicbrainz.org/static/images/favicons/favicon-32x32.png",
+            "https://musicbrainz.org/favicon.ico",
+        ],
+        "albumartexchange.png": [
+            "https://www.albumartexchange.com/favicon.ico",
+            "https://albumartexchange.com/favicon.ico",
+        ],
+    }
 
-	for filename, urls in site_favicons.items():
-		dest = favicon_dir / filename
-		if dest.exists() and dest.stat().st_size > 0:
-			continue
-		for url in urls:
-			try:
-				r = _req.get(url, timeout=5, headers={'User-Agent': 'Mozilla/5.0'})
-				if r.status_code == 200 and len(r.content) > 0:
-					dest.write_bytes(r.content)
-					logger.info(f'Cached site favicon {filename} from {url}')
-					break
-			except Exception as e:  # noqa: BLE001
-				logger.warning(f'Could not fetch favicon {filename} from {url}: {e}')
+    for filename, urls in site_favicons.items():
+        dest = favicon_dir / filename
+        if dest.exists() and dest.stat().st_size > 0:
+            continue
+        for url in urls:
+            try:
+                r = _req.get(url, timeout=5, headers={"User-Agent": "Mozilla/5.0"})
+                if r.status_code == 200 and len(r.content) > 0:
+                    dest.write_bytes(r.content)
+                    logger.info(f"Cached site favicon {filename} from {url}")
+                    break
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"Could not fetch favicon {filename} from {url}: {e}")
 
 
 _ensure_site_favicons()
 app = FastAPI()
-app.mount('/favicon', StaticFiles(directory=str(SCRIPTS_DIR / 'favicon')), name='favicon')
+app.mount(
+    "/favicon", StaticFiles(directory=str(SCRIPTS_DIR / "favicon")), name="favicon"
+)
 
-_sync: dict = {'proc': None}
-_refresh_done: dict = {'pending': False}
+_sync: dict = {"proc": None}
+_refresh_done: dict = {"pending": False}
 _album_cache: pd.DataFrame | None = None
 _current_proc: subprocess.Popen | None = None
 
 
 def _set_proc(proc: subprocess.Popen) -> subprocess.Popen:
-	"""Register proc as the current killable process and return it."""
-	global _current_proc
-	_current_proc = proc
-	return proc
+    """Register proc as the current killable process and return it."""
+    global _current_proc
+    _current_proc = proc
+    return proc
 
 
 def _clear_proc() -> None:
-	global _current_proc
-	_current_proc = None
+    global _current_proc
+    _current_proc = None
 
 
 def _cache_load() -> pd.DataFrame:
-	"""Return the in-memory album cache, loading from CSV if needed and filtering non-existent dirs."""
-	global _album_cache
-	if _album_cache is None:
-		csv = _config_dir() / 'albums.csv'
-		if csv.exists():
-			try:
-				df = pd.read_csv(csv, dtype=str).fillna('')
-				dir_col = None
-				for col in ('_DIRECTORY_PATH', 'Directory', '_directory_path'):
-					if col in df.columns:
-						dir_col = col
-						break
-				if dir_col:
-					initial_len = len(df)
-					df = df[df[dir_col].apply(lambda d: bool(d and Path(d).exists()))]
-					if len(df) < initial_len:
-						try:
-							df.to_csv(csv, index=False)
-							logger.info(
-								f'_cache_load: purged {initial_len - len(df)} non-existent directory rows'
-							)
-						except Exception as e:  # noqa: BLE001
-							logger.error(f'cache load purge write: {e}')
-				_album_cache = df
-			except Exception as e:  # noqa: BLE001
-				logger.error(f'cache load: {e}')
-				_album_cache = pd.DataFrame()
-		else:
-			_album_cache = pd.DataFrame()
-	return _album_cache
+    """Return the in-memory album cache, loading from CSV if needed and filtering non-existent dirs."""
+    global _album_cache
+    if _album_cache is None:
+        csv = _config_dir() / "albums.csv"
+        if csv.exists():
+            try:
+                df = pd.read_csv(csv, dtype=str).fillna("")
+                dir_col = None
+                for col in ("_DIRECTORY_PATH", "Directory", "_directory_path"):
+                    if col in df.columns:
+                        dir_col = col
+                        break
+                if dir_col:
+                    initial_len = len(df)
+                    df = df[df[dir_col].apply(lambda d: bool(d and Path(d).exists()))]
+                    if len(df) < initial_len:
+                        try:
+                            df.to_csv(csv, index=False)
+                            logger.info(
+                                f"_cache_load: purged {initial_len - len(df)} non-existent directory rows"
+                            )
+                        except Exception as e:  # noqa: BLE001
+                            logger.error(f"cache load purge write: {e}")
+                _album_cache = df
+            except Exception as e:  # noqa: BLE001
+                logger.error(f"cache load: {e}")
+                _album_cache = pd.DataFrame()
+        else:
+            _album_cache = pd.DataFrame()
+    return _album_cache
 
 
 def _cache_invalidate() -> None:
-	global _album_cache
-	_album_cache = None
+    global _album_cache
+    _album_cache = None
 
 
 def _cache_update(new_rows: list[dict], drop_dirs: set[str]) -> None:
-	"""Replace rows matching drop_dirs with new_rows, then write through to CSV and album_cache.json."""
-	global _album_cache
-	df = _cache_load()
-	for col in ('_DIRECTORY_PATH', 'Directory', '_directory_path'):
-		if col in df.columns:
-			df = df[~df[col].isin(drop_dirs)]
-	# Unify directory keys across all new rows
-	for r in new_rows:
-		d = r.get('_DIRECTORY_PATH') or r.get('Directory') or ''
-		if d:
-			r['_DIRECTORY_PATH'] = d
-			r['Directory'] = d
-	df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
-	_album_cache = df
-	try:
-		df.to_csv(_config_dir() / 'albums.csv', index=False)
-	except Exception as e:  # noqa: BLE001
-		logger.error(f'cache write: {e}')
+    """Replace rows matching drop_dirs with new_rows, then write through to CSV and album_cache.json."""
+    global _album_cache
+    df = _cache_load()
+    for col in ("_DIRECTORY_PATH", "Directory", "_directory_path"):
+        if col in df.columns:
+            df = df[~df[col].isin(drop_dirs)]
+    # Unify directory keys across all new rows
+    for r in new_rows:
+        d = r.get("_DIRECTORY_PATH") or r.get("Directory") or ""
+        if d:
+            r["_DIRECTORY_PATH"] = d
+            r["Directory"] = d
+    df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+    _album_cache = df
+    try:
+        df.to_csv(_config_dir() / "albums.csv", index=False)
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"cache write: {e}")
 
-	# Synchronize album_cache.json so rescans don't revert metadata
-	cache_file = _config_dir() / 'album_cache.json'
-	if cache_file.exists():
-		try:
-			cache_data = json.loads(cache_file.read_text(encoding='utf-8'))
-			for r in new_rows:
-				d = r.get('_DIRECTORY_PATH') or r.get('Directory')
-				if d and Path(d).exists():
-					flacs = _album_flacs(d)
-					if flacs:
-						mtime = max(os.path.getmtime(f) for f in flacs)
-						cache_data[d] = {'mtime': mtime, 'data': r}
-			for d in drop_dirs:
-				if d in cache_data and not Path(d).exists():
-					cache_data.pop(d, None)
-			cache_file.write_text(json.dumps(cache_data, indent=2), encoding='utf-8')
-		except Exception as e:  # noqa: BLE001
-			logger.warning(f'Could not update album_cache.json: {e}')
+    # Synchronize album_cache.json so rescans don't revert metadata
+    cache_file = _config_dir() / "album_cache.json"
+    if cache_file.exists():
+        try:
+            cache_data = json.loads(cache_file.read_text(encoding="utf-8"))
+            for r in new_rows:
+                d = r.get("_DIRECTORY_PATH") or r.get("Directory")
+                if d and Path(d).exists():
+                    flacs = _album_flacs(d)
+                    if flacs:
+                        mtime = max(os.path.getmtime(f) for f in flacs)
+                        cache_data[d] = {"mtime": mtime, "data": r}
+            for d in drop_dirs:
+                if d in cache_data and not Path(d).exists():
+                    cache_data.pop(d, None)
+            cache_file.write_text(json.dumps(cache_data, indent=2), encoding="utf-8")
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"Could not update album_cache.json: {e}")
 
 
 COLUMNS = [
-	'Album Artist',
-	'Album',
-	'Format',
-	'Edition',
-	'Release Date',
-	'Original Date',
-	'DR',
-	'Catalog',
-	'Cover Art',
+    "Album Artist",
+    "Album",
+    "Format",
+    "Edition",
+    "Release Date",
+    "Original Date",
+    "DR",
+    "Catalog",
+    "Cover Art",
 ]
 
 
 def dr_class(dr: str) -> str:
-	try:
-		v = int(dr)
-		if v >= 12:
-			return 'dr-hi'
-		if v >= 8:
-			return 'dr-mid'
-		return 'dr-lo'
-	except ValueError:
-		return ''
+    try:
+        v = int(dr)
+        if v >= 12:
+            return "dr-hi"
+        if v >= 8:
+            return "dr-mid"
+        return "dr-lo"
+    except ValueError:
+        return ""
 
 
-def load_albums(search: str = '', sort: str = 'Album Artist', order: str = 'asc') -> list[dict]:
-	df = _cache_load()
-	if df.empty:
-		return []
-	if search:
-		mask = df.apply(lambda row: row.str.contains(search, case=False).any(), axis=1)
-		df = df[mask]
-	if sort in df.columns:
-		asc = order == 'asc'
-		by = [sort]
-		ascending = [asc]
-		if sort == 'Album Artist':
-			by += ['Original Date', 'Release Date']
-			ascending += [True, True]
-		df = df.sort_values(by=by, ascending=ascending)
-	return df.to_dict(orient='records')
+def load_albums(
+    search: str = "", sort: str = "Album Artist", order: str = "asc"
+) -> list[dict]:
+    df = _cache_load()
+    if df.empty:
+        return []
+    if search:
+        mask = df.apply(lambda row: row.str.contains(search, case=False).any(), axis=1)
+        df = df[mask]
+    if sort in df.columns:
+        asc = order == "asc"
+        by = [sort]
+        ascending = [asc]
+        if sort == "Album Artist":
+            by += ["Original Date", "Release Date"]
+            ascending += [True, True]
+        df = df.sort_values(by=by, ascending=ascending)
+    return df.to_dict(orient="records")
 
 
 def _tagger_url(row: dict) -> str:
-	cfg = config_read()
-	scheme = cfg.get('tagger_scheme', '')
-	flacroot = cfg.get('flacroot', '')
-	flacroot_local = cfg.get('flacroot_local', flacroot)
-	directory = row.get('Directory', '')
-	if not scheme or not directory or not flacroot:
-		return ''
-	# make path relative to flacroot, then rebase onto flacroot_local
-	rel = (
-		Path(directory).relative_to(flacroot) if directory.startswith(flacroot) else Path(directory)
-	)
-	local_path = str(Path(flacroot_local) / rel)
-	return f'{scheme}{local_path}'
+    cfg = config_read()
+    scheme = cfg.get("tagger_scheme", "")
+    flacroot = cfg.get("flacroot", "")
+    flacroot_local = cfg.get("flacroot_local", flacroot)
+    directory = row.get("Directory", "")
+    if not scheme or not directory or not flacroot:
+        return ""
+    # make path relative to flacroot, then rebase onto flacroot_local
+    rel = (
+        Path(directory).relative_to(flacroot)
+        if directory.startswith(flacroot)
+        else Path(directory)
+    )
+    local_path = str(Path(flacroot_local) / rel)
+    return f"{scheme}{local_path}"
 
 
-def _album_link(row: dict, title: str = '') -> str:
-	album = escape(title or row.get('Album', ''))
-	url = _tagger_url(row)
-	if url:
-		return f'<a href="{escape(url)}" title="Open in tagger">{album}</a>'
-	return album
+def _album_link(row: dict, title: str = "") -> str:
+    album = escape(title or row.get("Album", ""))
+    url = _tagger_url(row)
+    if url:
+        return f'<a href="{escape(url)}" title="Open in tagger">{album}</a>'
+    return album
 
 
 def _icon_cell(url: str, icon_url: str, title: str) -> str:
-	if not url:
-		return '<td class="icon-link"></td>'
-	return (
-		f'<td class="icon-link">'
-		f'<a href="{url}" target="_blank" rel="noopener" title="{title}">'
-		f'<img src="{icon_url}" width="16" height="16" alt="{title}" />'
-		f'</a></td>'
-	)
+    if not url:
+        return '<td class="icon-link"></td>'
+    return (
+        f'<td class="icon-link">'
+        f'<a href="{url}" target="_blank" rel="noopener" title="{title}">'
+        f'<img src="{icon_url}" width="16" height="16" alt="{title}" />'
+        f"</a></td>"
+    )
 
 
 def _artist_id(artist: str) -> str:
-	return f'artist-{abs(hash(artist))}'
+    return f"artist-{abs(hash(artist))}"
 
 
 def _cover_art_cell(row: dict) -> str:
-	cover = row.get('Cover Art', '')
-	artist = row.get('Album Artist', '')
-	title = row.get('Original Title', '') or row.get('Album', '')
-	if not cover:
-		return '<span class="no-art">-</span>'
+    cover = row.get("Cover Art", "")
+    artist = row.get("Album Artist", "")
+    title = row.get("Original Title", "") or row.get("Album", "")
+    if not cover:
+        return '<span class="no-art">-</span>'
 
-	aae_link = ''
-	if artist or title:
-		from urllib.parse import urlencode
+    aae_link = ""
+    if artist or title:
+        from urllib.parse import urlencode
 
-		url = 'https://www.albumartexchange.com/covers?' + urlencode(
-			{'fltr': 'ALL', 'sort': 'TITLE', 'q': f'{artist} {title}'.strip()}
-		)
-		aae_link = (
-			f'<a href="{url}" target="_blank" rel="noopener" title="Search Album Art Exchange" style="margin-right:4px;">'
-			f'<img src="/favicon/albumartexchange.png" width="12" height="12" style="vertical-align:middle;opacity:0.8;">'
-			f'</a>'
-		)
+        url = "https://www.albumartexchange.com/covers?" + urlencode(
+            {"fltr": "ALL", "sort": "TITLE", "q": f"{artist} {title}".strip()}
+        )
+        aae_link = (
+            f'<a href="{url}" target="_blank" rel="noopener" title="Search Album Art Exchange" style="margin-right:4px;">'
+            f'<img src="/favicon/albumartexchange.png" width="12" height="12" style="vertical-align:middle;opacity:0.8;">'
+            f"</a>"
+        )
 
-	return f'{aae_link}{escape(cover)}'
+    return f"{aae_link}{escape(cover)}"
 
 
 def render_row(row: dict, artist_id: str, row_index: int = 0) -> str:
-	album_dir = row.get('_DIRECTORY_PATH', row.get('Directory', ''))
-	artist_dir = str(Path(album_dir).parent) if album_dir else ''
-	artist_id = _artist_id(row.get('Album Artist', ''))
-	album_title = row.get('Album', '')
-	btn = (
-		(
-			f'<button class="reprocess-btn" hx-get="/reprocess?artist_dir={escape(artist_dir)}&artist_id={artist_id}" '
-			f'hx-target="#modal-wrap" hx-swap="innerHTML" '
-			f'title="Reprocess artist library"><i class="fa-solid fa-arrows-rotate"></i></button>'
-		)
-		if artist_dir
-		else ''
-	)
-	dr = escape(row.get('DR', ''))
+    album_dir = row.get("_DIRECTORY_PATH", row.get("Directory", ""))
+    artist_dir = str(Path(album_dir).parent) if album_dir else ""
+    artist_id = _artist_id(row.get("Album Artist", ""))
+    album_title = row.get("Album", "")
+    btn = (
+        (
+            f'<button class="reprocess-btn" hx-get="/reprocess?artist_dir={escape(artist_dir)}&artist_id={artist_id}" '
+            f'hx-target="#modal-wrap" hx-swap="innerHTML" '
+            f'title="Reprocess artist library"><i class="fa-solid fa-arrows-rotate"></i></button>'
+        )
+        if artist_dir
+        else ""
+    )
+    dr = escape(row.get("DR", ""))
 
-	discogs_id = (
-		row.get('Discogs', '')
-		or row.get('Discogs Release ID', '')
-		or row.get('DISCOGS_RELEASE_ID', '')
-	).strip()
-	mb_id = (
-		row.get('MusicBrainz Release Id', '')
-		or row.get('MusicBrainz Release ID', '')
-		or row.get('MusicBrainz Album ID', '')
-		or row.get('MusicBrainz', '')
-		or row.get('MUSICBRAINZ_ALBUMID', '')
-	).strip()
-	cat_val = (
-		row.get('Catalog Number', '')
-		or row.get('Catalog', '')
-		or row.get('CATALOGNUMBER', '')
-		or row.get('CATALOG NUMBER', '')
-	).strip()
+    discogs_id = (
+        row.get("Discogs", "")
+        or row.get("Discogs Release ID", "")
+        or row.get("DISCOGS_RELEASE_ID", "")
+    ).strip()
+    mb_id = (
+        row.get("MusicBrainz Release Id", "")
+        or row.get("MusicBrainz Release ID", "")
+        or row.get("MusicBrainz Album ID", "")
+        or row.get("MusicBrainz", "")
+        or row.get("MUSICBRAINZ_ALBUMID", "")
+    ).strip()
+    cat_val = (
+        row.get("Catalog Number", "")
+        or row.get("Catalog", "")
+        or row.get("CATALOGNUMBER", "")
+        or row.get("CATALOG NUMBER", "")
+    ).strip()
 
-	discogs_cell = _icon_cell(
-		f'https://www.discogs.com/release/{escape(discogs_id)}' if discogs_id else '',
-		'/favicon/discogs.png',
-		'Discogs',
-	)
-	mb_cell = _icon_cell(
-		f'https://musicbrainz.org/release/{escape(mb_id)}' if mb_id else '',
-		'/favicon/musicbrainz.png',
-		'MusicBrainz',
-	)
-	from urllib.parse import urlencode
+    discogs_cell = _icon_cell(
+        f"https://www.discogs.com/release/{escape(discogs_id)}" if discogs_id else "",
+        "/favicon/discogs.png",
+        "Discogs",
+    )
+    mb_cell = _icon_cell(
+        f"https://musicbrainz.org/release/{escape(mb_id)}" if mb_id else "",
+        "/favicon/musicbrainz.png",
+        "MusicBrainz",
+    )
+    from urllib.parse import urlencode
 
-	dr_url = 'https://dr.loudness-war.info/album/list/1/dr/desc?' + urlencode(
-		{'artist': row.get('Album Artist', ''), 'album': album_title}
-	)
-	dr_btn = (
-		(
-			f'<a href="{dr_url}" target="_blank" rel="noopener" title="Look up DR on loudness-war.info" '
-			f'style="color:#888;font-size:11px;text-decoration:none;margin-left:4px;">'
-			f'<i class="fa-solid fa-wave-square"></i></a>'
-		)
-		if dr
-		else ''
-	)
-	fmt = escape(row.get('Format', ''))
-	ed = escape(row.get('Edition', ''))
-	return (
-		f'<tr class="{"even" if row_index % 2 else "odd"}">'
-		f'<td class="reprocess">{btn}</td>'
-		f'<td class="artist">{escape(row.get("Album Artist", ""))}</td>'
-		f'<td class="album">{_album_link(row, album_title)}</td>'
-		f'<td class="format">{fmt}</td>'
-		f'<td class="edition">{ed}</td>'
-		f'<td>{escape(row.get("Release Date", ""))}</td>'
-		f'<td>{escape(row.get("Original Date", ""))}</td>'
-		f'<td class="dr {dr_class(row.get("DR", ""))}">{dr}{dr_btn}</td>'
-		f'{discogs_cell}{mb_cell}'
-		f'<td>{escape(cat_val)}</td>'
-		f'<td class="cover-art">{_cover_art_cell(row)}</td>'
-		f'</tr>'
-	)
+    dr_url = "https://dr.loudness-war.info/album/list/1/dr/desc?" + urlencode(
+        {"artist": row.get("Album Artist", ""), "album": album_title}
+    )
+    dr_btn = (
+        (
+            f'<a href="{dr_url}" target="_blank" rel="noopener" title="Look up DR on loudness-war.info" '
+            f'style="color:#888;font-size:11px;text-decoration:none;margin-left:4px;">'
+            f'<i class="fa-solid fa-wave-square"></i></a>'
+        )
+        if dr
+        else ""
+    )
+    fmt = escape(row.get("Format", ""))
+    ed = escape(row.get("Edition", ""))
+    return (
+        f'<tr class="{"even" if row_index % 2 else "odd"}">'
+        f'<td class="reprocess">{btn}</td>'
+        f'<td class="artist">{escape(row.get("Album Artist", ""))}</td>'
+        f'<td class="album">{_album_link(row, album_title)}</td>'
+        f'<td class="format">{fmt}</td>'
+        f'<td class="edition">{ed}</td>'
+        f"<td>{escape(row.get('Release Date', ''))}</td>"
+        f"<td>{escape(row.get('Original Date', ''))}</td>"
+        f'<td class="dr {dr_class(row.get("DR", ""))}">{dr}{dr_btn}</td>'
+        f"{discogs_cell}{mb_cell}"
+        f"<td>{escape(cat_val)}</td>"
+        f'<td class="cover-art">{_cover_art_cell(row)}</td>'
+        f"</tr>"
+    )
 
 
 def render_artist_tbody(artist: str, rows: list[dict], start_index: int = 0) -> str:
-	aid = _artist_id(artist)
-	trs = ''.join(render_row(r, aid, start_index + i) for i, r in enumerate(rows))
-	return f'<tbody id="{aid}">{trs}</tbody>'
+    aid = _artist_id(artist)
+    trs = "".join(render_row(r, aid, start_index + i) for i, r in enumerate(rows))
+    return f'<tbody id="{aid}">{trs}</tbody>'
 
 
 def render_table(rows: list[dict], sort: str, order: str, search: str) -> str:
-	next_order = 'desc' if order == 'asc' else 'asc'
-	ths = ['<th></th>']  # reprocess column — no sort
-	for col in COLUMNS:
-		if col == 'Catalog':
-			for icon_col, favicon, label in [
-				('Discogs', '/favicon/discogs.png', 'Discogs'),
-				('MusicBrainz', '/favicon/musicbrainz.png', 'MusicBrainz'),
-			]:
-				cur = 'sorted-' + order if sort == icon_col else ''
-				col_order = next_order if sort == icon_col else 'asc'
-				ths.append(
-					f'<th class="icon-sort {cur}" '
-					f'hx-get="/albums" hx-target="#albums-wrap" hx-swap="outerHTML" '
-					f'hx-vals=\'{{"sort":"{icon_col}","order":"{col_order}","search":"{escape(search)}"}}\' '
-					f'title="{label}">'
-					f'<img src="{favicon}" width="14" height="14" alt="{label}" />'
-					f'</th>'
-				)
-		cur = 'sorted-' + order if sort == col else ''
-		col_order = next_order if sort == col else 'asc'
-		ths.append(
-			f'<th class="{cur}" '
-			f'hx-get="/albums" hx-target="#albums-wrap" hx-swap="outerHTML" '
-			f'hx-vals=\'{{"sort":"{escape(col)}","order":"{col_order}","search":"{escape(search)}"}}\' '
-			f'>{escape(col)}</th>'
-		)
-	thead = '<thead><tr>' + ''.join(ths) + '</tr></thead>'
+    next_order = "desc" if order == "asc" else "asc"
+    ths = ["<th></th>"]  # reprocess column — no sort
+    for col in COLUMNS:
+        if col == "Catalog":
+            for icon_col, favicon, label in [
+                ("Discogs", "/favicon/discogs.png", "Discogs"),
+                ("MusicBrainz", "/favicon/musicbrainz.png", "MusicBrainz"),
+            ]:
+                cur = "sorted-" + order if sort == icon_col else ""
+                col_order = next_order if sort == icon_col else "asc"
+                ths.append(
+                    f'<th class="icon-sort {cur}" '
+                    f'hx-get="/albums" hx-target="#albums-wrap" hx-swap="outerHTML" '
+                    f'hx-vals=\'{{"sort":"{icon_col}","order":"{col_order}","search":"{escape(search)}"}}\' '
+                    f'title="{label}">'
+                    f'<img src="{favicon}" width="14" height="14" alt="{label}" />'
+                    f"</th>"
+                )
+        cur = "sorted-" + order if sort == col else ""
+        col_order = next_order if sort == col else "asc"
+        ths.append(
+            f'<th class="{cur}" '
+            f'hx-get="/albums" hx-target="#albums-wrap" hx-swap="outerHTML" '
+            f'hx-vals=\'{{"sort":"{escape(col)}","order":"{col_order}","search":"{escape(search)}"}}\' '
+            f">{escape(col)}</th>"
+        )
+    thead = "<thead><tr>" + "".join(ths) + "</tr></thead>"
 
-	# Group rows by artist, preserving current sort order
-	from itertools import groupby
+    # Group rows by artist, preserving current sort order
+    from itertools import groupby
 
-	tbodies = ''
-	row_counter = 0
-	for artist, group in groupby(rows, key=lambda r: r.get('Album Artist', '')):
-		group_rows = list(group)
-		tbodies += render_artist_tbody(artist, group_rows, row_counter)
-		row_counter += len(group_rows)
+    tbodies = ""
+    row_counter = 0
+    for artist, group in groupby(rows, key=lambda r: r.get("Album Artist", "")):
+        group_rows = list(group)
+        tbodies += render_artist_tbody(artist, group_rows, row_counter)
+        row_counter += len(group_rows)
 
-	total = len(rows)
-	if total == 0:
-		return (
-			'<div id="albums-wrap"'
-			' hx-get="/refresh/start" hx-trigger="load" hx-target="#modal-wrap" hx-swap="innerHTML">'
-			'</div>'
-		)
-	return (
-		f'<div id="albums-wrap">'
-		f'<span id="count-data" data-total="{total}" style="display:none"></span>'
-		f'<table>{thead}{tbodies}</table>'
-		f'</div>'
-	)
+    total = len(rows)
+    if total == 0:
+        return (
+            '<div id="albums-wrap"'
+            ' hx-get="/refresh/start" hx-trigger="load" hx-target="#modal-wrap" hx-swap="innerHTML">'
+            "</div>"
+        )
+    return (
+        f'<div id="albums-wrap">'
+        f'<span id="count-data" data-total="{total}" style="display:none"></span>'
+        f"<table>{thead}{tbodies}</table>"
+        f"</div>"
+    )
 
 
 INDEX_HTML = """<!DOCTYPE html>
@@ -679,578 +690,598 @@ INDEX_HTML = """<!DOCTYPE html>
 </html>"""
 
 
-@app.get('/', response_class=HTMLResponse)
-async def index():
-	return HTMLResponse(INDEX_HTML)
+@app.get("/", response_class=HTMLResponse)
+async def index() -> HTMLResponse:
+    return HTMLResponse(INDEX_HTML)
 
 
-@app.get('/albums', response_class=HTMLResponse)
+@app.get("/albums", response_class=HTMLResponse)
 async def albums(
-	search: str = Query(default=''),
-	sort: str = Query(default='Album Artist'),
-	order: str = Query(default='asc'),
-):
-	rows = load_albums(search=search, sort=sort, order=order)
-	return HTMLResponse(render_table(rows, sort, order, search))
+    search: str = Query(default=""),
+    sort: str = Query(default="Album Artist"),
+    order: str = Query(default="asc"),
+) -> HTMLResponse:
+    rows = load_albums(search=search, sort=sort, order=order)
+    return HTMLResponse(render_table(rows, sort, order, search))
 
 
-def _start_album_scan(label: str = 'refresh', force: bool = False) -> None:
-	"""Launch album_list.py in a background thread; sets _refresh_done on completion."""
-	import threading
+def _start_album_scan(label: str = "refresh", force: bool = False) -> None:
+    """Launch album_list.py in a background thread; sets _refresh_done on completion."""
+    import threading
 
-	try:
-		from config import flacroot
-	except Exception as e:  # noqa: BLE001
-		logger.error(f'{label}: cannot import config: {e}')
-		return
-	if not Path(flacroot).exists():
-		logger.error(f'{label}: flacroot does not exist: {flacroot}')
-		return
-	script = SCRIPTS_DIR / 'album_list.py'
-	logger.info(f'{label}: running library scan')
-	cmd = ['uv', 'run', str(script)]
-	if force:
-		cmd.append('--force')
-	cmd.append(str(flacroot))
-	proc = _set_proc(
-		subprocess.Popen(
-			cmd,
-			stdout=subprocess.PIPE,
-			stderr=subprocess.DEVNULL,
-			text=True,
-			cwd=str(SCRIPTS_DIR),
-			env={**os.environ, 'DISCOGS_CHILD': '1'},
-		)
-	)
+    try:
+        from config import flacroot
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"{label}: cannot import config: {e}")
+        return
+    if not Path(flacroot).exists():
+        logger.error(f"{label}: flacroot does not exist: {flacroot}")
+        return
+    script = SCRIPTS_DIR / "album_list.py"
+    logger.info(f"{label}: running library scan")
+    cmd = ["uv", "run", str(script)]
+    if force:
+        cmd.append("--force")
+    cmd.append(str(flacroot))
+    proc = _set_proc(
+        subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            cwd=str(SCRIPTS_DIR),
+            env={**os.environ, "DISCOGS_CHILD": "1"},
+        )
+    )
 
-	def _reader():
-		for line in proc.stdout:
-			_relay_child_line(label, line)
-		proc.wait()
-		if proc.returncode == 0:
-			logger.info(f'{label}: library scan complete')
-			_cache_invalidate()
-			_refresh_done['pending'] = True
-		else:
-			logger.error(f'{label}: scan failed (exit {proc.returncode})')
+    def _reader() -> None:
+        for line in proc.stdout:
+            _relay_child_line(label, line)
+        proc.wait()
+        if proc.returncode == 0:
+            logger.info(f"{label}: library scan complete")
+            _cache_invalidate()
+            _refresh_done["pending"] = True
+        else:
+            logger.error(f"{label}: scan failed (exit {proc.returncode})")
 
-	threading.Thread(target=_reader, daemon=True).start()
-
-
-@app.get('/refresh/start', response_class=HTMLResponse)
-async def refresh_start():
-	_start_album_scan('refresh', force=True)
-	return await log_modal()
+    threading.Thread(target=_reader, daemon=True).start()
 
 
-@app.get('/reprocess', response_class=HTMLResponse)
-async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)):
-	import os
-
-	from mutagen.flac import FLAC
-
-	def clean(text: str) -> str:
-		"""Replicate bliss.clean() to derive canonical directory names."""
-		import unicodedata
-
-		replacements = {'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'Ä': 'Ae', 'Ö': 'Oe', 'Ü': 'Ue', 'ß': 'ss'}
-		for k, v in replacements.items():
-			text = text.replace(k, v)
-		# Remove chars that are unsafe on common filesystems
-		text = re.sub(
-			r'[^\w\s\-.]',
-			'',
-			unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode(),
-		)
-		return re.sub(r'[\s]+', '_', text).strip('_')
-
-	ALBUM_TAGS = [
-		'ALBUMARTIST',
-		'ALBUM',
-		'VERSION',
-		'ALBUM_DR',
-		'ALBUM_FORMAT',
-		'ALBUM_EDITION',
-		'ORIGINAL_TITLE',
-		'ORIGINALDATE',
-		'RELEASEDATE',
-		'CATALOGNUMBER',
-		'DISCOGS_RELEASE_ID',
-		'MUSICBRAINZ_ALBUMID',
-		'SUBTITLE',
-	]
-	DISPLAY = {
-		'ALBUMARTIST': 'Album Artist',
-		'ALBUM': 'Album',
-		'VERSION': 'Version',
-		'ALBUM_DR': 'DR',
-		'ALBUM_FORMAT': 'Format',
-		'ALBUM_EDITION': 'Edition',
-		'ORIGINAL_TITLE': 'Original Title',
-		'ORIGINALDATE': 'Original Date',
-		'RELEASEDATE': 'Release Date',
-		'CATALOGNUMBER': 'Catalog',
-		'DISCOGS_RELEASE_ID': 'Discogs',
-		'MUSICBRAINZ_ALBUMID': 'MusicBrainz',
-		'SUBTITLE': 'Subtitle',
-	}
-
-	def read_album_dir(album_dir: str) -> dict | None:
-		first_flac = next(iter(_album_flacs(album_dir)), None)
-		if not first_flac:
-			return None
-		flac_path = first_flac
-		try:
-			audio = FLAC(flac_path)
-			raw = {k.upper(): v for k, v in audio.tags.items()}
-		except Exception as e:  # noqa: BLE001
-			logger.warning(f'read_album_dir tag read failed for {album_dir}: {e}')
-			return None
-		row = {
-			DISPLAY[t]: (
-				raw.get(t, [''])[0] if isinstance(raw.get(t), list) else raw.get(t, '') or ''
-			)
-			for t in ALBUM_TAGS
-		}
-
-		cat_val = (
-			raw.get('CATALOGNUMBER', [''])[0]
-			or raw.get('CATALOG NUMBER', [''])[0]
-			or raw.get('CATALOG_NUMBER', [''])[0]
-			or raw.get('CATALOGNO', [''])[0]
-			or ''
-		)
-		mb_val = (
-			raw.get('MUSICBRAINZ_ALBUMID', [''])[0]
-			or raw.get('MUSICBRAINZ ALBUM ID', [''])[0]
-			or raw.get('MUSICBRAINZ_RELEASEGROUPID', [''])[0]
-			or raw.get('MUSICBRAINZ RELEASE GROUP ID', [''])[0]
-			or ''
-		)
-		discogs_val = raw.get('DISCOGS_RELEASE_ID', [''])[0] or ''
-		edition_val = raw.get('ALBUM_EDITION', [''])[0] or ''
-		format_val = raw.get('ALBUM_FORMAT', [''])[0] or raw.get('SUBTITLE', [''])[0] or ''
-		version_val = raw.get('VERSION', [''])[0] or format_val
-
-		row['Catalog Number'] = cat_val
-		row['Catalog'] = cat_val
-		row['MusicBrainz Release Id'] = mb_val
-		row['MusicBrainz'] = mb_val
-		row['Discogs Release ID'] = discogs_val
-		row['Discogs'] = discogs_val
-		row['Edition'] = edition_val
-		row['Format'] = format_val
-		row['Version'] = version_val
-
-		title_override = raw.get('ALBUM_TITLE_OVERRIDE', [''])[0]
-		master_title = raw.get('ALBUM_MASTER_TITLE', [''])[0]
-		orig_title = raw.get('ORIGINAL_TITLE', [''])[0]
-		if title_override:
-			row['Album'] = title_override
-		elif master_title:
-			row['Album'] = master_title
-		elif orig_title:
-			row['Album'] = orig_title
-		else:
-			alb = row.get('Album', '')
-			if '[' in alb:
-				alb = alb.split('[')[0].strip()
-			row['Album'] = alb
-		try:
-			import io
-
-			from PIL import Image
-
-			if audio.pictures:
-				img = Image.open(io.BytesIO(audio.pictures[0].data))
-				row['Cover Art'] = f'{img.width}x{img.height}'
-			else:
-				logger.info(f'read_album_dir: no pictures in {flac_path}')
-				row['Cover Art'] = ''
-		except Exception as e:  # noqa: BLE001
-			logger.warning(f'cover art read failed for {album_dir}: {e}')
-			row['Cover Art'] = ''
-		row['_DIRECTORY_PATH'] = album_dir
-		row['Directory'] = album_dir
-		return row
-
-	# Read ALBUMARTIST before running anything — bliss may rename the artist dir
-	album_artist = None
-	if Path(artist_dir).is_dir():
-		for entry in sorted(Path(artist_dir).iterdir()):
-			if entry.is_dir():
-				first_flac = next(iter(_album_flacs(str(entry))), None)
-				if first_flac:
-					try:
-						audio = FLAC(first_flac)
-						album_artist = audio.tags.get('ALBUMARTIST', [None])[0]
-					except Exception:  # noqa: BLE001, S110  # album artist is optional here
-						pass
-				if album_artist:
-					break
-
-	import threading
-
-	def run_scripts():
-		child_env = {**os.environ, 'DISCOGS_CHILD': '1'}
-		# Collect all album directories under artist_dir (including artist_dir itself if it contains FLACs)
-		album_dirs = []
-		if Path(artist_dir).is_dir():
-			if any(p.suffix == '.flac' for p in Path(artist_dir).glob('*.flac')):
-				album_dirs.append(Path(artist_dir))
-			for entry in sorted(Path(artist_dir).iterdir()):
-				if (
-					entry.is_dir()
-					and any(p.suffix == '.flac' for p in entry.rglob('*.flac'))
-					and entry not in album_dirs
-				):
-					album_dirs.append(entry)
-
-		# Run fixtags on each album directory
-		for album_dir_path in album_dirs:
-			proc = _set_proc(
-				subprocess.Popen(
-					['uv', 'run', str(SCRIPTS_DIR / 'fixtags.py'), str(album_dir_path)],
-					stdout=subprocess.PIPE,
-					stderr=subprocess.STDOUT,
-					text=True,
-					cwd=str(SCRIPTS_DIR),
-					env=child_env,
-				)
-			)
-			for line in proc.stdout:
-				_relay_child_line('fixtags', line)
-			proc.wait()
-
-		# Run bliss on artist dir
-		proc = _set_proc(
-			subprocess.Popen(
-				['uv', 'run', str(SCRIPTS_DIR / 'bliss.py'), artist_dir],
-				stdout=subprocess.PIPE,
-				stderr=subprocess.STDOUT,
-				text=True,
-				cwd=str(SCRIPTS_DIR),
-				env=child_env,
-			)
-		)
-		for line in proc.stdout:
-			_relay_child_line('bliss', line)
-		proc.wait()
-
-		# Update cache after fixtags/bliss
-		from config import flacroot
-
-		new_artist_dir = str(Path(flacroot) / clean(album_artist)) if album_artist else artist_dir
-		search_dir = Path(new_artist_dir) if Path(new_artist_dir).is_dir() else Path(artist_dir)
-		target_folders = set()
-		if search_dir.is_dir():
-			for flac_p in search_dir.rglob('*.flac'):
-				target_folders.add(_album_root(flac_p))
-
-		rows = []
-		for folder in sorted(target_folders):
-			row = read_album_dir(folder)
-			if row:
-				rows.append(row)
-
-		if rows:
-			new_dirs = {r['Directory'] for r in rows}
-			old_folders = (
-				{_album_root(p) for p in Path(artist_dir).rglob('*.flac')}
-				if Path(artist_dir).is_dir()
-				else set()
-			)
-			_cache_update(rows, new_dirs | old_folders | {artist_dir, new_artist_dir})
-			_cache_invalidate()
-			_refresh_done['pending'] = True
-		_clear_proc()
-
-	threading.Thread(target=run_scripts, daemon=True).start()
-	return await log_modal()
+@app.get("/refresh/start", response_class=HTMLResponse)
+async def refresh_start() -> HTMLResponse:
+    _start_album_scan("refresh", force=True)
+    return await log_modal()
 
 
-@app.get('/lyrics', response_class=HTMLResponse)
-async def lyrics_run():
-	import threading
+@app.get("/reprocess", response_class=HTMLResponse)
+async def reprocess(
+    artist_dir: str = Query(...), artist_id: str = Query(...)
+) -> HTMLResponse:
+    import os
 
-	from config import flacroot
+    from mutagen.flac import FLAC
 
-	logger.info('lyrics: starting update')
-	proc = _set_proc(
-		subprocess.Popen(  # noqa: ASYNC220  # quick fork/exec; output is read in a worker thread
-			['uv', 'run', str(SCRIPTS_DIR / 'update_lyrics.py'), str(flacroot)],
-			stdout=subprocess.PIPE,
-			stderr=subprocess.DEVNULL,
-			text=True,
-			cwd=str(SCRIPTS_DIR),
-			env={**os.environ, 'DISCOGS_CHILD': '1'},
-		)
-	)
+    def clean(text: str) -> str:
+        """Replicate bliss.clean() to derive canonical directory names."""
+        import unicodedata
 
-	def _reader():
-		for line in proc.stdout:
-			_relay_child_line('lyrics', line)
-		proc.wait()
-		if proc.returncode == 0:
-			logger.info('lyrics: done')
-		else:
-			logger.error(f'lyrics: failed (exit {proc.returncode})')
+        replacements = {
+            "ä": "ae",
+            "ö": "oe",
+            "ü": "ue",
+            "Ä": "Ae",
+            "Ö": "Oe",
+            "Ü": "Ue",
+            "ß": "ss",
+        }
+        for k, v in replacements.items():
+            text = text.replace(k, v)
+        # Remove chars that are unsafe on common filesystems
+        text = re.sub(
+            r"[^\w\s\-.]",
+            "",
+            unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode(),
+        )
+        return re.sub(r"[\s]+", "_", text).strip("_")
 
-	threading.Thread(target=_reader, daemon=True).start()
-	return await log_modal()
+    ALBUM_TAGS = [
+        "ALBUMARTIST",
+        "ALBUM",
+        "VERSION",
+        "ALBUM_DR",
+        "ALBUM_FORMAT",
+        "ALBUM_EDITION",
+        "ORIGINAL_TITLE",
+        "ORIGINALDATE",
+        "RELEASEDATE",
+        "CATALOGNUMBER",
+        "DISCOGS_RELEASE_ID",
+        "MUSICBRAINZ_ALBUMID",
+        "SUBTITLE",
+    ]
+    DISPLAY = {
+        "ALBUMARTIST": "Album Artist",
+        "ALBUM": "Album",
+        "VERSION": "Version",
+        "ALBUM_DR": "DR",
+        "ALBUM_FORMAT": "Format",
+        "ALBUM_EDITION": "Edition",
+        "ORIGINAL_TITLE": "Original Title",
+        "ORIGINALDATE": "Original Date",
+        "RELEASEDATE": "Release Date",
+        "CATALOGNUMBER": "Catalog",
+        "DISCOGS_RELEASE_ID": "Discogs",
+        "MUSICBRAINZ_ALBUMID": "MusicBrainz",
+        "SUBTITLE": "Subtitle",
+    }
+
+    def read_album_dir(album_dir: str) -> dict | None:
+        first_flac = next(iter(_album_flacs(album_dir)), None)
+        if not first_flac:
+            return None
+        flac_path = first_flac
+        try:
+            audio = FLAC(flac_path)
+            raw = {k.upper(): v for k, v in audio.tags.items()}
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"read_album_dir tag read failed for {album_dir}: {e}")
+            return None
+        row = {
+            DISPLAY[t]: (
+                raw.get(t, [""])[0]
+                if isinstance(raw.get(t), list)
+                else raw.get(t, "") or ""
+            )
+            for t in ALBUM_TAGS
+        }
+
+        cat_val = (
+            raw.get("CATALOGNUMBER", [""])[0]
+            or raw.get("CATALOG NUMBER", [""])[0]
+            or raw.get("CATALOG_NUMBER", [""])[0]
+            or raw.get("CATALOGNO", [""])[0]
+            or ""
+        )
+        mb_val = (
+            raw.get("MUSICBRAINZ_ALBUMID", [""])[0]
+            or raw.get("MUSICBRAINZ ALBUM ID", [""])[0]
+            or raw.get("MUSICBRAINZ_RELEASEGROUPID", [""])[0]
+            or raw.get("MUSICBRAINZ RELEASE GROUP ID", [""])[0]
+            or ""
+        )
+        discogs_val = raw.get("DISCOGS_RELEASE_ID", [""])[0] or ""
+        edition_val = raw.get("ALBUM_EDITION", [""])[0] or ""
+        format_val = (
+            raw.get("ALBUM_FORMAT", [""])[0] or raw.get("SUBTITLE", [""])[0] or ""
+        )
+        version_val = raw.get("VERSION", [""])[0] or format_val
+
+        row["Catalog Number"] = cat_val
+        row["Catalog"] = cat_val
+        row["MusicBrainz Release Id"] = mb_val
+        row["MusicBrainz"] = mb_val
+        row["Discogs Release ID"] = discogs_val
+        row["Discogs"] = discogs_val
+        row["Edition"] = edition_val
+        row["Format"] = format_val
+        row["Version"] = version_val
+
+        title_override = raw.get("ALBUM_TITLE_OVERRIDE", [""])[0]
+        master_title = raw.get("ALBUM_MASTER_TITLE", [""])[0]
+        orig_title = raw.get("ORIGINAL_TITLE", [""])[0]
+        if title_override:
+            row["Album"] = title_override
+        elif master_title:
+            row["Album"] = master_title
+        elif orig_title:
+            row["Album"] = orig_title
+        else:
+            alb = row.get("Album", "")
+            if "[" in alb:
+                alb = alb.split("[")[0].strip()
+            row["Album"] = alb
+        try:
+            import io
+
+            from PIL import Image
+
+            if audio.pictures:
+                img = Image.open(io.BytesIO(audio.pictures[0].data))
+                row["Cover Art"] = f"{img.width}x{img.height}"
+            else:
+                logger.info(f"read_album_dir: no pictures in {flac_path}")
+                row["Cover Art"] = ""
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"cover art read failed for {album_dir}: {e}")
+            row["Cover Art"] = ""
+        row["_DIRECTORY_PATH"] = album_dir
+        row["Directory"] = album_dir
+        return row
+
+    # Read ALBUMARTIST before running anything — bliss may rename the artist dir
+    album_artist = None
+    if Path(artist_dir).is_dir():
+        for entry in sorted(Path(artist_dir).iterdir()):
+            if entry.is_dir():
+                first_flac = next(iter(_album_flacs(str(entry))), None)
+                if first_flac:
+                    try:
+                        audio = FLAC(first_flac)
+                        album_artist = audio.tags.get("ALBUMARTIST", [None])[0]
+                    except Exception:  # noqa: BLE001, S110  # album artist is optional here
+                        pass
+                if album_artist:
+                    break
+
+    import threading
+
+    def run_scripts() -> None:
+        child_env = {**os.environ, "DISCOGS_CHILD": "1"}
+        # Collect all album directories under artist_dir (including artist_dir itself if it contains FLACs)
+        album_dirs = []
+        if Path(artist_dir).is_dir():
+            if any(p.suffix == ".flac" for p in Path(artist_dir).glob("*.flac")):
+                album_dirs.append(Path(artist_dir))
+            for entry in sorted(Path(artist_dir).iterdir()):
+                if (
+                    entry.is_dir()
+                    and any(p.suffix == ".flac" for p in entry.rglob("*.flac"))
+                    and entry not in album_dirs
+                ):
+                    album_dirs.append(entry)
+
+        # Run fixtags on each album directory
+        for album_dir_path in album_dirs:
+            proc = _set_proc(
+                subprocess.Popen(
+                    ["uv", "run", str(SCRIPTS_DIR / "fixtags.py"), str(album_dir_path)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    cwd=str(SCRIPTS_DIR),
+                    env=child_env,
+                )
+            )
+            for line in proc.stdout:
+                _relay_child_line("fixtags", line)
+            proc.wait()
+
+        # Run bliss on artist dir
+        proc = _set_proc(
+            subprocess.Popen(
+                ["uv", "run", str(SCRIPTS_DIR / "bliss.py"), artist_dir],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                cwd=str(SCRIPTS_DIR),
+                env=child_env,
+            )
+        )
+        for line in proc.stdout:
+            _relay_child_line("bliss", line)
+        proc.wait()
+
+        # Update cache after fixtags/bliss
+        from config import flacroot
+
+        new_artist_dir = (
+            str(Path(flacroot) / clean(album_artist)) if album_artist else artist_dir
+        )
+        search_dir = (
+            Path(new_artist_dir) if Path(new_artist_dir).is_dir() else Path(artist_dir)
+        )
+        target_folders = set()
+        if search_dir.is_dir():
+            for flac_p in search_dir.rglob("*.flac"):
+                target_folders.add(_album_root(flac_p))
+
+        rows = []
+        for folder in sorted(target_folders):
+            row = read_album_dir(folder)
+            if row:
+                rows.append(row)
+
+        if rows:
+            new_dirs = {r["Directory"] for r in rows}
+            old_folders = (
+                {_album_root(p) for p in Path(artist_dir).rglob("*.flac")}
+                if Path(artist_dir).is_dir()
+                else set()
+            )
+            _cache_update(rows, new_dirs | old_folders | {artist_dir, new_artist_dir})
+            _cache_invalidate()
+            _refresh_done["pending"] = True
+        _clear_proc()
+
+    threading.Thread(target=run_scripts, daemon=True).start()
+    return await log_modal()
 
 
-@app.get('/bliss', response_class=HTMLResponse)
-async def bliss_run():
-	import threading
+@app.get("/lyrics", response_class=HTMLResponse)
+async def lyrics_run() -> HTMLResponse:
+    import threading
 
-	logger.info('bliss: starting top-level organisation pass')
-	proc = _set_proc(
-		subprocess.Popen(  # noqa: ASYNC220  # quick fork/exec; output is read in a worker thread
-			['uv', 'run', str(SCRIPTS_DIR / 'bliss.py')],
-			stdout=subprocess.PIPE,
-			stderr=subprocess.STDOUT,
-			text=True,
-			cwd=str(SCRIPTS_DIR),
-			env={**os.environ, 'DISCOGS_CHILD': '1'},
-		)
-	)
+    from config import flacroot
 
-	def _reader():
-		for line in proc.stdout:
-			_relay_child_line('bliss', line)
-		proc.wait()
-		if proc.returncode == 0:
-			logger.info('bliss: done — triggering library rescan')
-			_start_album_scan('bliss')
-		else:
-			logger.error(f'bliss: failed (exit {proc.returncode})')
+    logger.info("lyrics: starting update")
+    proc = _set_proc(
+        subprocess.Popen(  # noqa: ASYNC220  # quick fork/exec; output is read in a worker thread
+            ["uv", "run", str(SCRIPTS_DIR / "update_lyrics.py"), str(flacroot)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            cwd=str(SCRIPTS_DIR),
+            env={**os.environ, "DISCOGS_CHILD": "1"},
+        )
+    )
 
-	threading.Thread(target=_reader, daemon=True).start()
-	return await log_modal()
+    def _reader() -> None:
+        for line in proc.stdout:
+            _relay_child_line("lyrics", line)
+        proc.wait()
+        if proc.returncode == 0:
+            logger.info("lyrics: done")
+        else:
+            logger.error(f"lyrics: failed (exit {proc.returncode})")
+
+    threading.Thread(target=_reader, daemon=True).start()
+    return await log_modal()
 
 
-_SYNC_PROGRESS_RE = re.compile(r'^\s*[\d.,]+[KMGT]?\s+\d+%\s')
+@app.get("/bliss", response_class=HTMLResponse)
+async def bliss_run() -> HTMLResponse:
+    import threading
+
+    logger.info("bliss: starting top-level organisation pass")
+    proc = _set_proc(
+        subprocess.Popen(  # noqa: ASYNC220  # quick fork/exec; output is read in a worker thread
+            ["uv", "run", str(SCRIPTS_DIR / "bliss.py")],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            cwd=str(SCRIPTS_DIR),
+            env={**os.environ, "DISCOGS_CHILD": "1"},
+        )
+    )
+
+    def _reader() -> None:
+        for line in proc.stdout:
+            _relay_child_line("bliss", line)
+        proc.wait()
+        if proc.returncode == 0:
+            logger.info("bliss: done — triggering library rescan")
+            _start_album_scan("bliss")
+        else:
+            logger.error(f"bliss: failed (exit {proc.returncode})")
+
+    threading.Thread(target=_reader, daemon=True).start()
+    return await log_modal()
+
+
+_SYNC_PROGRESS_RE = re.compile(r"^\s*[\d.,]+[KMGT]?\s+\d+%\s")
 _SYNC_PROGRESS_EVERY = 5.0  # seconds between logged rsync progress lines
 
 
-def _sync_lines(stream):
-	"""Yield text lines from a binary stream, splitting on both \\r and \\n.
+def _sync_lines(stream: BufferedIOBase) -> Iterator[str]:
+    """Yield text lines from a binary stream, splitting on both \\r and \\n.
 
-	rsync redraws its progress line with carriage returns, and `ssh -tt` turns newlines into
-	\\r\\n, so a plain line iterator would glue many progress updates into one long line."""
-	buf = b''
-	while chunk := stream.read1(4096):
-		buf += chunk
-		parts = re.split(rb'[\r\n]+', buf)
-		buf = parts.pop()
-		for part in parts:
-			if part.strip():
-				yield part.decode('utf-8', 'replace').rstrip()
-	if buf.strip():
-		yield buf.decode('utf-8', 'replace').rstrip()
+    rsync redraws its progress line with carriage returns, and `ssh -tt` turns newlines into
+    \\r\\n, so a plain line iterator would glue many progress updates into one long line."""
+    buf = b""
+    while chunk := stream.read1(4096):
+        buf += chunk
+        parts = re.split(rb"[\r\n]+", buf)
+        buf = parts.pop()
+        for part in parts:
+            if part.strip():
+                yield part.decode("utf-8", "replace").rstrip()
+    if buf.strip():
+        yield buf.decode("utf-8", "replace").rstrip()
 
 
 def _sync_command(cfg: dict[str, str]) -> list[str] | None:
-	"""Build the command for the user's sync script (ADR 0010).
+    """Build the command for the user's sync script (ADR 0010).
 
-	`sync_script` is a path, or a bare name resolved against the config directory. Returns None
-	when it is unset or the file does not exist."""
-	name = cfg.get('sync_script', '')
-	if not name:
-		return None
-	script = Path(name)
-	if not script.is_absolute():
-		script = _config_dir() / script
-	return ['bash', str(script)] if script.is_file() else None
-
-
-@app.get('/sync', response_class=HTMLResponse)
-async def sync_start():
-	sync_cmd = _sync_command(config_read())
-
-	if not sync_cmd:
-		logger.error('sync: sync_script not set in config, or the script does not exist')
-	else:
-		if _sync.get('proc') and _sync['proc'].poll() is None:
-			_sync['proc'].terminate()
-		import threading
-
-		def _run_sequence():
-			logger.info(f'sync started: {shlex.join(sync_cmd)}')
-			proc = _set_proc(
-				subprocess.Popen(
-					sync_cmd,
-					stdin=subprocess.DEVNULL,
-					stdout=subprocess.PIPE,
-					stderr=subprocess.STDOUT,
-				)
-			)
-			_sync['proc'] = proc
-
-			last_progress = 0.0
-			for line in _sync_lines(proc.stdout):
-				if _SYNC_PROGRESS_RE.match(line):
-					now = time.monotonic()
-					if now - last_progress < _SYNC_PROGRESS_EVERY:
-						continue
-					last_progress = now
-				logger.info(f'rsync: {line}')
-			proc.wait()
-
-			if proc.returncode == 0:
-				logger.info('sync done (exit 0)')
-			elif proc.returncode < 0:
-				logger.warning('sync terminated by user')
-			else:
-				logger.error(f'sync failed (exit {proc.returncode})')
-
-		threading.Thread(target=_run_sequence, daemon=True).start()
-
-	# Return the standard log modal
-	return await log_modal()
+    `sync_script` is a path, or a bare name resolved against the config directory. Returns None
+    when it is unset or the file does not exist."""
+    name = cfg.get("sync_script", "")
+    if not name:
+        return None
+    script = Path(name)
+    if not script.is_absolute():
+        script = _config_dir() / script
+    return ["bash", str(script)] if script.is_file() else None
 
 
-@app.get('/run-pipeline', response_class=HTMLResponse)
-@app.post('/run-pipeline', response_class=HTMLResponse)
-@app.get('/api/reprocess', response_class=HTMLResponse)
-@app.post('/api/reprocess', response_class=HTMLResponse)
-async def run_pipeline(directory: str = Query(...)):
-	import threading
+@app.get("/sync", response_class=HTMLResponse)
+async def sync_start() -> HTMLResponse:
+    sync_cmd = _sync_command(config_read())
 
-	logger.info(f'pipeline: starting nzbfix on {directory}')
-	proc = _set_proc(
-		subprocess.Popen(  # noqa: ASYNC220  # quick fork/exec; output is read in a worker thread
-			['uv', 'run', str(SCRIPTS_DIR / 'nzbfix.py'), directory],
-			stdout=subprocess.PIPE,
-			stderr=subprocess.STDOUT,
-			text=True,
-			cwd=str(SCRIPTS_DIR),
-			env={**os.environ, 'DISCOGS_CHILD': '1'},
-		)
-	)
+    if not sync_cmd:
+        logger.error(
+            "sync: sync_script not set in config, or the script does not exist"
+        )
+    else:
+        if _sync.get("proc") and _sync["proc"].poll() is None:
+            _sync["proc"].terminate()
+        import threading
 
-	def _stream_pipeline():
-		for line in proc.stdout:
-			_relay_child_line('nzbfix', line)
-		proc.wait()
-		_clear_proc()
+        def _run_sequence() -> None:
+            logger.info(f"sync started: {shlex.join(sync_cmd)}")
+            proc = _set_proc(
+                subprocess.Popen(
+                    sync_cmd,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                )
+            )
+            _sync["proc"] = proc
 
-	threading.Thread(target=_stream_pipeline, daemon=True).start()
-	return await log_modal()
+            last_progress = 0.0
+            for line in _sync_lines(proc.stdout):
+                if _SYNC_PROGRESS_RE.match(line):
+                    now = time.monotonic()
+                    if now - last_progress < _SYNC_PROGRESS_EVERY:
+                        continue
+                    last_progress = now
+                logger.info(f"rsync: {line}")
+            proc.wait()
+
+            if proc.returncode == 0:
+                logger.info("sync done (exit 0)")
+            elif proc.returncode < 0:
+                logger.warning("sync terminated by user")
+            else:
+                logger.error(f"sync failed (exit {proc.returncode})")
+
+        threading.Thread(target=_run_sequence, daemon=True).start()
+
+    # Return the standard log modal
+    return await log_modal()
+
+
+@app.get("/run-pipeline", response_class=HTMLResponse)
+@app.post("/run-pipeline", response_class=HTMLResponse)
+@app.get("/api/reprocess", response_class=HTMLResponse)
+@app.post("/api/reprocess", response_class=HTMLResponse)
+async def run_pipeline(directory: str = Query(...)) -> HTMLResponse:
+    import threading
+
+    logger.info(f"pipeline: starting nzbfix on {directory}")
+    proc = _set_proc(
+        subprocess.Popen(  # noqa: ASYNC220  # quick fork/exec; output is read in a worker thread
+            ["uv", "run", str(SCRIPTS_DIR / "nzbfix.py"), directory],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            cwd=str(SCRIPTS_DIR),
+            env={**os.environ, "DISCOGS_CHILD": "1"},
+        )
+    )
+
+    def _stream_pipeline() -> None:
+        for line in proc.stdout:
+            _relay_child_line("nzbfix", line)
+        proc.wait()
+        _clear_proc()
+
+    threading.Thread(target=_stream_pipeline, daemon=True).start()
+    return await log_modal()
 
 
 def _config_path() -> Path:
-	return _config_dir() / 'config.py'
+    return _config_dir() / "config.py"
 
 
 # Labels and ordering for the settings form
-SETTINGS_TITLE = 'Settings'
+SETTINGS_TITLE = "Settings"
 
 CONFIG_LABELS = {
-	'config_dir': ('Config / Data Directory', 'text'),
-	'discogs_api_key': ('Discogs API Key', 'text'),
-	'tagger_scheme': ('Tagger URL Scheme', 'text'),
-	'flacroot': ('FLAC Library Root', 'text'),
-	'mp3root': ('MP3 Mirror Root', 'text'),
-	'flacroot_local': ('FLAC Root (local)', 'text'),
-	'nzbdir': ('NZB Complete Dir', 'text'),
-	'rsgain_loudness': ('rsgain Loudness (LUFS)', 'text'),
-	'rsgain_clip_mode': ('rsgain Clip Mode (n/p/a)', 'text'),
-	'rsgain_max_peak': ('rsgain Max Peak (dBTP)', 'text'),
-	'rsgain_true_peak': ('rsgain True Peak (True/False)', 'text'),
-	'rsgain_skip': ('rsgain Skip Existing (True/False)', 'text'),
-	'log_file': ('Log File', 'text'),
-	'log_rotation': ('Log Rotation', 'text'),
-	'log_retention': ('Log Retention', 'text'),
-	'syslog_host': ('Syslog Host (Synology)', 'text'),
-	'syslog_port': ('Syslog Port', 'text'),
-	'sync_script': ('Sync Script (in config dir)', 'text'),
-	'cover_max_size': ('Cover Art Max Size (px)', 'text'),
-	'link_url_1': ('Link Button #1 URL', 'text'),
-	'link_url_2': ('Link Button #2 URL', 'text'),
-	'link_url_3': ('Link Button #3 URL', 'text'),
-	'link_url_4': ('Link Button #4 URL', 'text'),
-	'link_url_5': ('Link Button #5 URL', 'text'),
+    "config_dir": ("Config / Data Directory", "text"),
+    "discogs_api_key": ("Discogs API Key", "text"),
+    "tagger_scheme": ("Tagger URL Scheme", "text"),
+    "flacroot": ("FLAC Library Root", "text"),
+    "mp3root": ("MP3 Mirror Root", "text"),
+    "flacroot_local": ("FLAC Root (local)", "text"),
+    "nzbdir": ("NZB Complete Dir", "text"),
+    "rsgain_loudness": ("rsgain Loudness (LUFS)", "text"),
+    "rsgain_clip_mode": ("rsgain Clip Mode (n/p/a)", "text"),
+    "rsgain_max_peak": ("rsgain Max Peak (dBTP)", "text"),
+    "rsgain_true_peak": ("rsgain True Peak (True/False)", "text"),
+    "rsgain_skip": ("rsgain Skip Existing (True/False)", "text"),
+    "log_file": ("Log File", "text"),
+    "log_rotation": ("Log Rotation", "text"),
+    "log_retention": ("Log Retention", "text"),
+    "syslog_host": ("Syslog Host (Synology)", "text"),
+    "syslog_port": ("Syslog Port", "text"),
+    "sync_script": ("Sync Script (in config dir)", "text"),
+    "cover_max_size": ("Cover Art Max Size (px)", "text"),
+    "link_url_1": ("Link Button #1 URL", "text"),
+    "link_url_2": ("Link Button #2 URL", "text"),
+    "link_url_3": ("Link Button #3 URL", "text"),
+    "link_url_4": ("Link Button #4 URL", "text"),
+    "link_url_5": ("Link Button #5 URL", "text"),
 }
 
 
 def config_read() -> dict[str, str]:
-	"""Parse config.py and return active (non-commented) key=value pairs as strings."""
-	text = _config_path().read_text()
-	result = {}
-	for line in text.splitlines():
-		line = line.strip()
-		if line.startswith('#') or not line:
-			continue
-		# strip inline comment (outside of quotes)
-		line = re.sub(r'\s+#.*$', '', line)
-		# quoted string
-		m = re.match(r'^(\w+)\s*=\s*[\'"](.*)[\'"]\s*$', line)
-		if m:
-			result[m.group(1)] = m.group(2)
-			continue
-		# unquoted value (bool, int, float, or empty) — strip any accidental quotes
-		m = re.match(r'^(\w+)\s*=\s*(\S*)', line)
-		if m:
-			result[m.group(1)] = m.group(2).strip('\'"')
-	return result
+    """Parse config.py and return active (non-commented) key=value pairs as strings."""
+    text = _config_path().read_text()
+    result = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("#") or not line:
+            continue
+        # strip inline comment (outside of quotes)
+        line = re.sub(r"\s+#.*$", "", line)
+        # quoted string
+        m = re.match(r'^(\w+)\s*=\s*[\'"](.*)[\'"]\s*$', line)
+        if m:
+            result[m.group(1)] = m.group(2)
+            continue
+        # unquoted value (bool, int, float, or empty) — strip any accidental quotes
+        m = re.match(r"^(\w+)\s*=\s*(\S*)", line)
+        if m:
+            result[m.group(1)] = m.group(2).strip("'\"")
+    return result
 
 
 # Keys whose values are stored unquoted in config.py
 _UNQUOTED = {
-	'rsgain_loudness',
-	'rsgain_max_peak',
-	'rsgain_true_peak',
-	'rsgain_skip',
-	'cover_max_size',
-	'syslog_port',
+    "rsgain_loudness",
+    "rsgain_max_peak",
+    "rsgain_true_peak",
+    "rsgain_skip",
+    "cover_max_size",
+    "syslog_port",
 }
 
 
 def config_write(updates: dict[str, str]) -> None:
-	"""Write updated values back to config.py, preserving comments and structure.
-	Keys already present are updated in-place; new keys are appended at the end."""
-	lines = _config_path().read_text().splitlines()
-	written = set()
-	out = []
-	for line in lines:
-		m = re.match(r'^(\w+)\s*=\s*[\'"](.*)[\'"]\s*$', line.strip())
-		if not m:
-			m = re.match(r'^(\w+)\s*=\s*(\S*)', line.strip())
-		if m and m.group(1) in updates:
-			key = m.group(1)
-			val = updates[key]
-			written.add(key)
-			if key in _UNQUOTED:
-				out.append(f'{key} = {val}')
-				continue
-			quote = "'" if line.strip()[len(key) :].lstrip(' =')[0] == "'" else '"'
-			out.append(f'{key} = {quote}{val}{quote}')
-		else:
-			out.append(line)
-	# Append any keys that were not found in the existing file
-	for key, val in updates.items():
-		if key not in written:
-			if key in _UNQUOTED:
-				out.append(f'{key} = {val}')
-			else:
-				out.append(f"{key} = '{val}'")
-	_config_path().write_text('\n'.join(out) + '\n')
+    """Write updated values back to config.py, preserving comments and structure.
+    Keys already present are updated in-place; new keys are appended at the end."""
+    lines = _config_path().read_text().splitlines()
+    written = set()
+    out = []
+    for line in lines:
+        m = re.match(r'^(\w+)\s*=\s*[\'"](.*)[\'"]\s*$', line.strip())
+        if not m:
+            m = re.match(r"^(\w+)\s*=\s*(\S*)", line.strip())
+        if m and m.group(1) in updates:
+            key = m.group(1)
+            val = updates[key]
+            written.add(key)
+            if key in _UNQUOTED:
+                out.append(f"{key} = {val}")
+                continue
+            quote = "'" if line.strip()[len(key) :].lstrip(" =")[0] == "'" else '"'
+            out.append(f"{key} = {quote}{val}{quote}")
+        else:
+            out.append(line)
+    # Append any keys that were not found in the existing file
+    for key, val in updates.items():
+        if key not in written:
+            if key in _UNQUOTED:
+                out.append(f"{key} = {val}")
+            else:
+                out.append(f"{key} = '{val}'")
+    _config_path().write_text("\n".join(out) + "\n")
 
 
 def render_settings_modal(values: dict[str, str], saved: bool = False) -> str:
-	fields = ''
-	for key, (label, _) in CONFIG_LABELS.items():
-		val = escape(values.get(key, ''))
-		fields += (
-			f'<div class="field">'
-			f'<label for="cfg-{key}">{label}</label>'
-			f'<input type="text" id="cfg-{key}" name="{key}" value="{val}" />'
-			f'</div>'
-		)
-	banner = '<p class="saved-ok">Saved.</p>' if saved else ''
-	return f"""
+    fields = ""
+    for key, (label, _) in CONFIG_LABELS.items():
+        val = escape(values.get(key, ""))
+        fields += (
+            f'<div class="field">'
+            f'<label for="cfg-{key}">{label}</label>'
+            f'<input type="text" id="cfg-{key}" name="{key}" value="{val}" />'
+            f"</div>"
+        )
+    banner = '<p class="saved-ok">Saved.</p>' if saved else ""
+    return f"""
 <div id="modal-backdrop" onclick="closeModal()"></div>
 <div id="modal" style="max-height:90vh;display:flex;flex-direction:column;">
   <div id="modal-header">
@@ -1272,46 +1303,50 @@ LOG_TAIL = 500  # lines to show
 
 
 _LOG_COLOURS = {
-	'SUCCESS': '#6ec96e',
-	'ERROR': '#f47f7f',
-	'WARNING': '#e0a840',
-	'CRITICAL': '#ff5555',
+    "SUCCESS": "#6ec96e",
+    "ERROR": "#f47f7f",
+    "WARNING": "#e0a840",
+    "CRITICAL": "#ff5555",
 }
 
 
 def _read_log_html() -> str:
-	import json
+    import json
 
-	cfg = config_read()
-	log_path = _config_dir() / cfg.get('log_file', 'discogs.log')
-	if not log_path.exists():
-		return '<span style="color:#666">(log file not found)</span>'
-	lines = log_path.read_text(errors='replace').splitlines()[-LOG_TAIL:]
-	out = []
-	for line in lines:
-		try:
-			rec = json.loads(line)
-			level = rec.get('level', '').upper()
-			ts = rec.get('timestamp', '')
-			event = rec.get('event', line)
-			# Extra keys beyond the standard three
-			extras = {k: v for k, v in rec.items() if k not in ('level', 'timestamp', 'event')}
-			text = f'{ts} | {level:<8} | {event}'
-			if extras:
-				text += '  ' + '  '.join(f'{k}={v}' for k, v in extras.items())
-		except (json.JSONDecodeError, ValueError):
-			level = next((l for l in _LOG_COLOURS if f'| {l}' in line), None)
-			text = line
-		colour = _LOG_COLOURS.get(level)
-		escaped = escape(text)
-		out.append(f'<span style="color:{colour}">{escaped}</span>' if colour else escaped)
-	return '\n'.join(out)
+    cfg = config_read()
+    log_path = _config_dir() / cfg.get("log_file", "discogs.log")
+    if not log_path.exists():
+        return '<span style="color:#666">(log file not found)</span>'
+    lines = log_path.read_text(errors="replace").splitlines()[-LOG_TAIL:]
+    out = []
+    for line in lines:
+        try:
+            rec = json.loads(line)
+            level = rec.get("level", "").upper()
+            ts = rec.get("timestamp", "")
+            event = rec.get("event", line)
+            # Extra keys beyond the standard three
+            extras = {
+                k: v for k, v in rec.items() if k not in ("level", "timestamp", "event")
+            }
+            text = f"{ts} | {level:<8} | {event}"
+            if extras:
+                text += "  " + "  ".join(f"{k}={v}" for k, v in extras.items())
+        except (json.JSONDecodeError, ValueError):
+            level = next((lv for lv in _LOG_COLOURS if f"| {lv}" in line), None)
+            text = line
+        colour = _LOG_COLOURS.get(level)
+        escaped = escape(text)
+        out.append(
+            f'<span style="color:{colour}">{escaped}</span>' if colour else escaped
+        )
+    return "\n".join(out)
 
 
-@app.get('/log', response_class=HTMLResponse)
-async def log_modal():
-	return HTMLResponse(
-		"""
+@app.get("/log", response_class=HTMLResponse)
+async def log_modal() -> HTMLResponse:
+    return HTMLResponse(
+        """
 <div id="modal-backdrop" onclick="closeModal()"></div>
 <div id="modal" style="width:80vw;height:80vh;display:flex;flex-direction:column;">
   <div id="modal-header">
@@ -1338,46 +1373,46 @@ async def log_modal():
     style="flex:1;overflow:auto;margin:0;padding:12px;background:#1e1e1e;color:#d4d4d4;
            font-family:monospace;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all;user-select:text;"
   >"""
-		+ _read_log_html()
-		+ """</pre>
+        + _read_log_html()
+        + """</pre>
 </div>
 <script>
   (function(){ var el=document.getElementById('log-content'); el.scrollTop=el.scrollHeight; })();
 </script>"""
-	)
+    )
 
 
-@app.post('/kill', response_class=HTMLResponse)
-async def kill_proc():
-	global _current_proc
-	proc = _current_proc
-	if proc and proc.poll() is None:
-		proc.terminate()
-		logger.warning('Process killed by user')
-		_current_proc = None
-	else:
-		logger.info('No active process to kill')
-	return HTMLResponse('')
+@app.post("/kill", response_class=HTMLResponse)
+async def kill_proc() -> HTMLResponse:
+    global _current_proc
+    proc = _current_proc
+    if proc and proc.poll() is None:
+        proc.terminate()
+        logger.warning("Process killed by user")
+        _current_proc = None
+    else:
+        logger.info("No active process to kill")
+    return HTMLResponse("")
 
 
-@app.get('/log/content', response_class=HTMLResponse)
-async def log_content():
-	html = _read_log_html()
-	if _refresh_done.get('pending'):
-		_refresh_done['pending'] = False
-		# Out-of-band swap: replace #albums-wrap with a self-loading placeholder
-		html += (
-			'<div id="albums-wrap" hx-swap-oob="true"'
-			' hx-get="/albums" hx-trigger="load" hx-target="#albums-wrap" hx-swap="outerHTML">'
-			'<p style="padding:16px;color:#666">Reloading…</p>'
-			'</div>'
-		)
-	return HTMLResponse(html)
+@app.get("/log/content", response_class=HTMLResponse)
+async def log_content() -> HTMLResponse:
+    html = _read_log_html()
+    if _refresh_done.get("pending"):
+        _refresh_done["pending"] = False
+        # Out-of-band swap: replace #albums-wrap with a self-loading placeholder
+        html += (
+            '<div id="albums-wrap" hx-swap-oob="true"'
+            ' hx-get="/albums" hx-trigger="load" hx-target="#albums-wrap" hx-swap="outerHTML">'
+            '<p style="padding:16px;color:#666">Reloading…</p>'
+            "</div>"
+        )
+    return HTMLResponse(html)
 
 
-@app.get('/about', response_class=HTMLResponse)
-async def about():
-	return HTMLResponse("""
+@app.get("/about", response_class=HTMLResponse)
+async def about() -> HTMLResponse:
+    return HTMLResponse("""
 <div id="modal-backdrop" onclick="closeModal()"></div>
 <div id="modal" style="width:560px;max-height:80vh;display:flex;flex-direction:column;">
   <div id="modal-header">
@@ -1420,131 +1455,146 @@ async def about():
 </div>""")
 
 
-@app.get('/settings', response_class=HTMLResponse)
-async def settings_get():
-	return HTMLResponse(render_settings_modal(config_read()))
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_get() -> HTMLResponse:
+    return HTMLResponse(render_settings_modal(config_read()))
 
 
-@app.post('/settings/save', response_class=HTMLResponse)
-async def settings_save(request: Request):
-	import threading
+@app.post("/settings/save", response_class=HTMLResponse)
+async def settings_save(request: Request) -> HTMLResponse:
+    import threading
 
-	form = await request.form()
-	updates = {k: v for k, v in form.items() if k in CONFIG_LABELS}
-	config_write(updates)
+    form = await request.form()
+    updates = {k: v for k, v in form.items() if k in CONFIG_LABELS}
+    config_write(updates)
 
-	# Re-fetch favicons for any link URLs in background
-	def _refetch():
-		for i in range(1, 6):
-			url = updates.get(f'link_url_{i}', '').strip()
-			if url:
-				_cache_link_favicon(i, url)
+    # Re-fetch favicons for any link URLs in background
+    def _refetch() -> None:
+        for i in range(1, 6):
+            url = updates.get(f"link_url_{i}", "").strip()
+            if url:
+                _cache_link_favicon(i, url)
 
-	threading.Thread(target=_refetch, daemon=True).start()
-	modal = render_settings_modal(config_read(), saved=True)
-	oob = f'<div id="link-buttons" hx-swap-oob="true">{_render_link_buttons()}</div>'
-	return HTMLResponse(modal + oob)
+    threading.Thread(target=_refetch, daemon=True).start()
+    modal = render_settings_modal(config_read(), saved=True)
+    oob = f'<div id="link-buttons" hx-swap-oob="true">{_render_link_buttons()}</div>'
+    return HTMLResponse(modal + oob)
 
 
 def _cache_link_favicon(n: int, url: str) -> None:
-	"""Fetch favicon for link button n from url and save to config dir."""
-	from urllib.parse import urlparse
+    """Fetch favicon for link button n from url and save to config dir."""
+    from urllib.parse import urlparse
 
-	import requests as _req
+    import requests as _req
 
-	parsed = urlparse(url)
-	for path in ('/favicon.ico', '/favicon.png', '/favicon-32x32.png', '/favicon-16x16.png'):
-		favicon_url = f'{parsed.scheme}://{parsed.netloc}{path}'
-		try:
-			r = _req.get(favicon_url, timeout=5)
-			logger.info(f'Favicon {n}: {favicon_url} → {r.status_code} ({len(r.content)} bytes)')
-			data = r.content
-			is_image = (
-				data[:4] == b'\x89PNG'
-				or data[:2] == b'\xff\xd8'
-				or data[:4] in (b'GIF8', b'RIFF')
-				or data[:4] == b'\x00\x00\x01\x00'  # ICO
-				or b'<svg' in data[:64]
-			)
-			if r.status_code == 200 and is_image:
-				dest = _config_dir() / f'link_favicon_{n}.ico'
-				dest.write_bytes(data)
-				return
-		except Exception as e:  # noqa: BLE001
-			logger.warning(f'Could not fetch favicon for link {n} at {favicon_url}: {e}')
-	logger.warning(f'No favicon found for link {n} ({url})')
+    parsed = urlparse(url)
+    for path in (
+        "/favicon.ico",
+        "/favicon.png",
+        "/favicon-32x32.png",
+        "/favicon-16x16.png",
+    ):
+        favicon_url = f"{parsed.scheme}://{parsed.netloc}{path}"
+        try:
+            r = _req.get(favicon_url, timeout=5)
+            logger.info(
+                f"Favicon {n}: {favicon_url} → {r.status_code} ({len(r.content)} bytes)"
+            )
+            data = r.content
+            is_image = (
+                data[:4] == b"\x89PNG"
+                or data[:2] == b"\xff\xd8"
+                or data[:4] in (b"GIF8", b"RIFF")
+                or data[:4] == b"\x00\x00\x01\x00"  # ICO
+                or b"<svg" in data[:64]
+            )
+            if r.status_code == 200 and is_image:
+                dest = _config_dir() / f"link_favicon_{n}.ico"
+                dest.write_bytes(data)
+                return
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                f"Could not fetch favicon for link {n} at {favicon_url}: {e}"
+            )
+    logger.warning(f"No favicon found for link {n} ({url})")
 
 
 def _render_link_buttons() -> str:
-	cfg = config_read()
-	buttons = []
-	for i in range(1, 6):
-		url = cfg.get(f'link_url_{i}', '').strip()
-		if not url:
-			continue
-		cached = _config_dir() / f'link_favicon_{i}.ico'
-		if not cached.exists():
-			_cache_link_favicon(i, url)
-		favicon_src = f'/link-favicon/{i}' if cached.exists() else ''
-		img = f'<img src="{favicon_src}" width="16" height="16" alt="" />' if favicon_src else '🔗'
-		buttons.append(
-			f'<a href="{escape(url)}" target="_blank" rel="noopener" class="link-url-btn" title="{escape(url)}">'
-			f'{img}'
-			f'</a>'
-		)
-	return ''.join(buttons)
+    cfg = config_read()
+    buttons = []
+    for i in range(1, 6):
+        url = cfg.get(f"link_url_{i}", "").strip()
+        if not url:
+            continue
+        cached = _config_dir() / f"link_favicon_{i}.ico"
+        if not cached.exists():
+            _cache_link_favicon(i, url)
+        favicon_src = f"/link-favicon/{i}" if cached.exists() else ""
+        img = (
+            f'<img src="{favicon_src}" width="16" height="16" alt="" />'
+            if favicon_src
+            else "🔗"
+        )
+        buttons.append(
+            f'<a href="{escape(url)}" target="_blank" rel="noopener" class="link-url-btn" title="{escape(url)}">'
+            f"{img}"
+            f"</a>"
+        )
+    return "".join(buttons)
 
 
-@app.get('/link-favicon/{n}')
-async def link_favicon(n: int):
-	path = _config_dir() / f'link_favicon_{n}.ico'
-	if not path.exists():
-		return Response(status_code=404)
-	data = path.read_bytes()
-	if data[:4] == b'\x89PNG':
-		media_type = 'image/png'
-	elif data[:4] == b'<svg' or b'<svg' in data[:64]:
-		media_type = 'image/svg+xml'
-	elif data[:6] in (b'GIF87a', b'GIF89a'):
-		media_type = 'image/gif'
-	elif data[:2] == b'\xff\xd8':
-		media_type = 'image/jpeg'
-	else:
-		media_type = 'image/x-icon'
-	return Response(content=data, media_type=media_type)
+@app.get("/link-favicon/{n}")
+async def link_favicon(n: int) -> Response:
+    path = _config_dir() / f"link_favicon_{n}.ico"
+    if not path.exists():
+        return Response(status_code=404)
+    data = path.read_bytes()
+    if data[:4] == b"\x89PNG":
+        media_type = "image/png"
+    elif data[:4] == b"<svg" or b"<svg" in data[:64]:
+        media_type = "image/svg+xml"
+    elif data[:6] in (b"GIF87a", b"GIF89a"):
+        media_type = "image/gif"
+    elif data[:2] == b"\xff\xd8":
+        media_type = "image/jpeg"
+    else:
+        media_type = "image/x-icon"
+    return Response(content=data, media_type=media_type)
 
 
-@app.get('/link-buttons', response_class=HTMLResponse)
-async def link_buttons():
-	return HTMLResponse(_render_link_buttons())
+@app.get("/link-buttons", response_class=HTMLResponse)
+async def link_buttons() -> HTMLResponse:
+    return HTMLResponse(_render_link_buttons())
 
 
-if __name__ == '__main__':
-	logger.info(f'Python {sys.version.split()[0]}, cwd={Path.cwd()}')
-	logger.info(f'SCRIPTS_DIR={SCRIPTS_DIR}')
-	logger.info(f'CONFIG_DIR env={os.environ.get("CONFIG_DIR", "(not set)")}')
+if __name__ == "__main__":
+    logger.info(f"Python {sys.version.split()[0]}, cwd={Path.cwd()}")
+    logger.info(f"SCRIPTS_DIR={SCRIPTS_DIR}")
+    logger.info(f"CONFIG_DIR env={os.environ.get('CONFIG_DIR', '(not set)')}")
 
-	cfg_dir = _config_dir()
-	logger.info(f'Resolved config dir: {cfg_dir}')
-	logger.info(f'config dir exists: {cfg_dir.exists()}, writable: {os.access(cfg_dir, os.W_OK)}')
+    cfg_dir = _config_dir()
+    logger.info(f"Resolved config dir: {cfg_dir}")
+    logger.info(
+        f"config dir exists: {cfg_dir.exists()}, writable: {os.access(cfg_dir, os.W_OK)}"
+    )
 
-	try:
-		import config
+    try:
+        import config
 
-		logger.info(f'config.py loaded from: {config.__file__}')
-		logger.info(f'config.flacroot={getattr(config, "flacroot", "(missing)")}')
-		logger.info(f'config.config_dir={getattr(config, "config_dir", "(missing)")}')
-	except Exception as e:  # noqa: BLE001
-		logger.error(f'Failed to import config.py: {e}')
+        logger.info(f"config.py loaded from: {config.__file__}")
+        logger.info(f"config.flacroot={getattr(config, 'flacroot', '(missing)')}")
+        logger.info(f"config.config_dir={getattr(config, 'config_dir', '(missing)')}")
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"Failed to import config.py: {e}")
 
-	cfg = config_read()
-	link_urls = {k: v for k, v in cfg.items() if k.startswith('link_url_') and v}
-	logger.info(f'Link buttons configured: {link_urls or "none"}')
+    cfg = config_read()
+    link_urls = {k: v for k, v in cfg.items() if k.startswith("link_url_") and v}
+    logger.info(f"Link buttons configured: {link_urls or 'none'}")
 
-	csv = cfg_dir / 'albums.csv'
-	logger.info(f'albums.csv path: {csv} — exists: {csv.exists()}')
+    csv = cfg_dir / "albums.csv"
+    logger.info(f"albums.csv path: {csv} — exists: {csv.exists()}")
 
-	host = '127.0.0.1' if not os.environ.get('CONFIG_DIR') else '0.0.0.0'
-	port = int(os.environ.get('PORT', '8765'))
-	logger.info(f'Starting uvicorn on {host}:{port}')
-	uvicorn.run('webui:app', host=host, port=port, reload=False)
+    host = "127.0.0.1" if not os.environ.get("CONFIG_DIR") else "0.0.0.0"
+    port = int(os.environ.get("PORT", "8765"))
+    logger.info(f"Starting uvicorn on {host}:{port}")
+    uvicorn.run("webui:app", host=host, port=port, reload=False)
