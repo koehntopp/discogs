@@ -55,6 +55,16 @@ RUN ldconfig /opt/taglib/lib
 # Copy only the rsgain binary from the builder
 COPY --from=builder /tmp/rsgain-build/rsgain /usr/local/bin/rsgain
 
+# drcalc: static Dynamic Range meter (calculate_dr.py)
+ARG DRCALC_VERSION=0.1.0
+ARG TARGETARCH
+RUN case "${TARGETARCH:-amd64}" in arm64) T=aarch64 ;; *) T=x86_64 ;; esac \
+    && D="drcalc-v${DRCALC_VERSION}-${T}-unknown-linux-musl" \
+    && curl -fsSL "https://github.com/koehntopp/drcalc/releases/download/v${DRCALC_VERSION}/${D}.tar.gz" \
+       | tar xz -C /tmp \
+    && mv "/tmp/${D}/drcalc" /usr/local/bin/drcalc \
+    && rm -rf "/tmp/${D}"
+
 # Install uv (manages Python 3.14 automatically)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 

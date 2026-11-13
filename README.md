@@ -27,6 +27,7 @@ If you have multiple versions of the same album (original, remaster, SACD, Qobuz
 
 ```bash
 brew install taglib --HEAD ffmpeg rsgain
+# drcalc: download from https://github.com/koehntopp/drcalc/releases and put it on PATH
 cp config_demo.py config/config.py   # fill in your paths and API key
 uv run webui.py
 ```
@@ -192,7 +193,7 @@ uv run lrclib_submitter.py /path/to/song.flac
 ## Requirements
 
 - Python ≥ 3.14 (managed automatically by uv)
-- **ffmpeg**, **rsgain**, **openssh-client** — included in the Docker image; install separately for local use
+- **ffmpeg**, **rsgain**, **drcalc**, **openssh-client** — included in the Docker image; install separately for local use (`drcalc` must be on `PATH`)
 
 ## Logging
 
@@ -208,7 +209,7 @@ Structured logging via [structlog](https://github.com/hynek/structlog):
 - [discogs_client](https://github.com/joalla/discogs_client) — Discogs API
 - [mutagen](https://github.com/quodlibet/mutagen) — FLAC audio tag read/write
 - [stable-whisper](https://github.com/cfmcdonald/stable-whisper) — MLX-accelerated word-level Whisper STT alignment
-- [drmeter](https://codeberg.org/janw/drmeter) — Dynamic Range calculation
+- [drcalc](https://github.com/koehntopp/drcalc) — Dynamic Range calculation (Rust port of [drmeter](https://codeberg.org/janw/drmeter))
 - [pyacoustid](https://github.com/beetbox/pyacoustid) — AcoustID fingerprinting
 - [lrclib.net](https://lrclib.net) — synced lyrics API
 - [rsgain](https://github.com/complexlogic/rsgain) — ReplayGain tag calculation

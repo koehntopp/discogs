@@ -31,7 +31,7 @@ We establish the following binding rules and standards for all FLAC tag handling
   * **Per-Track Language (Managed by `fixtags.py`, derived from MusicBrainz)**: `LYRICS_LANGUAGE`. See §5b.
   * **User Overrides (Optional, read by scripts)**: `ALBUM_TITLE_OVERRIDE`, `ALBUM_ARTIST_OVERRIDE`.
   * **Calculated Metric Tags**:
-    * **Track & Album Dynamic Range (`DYNAMIC_RANGE`, `ALBUM_DR`)**: Computed via EBU R 128 / `drmeter`. Track DR is written to `DYNAMIC_RANGE`. Album DR is the rounded arithmetic mean of all track DR scores in the album, written to `ALBUM_DR`.
+    * **Track & Album Dynamic Range (`DYNAMIC_RANGE`, `ALBUM_DR`)**: Computed by `drcalc` (https://github.com/koehntopp/drcalc, a Rust port of `drmeter`; same algorithm and results), which `calculate_dr.py` runs on albums whose tags are missing or inconsistent. Track DR is written to `DYNAMIC_RANGE`. Album DR is the rounded arithmetic mean of all track DR scores in the album, written to `ALBUM_DR`.
     * **AcoustID Fingerprints (`ACOUSTID_FINGERPRINT`)**: Computed via `fpcalc` (Chromaprint / `pyacoustid`). Decoded to a UTF-8 `str` string before assigning to Mutagen FLAC tags to prevent `TypeError`. Written once to `ACOUSTID_FINGERPRINT` and skipped if already present.
   * **Lyrics (Managed by `update_lyrics.py`)**: `LYRICS`.
 

@@ -137,7 +137,7 @@ Avoid `Any`. If it's genuinely necessary, add a comment saying why.
 - `album_list.py`: Scans FLAC library, outputs `albums.csv` and `albums_dr.png`.
 - `update_lyrics.py`: Parallel lyrics fetcher from lrclib.net with backoff retry logic.
 - `lrclib_submitter.py`: Submits FLAC file lyrics to LRCLIB API (`lrclib.net`) with PoW challenge solver.
-- `calculate_dr.py`: Dynamic Range calculation per track and album (`drmeter`).
+- `calculate_dr.py`: Dynamic Range calculation per track and album (wraps the `drcalc` binary).
 - `calculate_fp.py`: AcoustID acoustic fingerprint generation (`fpcalc` / `pyacoustid`).
 - `convert_opus.py`: Transcodes FLAC to Opus format.
 - `lrc_fix.py`: Local (no cloud API) LRC realignment via demucs vocal isolation + whisperx transcription + onset snapping. Own docs: `README-lrc_fix.md`; design: ADR 0009.

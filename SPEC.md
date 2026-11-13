@@ -235,7 +235,7 @@ At least one of the two must be provided; otherwise help is printed.
 
 **Purpose:** Compute and store the EBU R 128 / DR-meter Dynamic Range score for each track and album.
 
-Tracks without a `DYNAMIC_RANGE` tag are decoded in parallel, one process per CPU core; the tags are still written one file at a time in file order, so the result and the log are the same as a sequential run. `ALBUM_DR` is the mean over all discs of an album (`Disc N` and `CD N` folders are one album, `disc_layout.py`).
+`calculate_dr.py` is a thin wrapper around the `drcalc` binary (https://github.com/koehntopp/drcalc, Rust port of `drmeter`, parallel). `ALBUM_DR` is the mean of the rounded track scores over all discs of an album (`Disc N` and `CD N` folders are one album, `disc_layout.py`; 0-DR tracks are left out).
 
 **Usage:**
 
@@ -245,21 +245,20 @@ uv run calculate_dr.py [FLAC_DIR]
 
 | Argument   | Required | Description                                             |
 |------------|----------|---------------------------------------------------------|
-| `FLAC_DIR` | No       | Root of the FLAC library.  Falls back to `config.flacdir`. |
+| `FLAC_DIR` | No       | Root of the FLAC library (default: current directory). |
 
 **Behaviour:**
 
-1. Walks `FLAC_DIR` recursively to find all album directories.
-2. For each album, reads the `DYNAMIC_RANGE` tag (with fallback to deprecated `DYNAMIC RANGE`) from every FLAC.
-   - If absent, computes the score via `drmeter` + `soundfile` and writes `DYNAMIC_RANGE` back.
-3. Derives the album DR score as the rounded mean of all per-track scores.
-4. Writes `ALBUM_DR` to every file in the album when the value changed.
+1. Walks `FLAC_DIR` recursively and groups FLACs into albums (`disc_layout.album_root_of_file`).
+2. Skips an album when every track has a non-zero `DYNAMIC_RANGE` and `ALBUM_DR` equals their rounded mean, because `drcalc` re-analyses every file it is given.
+3. Otherwise runs `drcalc --write-tags --quiet --album folder <album dir>`, which writes `DYNAMIC_RANGE` and `ALBUM_DR` (two digits, zero padded; unchanged files are not rewritten) and logs one `Album DR` line.
+4. Exits 1 if `drcalc` is missing from `PATH` or fails for an album (files under 12 s cannot be measured).
 
-**Tags read:** `DYNAMIC_RANGE` (or `DYNAMIC RANGE`), `ALBUM_DR` (or `ALBUM DYNAMIC RANGE`), `TITLE`, `ALBUM`
+**Tags read:** `DYNAMIC_RANGE`, `ALBUM_DR`
 
-**Tags written:** `DYNAMIC_RANGE`, `ALBUM_DR`
+**Tags written (by `drcalc`):** `DYNAMIC_RANGE`, `ALBUM_DR`
 
-**External tools:** none (pure Python via `drmeter` / `soundfile`)
+**External tools:** `drcalc` on `PATH` (in the Docker image)
 
 ---
 

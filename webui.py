@@ -1414,7 +1414,7 @@ async def about() -> HTMLResponse:
       <tr><td><a href="https://github.com/matplotlib/matplotlib" target="_blank" rel="noopener">matplotlib</a></td><td>Dynamic Range distribution chart</td></tr>
       <tr><td><a href="https://github.com/Textualize/rich" target="_blank" rel="noopener">Rich</a></td><td>Coloured terminal output and logging</td></tr>
       <tr><td><a href="https://github.com/beetbox/pyacoustid" target="_blank" rel="noopener">pyacoustid</a></td><td>AcoustID acoustic fingerprinting</td></tr>
-      <tr><td><a href="https://pypi.org/project/drmeter/" target="_blank" rel="noopener">drmeter</a></td><td>Dynamic Range score calculation</td></tr>
+      <tr><td><a href="https://github.com/koehntopp/drcalc" target="_blank" rel="noopener">drcalc</a></td><td>Dynamic Range score calculation</td></tr>
       <tr><td><a href="https://github.com/amueller/word_cloud" target="_blank" rel="noopener">wordcloud</a></td><td>Lyrics word cloud generation</td></tr>
       <tr><td><a href="https://github.com/un33k/python-slugify" target="_blank" rel="noopener">python-slugify</a></td><td>Filename sanitisation</td></tr>
       <tr><td><a href="https://github.com/avian2/unidecode" target="_blank" rel="noopener">Unidecode</a></td><td>Unicode to ASCII transliteration</td></tr>
