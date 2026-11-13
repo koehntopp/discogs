@@ -14,6 +14,10 @@ mp3root = "/mp3/"  # mapped from e.g. /volume1/MP3 on Synology
 # Path as seen from the machine running the browser (for tagger links)
 flacroot_local = "/volume1/FLAC/"
 
+# The web UI's album list comes from Tagwright (ADR 0011)
+tagwright_url = "http://192.168.1.97:8780"
+albums_refresh_minutes = 5  # also refreshes an open page; 0 = off
+
 nzbdir = "/nzb/"  # mapped from e.g. /volume1/nzb/complete
 
 # Library sync: script run by the Sync button. A bare name is looked up in the config

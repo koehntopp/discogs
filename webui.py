@@ -30,7 +30,6 @@ import subprocess
 
 def _relay_child_line(prefix: str, line: str) -> None:
     """Parse a JSON log line from a child process and re-log just the event."""
-    import json
 
     line = line.strip()
     if not line:
@@ -133,6 +132,7 @@ app.mount("/favicon", StaticFiles(directory=str(SCRIPTS_DIR / "favicon")), name=
 _sync: dict = {"proc": None}
 _refresh_done: dict = {"pending": False}
 _album_cache: pd.DataFrame | None = None
+_album_cache_time: float = 0.0  # time.time() of the last fetch from Tagwright
 _current_proc: subprocess.Popen | None = None
 
 
@@ -148,36 +148,55 @@ def _clear_proc() -> None:
     _current_proc = None
 
 
+DEFAULT_REFRESH_MINUTES = 5
+
+
+def _refresh_minutes() -> int:
+    """Auto-refresh interval of the album list in minutes (setting albums_refresh_minutes; 0 = off)."""
+    try:
+        return max(0, int(config_read().get("albums_refresh_minutes", DEFAULT_REFRESH_MINUTES)))
+    except ValueError:
+        return DEFAULT_REFRESH_MINUTES
+
+
+def _fetch_albums() -> pd.DataFrame:
+    """The library's albums from Tagwright (ADR 0011): its albums.csv with the folders as seen from here."""
+    import io
+
+    import requests as _req
+
+    cfg = config_read()
+    url = cfg.get("tagwright_url", "").strip().rstrip("/")
+    if not url:
+        raise RuntimeError("tagwright_url is not set (Settings)")
+    r = _req.get(
+        f"{url}/api/library/albums.csv",
+        params={"path_prefix": cfg.get("flacroot", "").rstrip("/")},
+        timeout=120,
+    )
+    r.raise_for_status()
+    df = pd.read_csv(io.StringIO(r.text), dtype=str).fillna("")
+    if "Directory" in df.columns:
+        df = df[df["Directory"].apply(lambda d: bool(d and Path(d).exists()))]
+    return df
+
+
 def _cache_load() -> pd.DataFrame:
-    """Return the in-memory album cache, loading from CSV if needed and filtering non-existent dirs."""
-    global _album_cache
-    if _album_cache is None:
-        csv = _config_dir() / "albums.csv"
-        if csv.exists():
-            try:
-                df = pd.read_csv(csv, dtype=str).fillna("")
-                dir_col = None
-                for col in ("_DIRECTORY_PATH", "Directory", "_directory_path"):
-                    if col in df.columns:
-                        dir_col = col
-                        break
-                if dir_col:
-                    initial_len = len(df)
-                    df = df[df[dir_col].apply(lambda d: bool(d and Path(d).exists()))]
-                    if len(df) < initial_len:
-                        try:
-                            df.to_csv(csv, index=False)
-                            logger.info(
-                                f"_cache_load: purged {initial_len - len(df)} non-existent directory rows"
-                            )
-                        except Exception as e:  # noqa: BLE001
-                            logger.error(f"cache load purge write: {e}")
-                _album_cache = df
-            except Exception as e:  # noqa: BLE001
-                logger.error(f"cache load: {e}")
+    """The in-memory album list, fetched from Tagwright when missing or older than the refresh interval.
+    A failed fetch is logged and the old list stays."""
+    global _album_cache, _album_cache_time
+    minutes = _refresh_minutes()
+    stale = minutes > 0 and time.time() - _album_cache_time >= minutes * 60 - 10
+    if _album_cache is None or stale:
+        try:
+            _album_cache = _fetch_albums()
+            _album_cache_time = time.time()
+            logger.info(f"album list: {len(_album_cache)} albums from Tagwright")
+        except Exception as e:  # noqa: BLE001
+            logger.error(f"album list from Tagwright: {e}")
+            _album_cache_time = time.time()  # try again at the next interval, not at every request
+            if _album_cache is None:
                 _album_cache = pd.DataFrame()
-        else:
-            _album_cache = pd.DataFrame()
     return _album_cache
 
 
@@ -187,43 +206,19 @@ def _cache_invalidate() -> None:
 
 
 def _cache_update(new_rows: list[dict], drop_dirs: set[str]) -> None:
-    """Replace rows matching drop_dirs with new_rows, then write through to CSV and album_cache.json."""
+    """Replace rows matching drop_dirs with new_rows in the in-memory list, so that the table shows a
+    reprocessed album at once. Nothing is written: Tagwright's list replaces it at the next fetch."""
     global _album_cache
     df = _cache_load()
     for col in ("_DIRECTORY_PATH", "Directory", "_directory_path"):
         if col in df.columns:
             df = df[~df[col].isin(drop_dirs)]
-    # Unify directory keys across all new rows
-    for r in new_rows:
+    for r in new_rows:  # unify directory keys across all new rows
         d = r.get("_DIRECTORY_PATH") or r.get("Directory") or ""
         if d:
             r["_DIRECTORY_PATH"] = d
             r["Directory"] = d
-    df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
-    _album_cache = df
-    try:
-        df.to_csv(_config_dir() / "albums.csv", index=False)
-    except Exception as e:  # noqa: BLE001
-        logger.error(f"cache write: {e}")
-
-    # Synchronize album_cache.json so rescans don't revert metadata
-    cache_file = _config_dir() / "album_cache.json"
-    if cache_file.exists():
-        try:
-            cache_data = json.loads(cache_file.read_text(encoding="utf-8"))
-            for r in new_rows:
-                d = r.get("_DIRECTORY_PATH") or r.get("Directory")
-                if d and Path(d).exists():
-                    flacs = _album_flacs(d)
-                    if flacs:
-                        mtime = max(os.path.getmtime(f) for f in flacs)
-                        cache_data[d] = {"mtime": mtime, "data": r}
-            for d in drop_dirs:
-                if d in cache_data and not Path(d).exists():
-                    cache_data.pop(d, None)
-            cache_file.write_text(json.dumps(cache_data, indent=2), encoding="utf-8")
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"Could not update album_cache.json: {e}")
+    _album_cache = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
 
 
 COLUMNS = [
@@ -461,8 +456,15 @@ def render_table(rows: list[dict], sort: str, order: str, search: str) -> str:
             ' hx-get="/refresh/start" hx-trigger="load" hx-target="#modal-wrap" hx-swap="innerHTML">'
             "</div>"
         )
+    minutes = _refresh_minutes()
+    poll = (
+        f' hx-get="/albums" hx-trigger="every {minutes * 60}s" hx-swap="outerHTML"'
+        f""" hx-include="[name='search']" hx-vals='{{"sort":"{escape(sort)}","order":"{order}"}}'"""
+        if minutes
+        else ""
+    )
     return (
-        f'<div id="albums-wrap">'
+        f'<div id="albums-wrap"{poll}>'
         f'<span id="count-data" data-total="{total}" style="display:none"></span>'
         f"<table>{thead}{tbodies}</table>"
         f"</div>"
@@ -690,7 +692,7 @@ async def index() -> HTMLResponse:
 
 
 @app.get("/albums", response_class=HTMLResponse)
-async def albums(
+def albums(
     search: str = Query(default=""),
     sort: str = Query(default="Album Artist"),
     order: str = Query(default="asc"),
@@ -699,52 +701,30 @@ async def albums(
     return HTMLResponse(render_table(rows, sort, order, search))
 
 
-def _start_album_scan(label: str = "refresh", force: bool = False) -> None:
-    """Launch album_list.py in a background thread; sets _refresh_done on completion."""
+def _start_album_scan(label: str = "refresh") -> None:
+    """Fetch the album list from Tagwright again in a background thread; sets _refresh_done when done."""
     import threading
 
-    try:
-        from config import flacroot
-    except Exception as e:  # noqa: BLE001
-        logger.error(f"{label}: cannot import config: {e}")
-        return
-    if not Path(flacroot).exists():
-        logger.error(f"{label}: flacroot does not exist: {flacroot}")
-        return
-    script = SCRIPTS_DIR / "album_list.py"
-    logger.info(f"{label}: running library scan")
-    cmd = ["uv", "run", str(script)]
-    if force:
-        cmd.append("--force")
-    cmd.append(str(flacroot))
-    proc = _set_proc(
-        subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            cwd=str(SCRIPTS_DIR),
-            env={**os.environ, "DISCOGS_CHILD": "1"},
-        )
-    )
-
-    def _reader() -> None:
-        for line in proc.stdout:
-            _relay_child_line(label, line)
-        proc.wait()
-        if proc.returncode == 0:
-            logger.info(f"{label}: library scan complete")
-            _cache_invalidate()
-            _refresh_done["pending"] = True
+    def _fetch() -> None:
+        logger.info(f"{label}: fetching the album list from Tagwright")
+        _cache_invalidate()
+        try:
+            df = _cache_load()
+        except Exception as e:  # noqa: BLE001
+            logger.error(f"{label}: {e}")
+            return
+        if df.empty:
+            logger.error(f"{label}: no albums (see the album list error above)")
         else:
-            logger.error(f"{label}: scan failed (exit {proc.returncode})")
+            logger.info(f"{label}: library scan complete")
+        _refresh_done["pending"] = True
 
-    threading.Thread(target=_reader, daemon=True).start()
+    threading.Thread(target=_fetch, daemon=True).start()
 
 
 @app.get("/refresh/start", response_class=HTMLResponse)
 async def refresh_start() -> HTMLResponse:
-    _start_album_scan("refresh", force=True)
+    _start_album_scan("refresh")
     return await log_modal()
 
 
@@ -974,7 +954,6 @@ async def reprocess(artist_dir: str = Query(...), artist_id: str = Query(...)) -
                 else set()
             )
             _cache_update(rows, new_dirs | old_folders | {artist_dir, new_artist_dir})
-            _cache_invalidate()
             _refresh_done["pending"] = True
         _clear_proc()
 
@@ -1180,6 +1159,8 @@ CONFIG_LABELS = {
     "syslog_port": ("Syslog Port", "text"),
     "sync_script": ("Sync Script (in config dir)", "text"),
     "cover_max_size": ("Cover Art Max Size (px)", "text"),
+    "tagwright_url": ("Tagwright URL (album list)", "text"),
+    "albums_refresh_minutes": ("Album List Auto-Refresh (minutes, 0 = off)", "text"),
     "link_url_1": ("Link Button #1 URL", "text"),
     "link_url_2": ("Link Button #2 URL", "text"),
     "link_url_3": ("Link Button #3 URL", "text"),
@@ -1218,6 +1199,7 @@ _UNQUOTED = {
     "rsgain_skip",
     "cover_max_size",
     "syslog_port",
+    "albums_refresh_minutes",
 }
 
 
@@ -1293,7 +1275,6 @@ _LOG_COLOURS = {
 
 
 def _read_log_html() -> str:
-    import json
 
     cfg = config_read()
     log_path = _config_dir() / cfg.get("log_file", "discogs.log")
@@ -1559,8 +1540,10 @@ if __name__ == "__main__":
     link_urls = {k: v for k, v in cfg.items() if k.startswith("link_url_") and v}
     logger.info(f"Link buttons configured: {link_urls or 'none'}")
 
-    csv = cfg_dir / "albums.csv"
-    logger.info(f"albums.csv path: {csv} — exists: {csv.exists()}")
+    logger.info(
+        f"Album list from Tagwright: {cfg.get('tagwright_url') or 'not set'}, "
+        f"refresh every {_refresh_minutes()} min"
+    )
 
     host = "127.0.0.1" if not os.environ.get("CONFIG_DIR") else "0.0.0.0"
     port = int(os.environ.get("PORT", "8765"))

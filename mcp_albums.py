@@ -2,26 +2,30 @@
 # /// script
 # dependencies = ["mcp", "pandas"]
 # ///
-"""Standalone MCP server exposing the albums.csv music library."""
+"""Standalone MCP server exposing the music library (the album list comes from Tagwright)."""
 
 import csv
+import io
 import os
+import urllib.request
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-# Locate albums.csv: prefer CONFIG_DIR, fall back to script directory
+# CONFIG_DIR (or the script directory) is where lyrics/ lives
 _config_dir = os.environ.get("CONFIG_DIR", os.path.dirname(os.path.abspath(__file__)))
-CSV_PATH = Path(_config_dir) / "albums.csv"
+
+# The album list comes from Tagwright (ADR 0011), e.g. TAGWRIGHT_URL=http://192.168.1.97:8780
+TAGWRIGHT_URL = os.environ.get("TAGWRIGHT_URL", "").rstrip("/")
 
 mcp = FastMCP("discogs-albums")
 
 
 def _load() -> list[dict]:
-    if not CSV_PATH.exists():
+    if not TAGWRIGHT_URL:
         return []
-    with open(CSV_PATH, newline="", encoding="utf-8") as f:
-        return list(csv.DictReader(f))
+    with urllib.request.urlopen(f"{TAGWRIGHT_URL}/api/library/albums.csv", timeout=120) as r:  # noqa: S310
+        return list(csv.DictReader(io.StringIO(r.read().decode("utf-8"), newline="")))
 
 
 def _match(row: dict, query: str) -> bool:

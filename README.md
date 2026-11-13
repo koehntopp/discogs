@@ -84,7 +84,7 @@ The container's persistent data is on the NAS (NFS), not on the host:
 
 | Container path | NAS path |
 |---|---|
-| `/config` | `/volume1/docker/discogs/discogs/config` (config.py, logs, albums.csv, lyrics/) |
+| `/config` | `/volume1/docker/discogs/discogs/config` (config.py, logs, lyrics/) |
 | `/root/.ssh` | the SSH folder with the key used by the Sync script, e.g. `/volume1/docker/discogs/discogs/ssh` (read-only) |
 | `/flac` | SMB share `//192.168.1.98/flac` |
 
@@ -104,6 +104,8 @@ Copy `config_demo.py` to `config/config.py` and set:
 | `nzbdir` | Staging directory for newly tagged FLACs |
 | `flacroot_local` | Path as seen by the browser (for tagger deep links) |
 | `sync_script` | Script run by the Sync button; a bare name is looked up in the config directory (see `sync_demo.sh`) |
+| `tagwright_url` | Tagwright's address, e.g. `http://192.168.1.97:8780`; the web UI's album list comes from its `/api/library/albums.csv` (ADR 0011) |
+| `albums_refresh_minutes` | How often the album list is fetched again, also in an open page (default 5; 0 = off) |
 | `cover_max_size` | Resize embedded cover art above this dimension (px) |
 | `musicbrainz_languages` | `True` (default): `fixtags.py` writes `LYRICS_LANGUAGE` per track from MusicBrainz (needs `MUSICBRAINZ_ALBUMID`); `False` switches the lookup off |
 | `rsgain_loudness` / `rsgain_clip_mode` / `rsgain_max_peak` / `rsgain_true_peak` / `rsgain_skip` | ReplayGain tagging settings passed to `rsgain` |
@@ -146,7 +148,7 @@ All config values are also editable via the Settings modal in the web UI.
 | `nzbfix.py` | Pipeline orchestrator (`dot_clean` → `calculate_dr` / `rsgain` / `calculate_fp` → `fixtags` → `update_lyrics`) |
 | `fixtags.py` | Discogs API tag enrichment & date tag mapping |
 | `bliss.py` | File organisation + MP3 sync (with overwrite protection) |
-| `album_list.py` | Album inventory scan → CSV + DR chart |
+| `album_list.py` | Album inventory scan → CSV + DR chart (the web UI no longer uses it: its album list comes from Tagwright, ADR 0011) |
 | `disc_layout.py` | Shared helpers for the `Disc N` folder layout of multi-disc albums (no CLI) |
 | `update_lyrics.py` | Parallel lyrics fetch from lrclib.net (8 workers, one lrclib request at a time, adaptive pacing, retries failed tracks, warns when nothing is found; marks tracks tagged `LYRICS_LANGUAGE=zxx` instrumental without asking lrclib) |
 | `lrc_fix.py` | Local LRC realignment (demucs vocal isolation + whisperx + onset-snapping) |

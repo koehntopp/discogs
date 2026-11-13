@@ -50,7 +50,7 @@ services:
     ports:
       - "8765:8000"
     volumes:
-      - ./config:/config        # config.py, logs, albums.csv
+      - ./config:/config        # config.py, logs
       - /path/to/your/flac:/flac
     environment:
       - CONFIG_DIR=/config
@@ -76,7 +76,7 @@ Open **http://localhost:8765** in your browser.
 
 ### Web UI
 
-The main view is a table of your albums, scanned from `flacroot`. Each row shows:
+The main view is a table of your albums, read from Tagwright (`tagwright_url`, refreshed every `albums_refresh_minutes`). Each row shows:
 
 | Column | Description |
 |--------|-------------|
@@ -91,7 +91,7 @@ The main view is a table of your albums, scanned from `flacroot`. Each row shows
 
 ### Toolbar buttons
 
-- **Refresh** — scans `flacroot` and rebuilds the album table
+- **Refresh** — fetches the album table from Tagwright again
 - **Lyrics** — fetches lyrics for all albums in `nzbdir` (see Part 2)
 - **Bliss** — organises files into `Artist/Album/track.flac` structure (see Part 2)
 - **Sync** — makes ROCK pull the library from the NAS with rsync (see Part 3)

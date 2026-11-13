@@ -98,6 +98,7 @@ Detailed architectural standards and design contracts are maintained in `docs/ad
 - [ADR 0006: Whisper Speech-to-Text LRC Lyrics Alignment, Time-Anchor Search, and Fallback Architecture](file:///Users/koehntopp/src/discogs/docs/adr/0006-whisper-lrc-alignment-and-fallback.md)
 - [ADR 0007: LRCLIB Lyrics Submission & Proof-of-Work Challenge Solver Architecture](file:///Users/koehntopp/src/discogs/docs/adr/0007-lrclib-lyrics-submission-proof-of-work.md)
 - [ADR 0008: Roon-Specific Tag Conventions](file:///Users/koehntopp/src/discogs/docs/adr/0008-roon-specific-tag-conventions.md)
+- [ADR 0011: The web UI reads the album list from Tagwright](file:///Users/koehntopp/src/discogs/docs/adr/0011-album-list-from-tagwright.md)
 
 Also see [docs/tag-schema.md](file:///Users/koehntopp/src/discogs/docs/tag-schema.md) — a Mermaid ERD of the FLAC tag relationships defined in ADR 0002/0008.
 
@@ -109,7 +110,7 @@ Also see [docs/tag-schema.md](file:///Users/koehntopp/src/discogs/docs/tag-schem
 
 ### `webui.py` — Web Dashboard & Subprocess Controller
 
-**Purpose:** Provide a FastAPI + HTMX dashboard for library inventory browsing, tagger links, DR color indicators, live log streaming, and batch script execution.
+**Purpose:** Provide a FastAPI + HTMX dashboard for library inventory browsing (the album list is fetched from Tagwright's `/api/library/albums.csv`, setting `tagwright_url`, refreshed every `albums_refresh_minutes`, ADR 0011), tagger links, DR color indicators, live log streaming, and batch script execution.
 
 **Usage:**
 
